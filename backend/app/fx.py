@@ -69,19 +69,34 @@ def get_rate(conn: sqlite3.Connection, currency: str, day: str | None = None) ->
     return target_str, rate
 
 
+# NBP API odrzuca zakresy > 367 dni (HTTP 400), więc backfill dzielimy na okna.
+_NBP_MAX_WINDOW = timedelta(days=360)
+
+
 def backfill_range(conn: sqlite3.Connection, currency: str, start: str, end: str) -> int:
-    """Pobiera kursy NBP dla zakresu dat i cache'uje. Zwraca liczbę zapisanych dni."""
+    """Pobiera kursy NBP dla zakresu dat (dzieląc na okna ≤360 dni) i cache'uje.
+
+    Bez podziału portfel starszy niż ~rok dostawałby od NBP błąd 400 i ZERO kursów,
+    co psułoby historię, TWR i atrybucję FX.
+    """
     currency = currency.upper()
     if currency == "PLN":
         return 0
-    url = f"{NBP_BASE}/{currency}/{start}/{end}/?format=json"
-    try:
-        resp = httpx.get(url, timeout=_TIMEOUT)
-        resp.raise_for_status()
-        rates = resp.json().get("rates", [])
-    except Exception:
-        return 0
-    for r in rates:
-        _cache_put(conn, currency, r["effectiveDate"], float(r["mid"]))
+    start_d, end_d = date.fromisoformat(start), date.fromisoformat(end)
+    total = 0
+    cur = start_d
+    while cur <= end_d:
+        win_end = min(cur + _NBP_MAX_WINDOW, end_d)
+        url = f"{NBP_BASE}/{currency}/{cur.isoformat()}/{win_end.isoformat()}/?format=json"
+        try:
+            resp = httpx.get(url, timeout=_TIMEOUT)
+            resp.raise_for_status()
+            rates = resp.json().get("rates", [])
+        except Exception:
+            rates = []
+        for r in rates:
+            _cache_put(conn, currency, r["effectiveDate"], float(r["mid"]))
+        total += len(rates)
+        cur = win_end + timedelta(days=1)
     conn.commit()
-    return len(rates)
+    return total
