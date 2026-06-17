@@ -176,28 +176,35 @@ def instrument_history(conn: sqlite3.Connection, isin: str) -> dict | None:
     fx_dates = [r["date"] for r in fx_rows]
     fx_vals = [r["rate_to_pln"] for r in fx_rows]
 
-    # Zdarzenia zmiany ilości (sygnowane) posortowane po dniu.
+    # Zdarzenia (data, delta_ilości, wartość_PLN) — do śledzenia ilości i kosztu (średni koszt).
     tx_rows = conn.execute(
-        "SELECT ts, type, quantity FROM transactions WHERE isin = ? ORDER BY ts ASC", (isin,)
+        "SELECT ts, type, quantity, value_pln FROM transactions WHERE isin = ? ORDER BY ts ASC", (isin,)
     ).fetchall()
     events = sorted(
-        (t["ts"][:10], t["quantity"] if t["type"] == "BUY" else -t["quantity"]) for t in tx_rows
+        (t["ts"][:10], t["type"], t["quantity"], t["value_pln"]) for t in tx_rows
     )
 
     rows = []
     held = 0.0
+    cost = 0.0
     ev_idx = 0
     for pr in price_rows:
         day = pr["date"]
-        # Dolicz wszystkie transakcje z datą <= bieżący dzień.
+        # Zastosuj transakcje z datą <= bieżący dzień (średni koszt).
         while ev_idx < len(events) and events[ev_idx][0] <= day:
-            held += events[ev_idx][1]
+            _, etype, eqty, evalue = events[ev_idx]
+            if etype == "BUY":
+                held += eqty
+                cost += evalue
+            else:
+                avg = (cost / held) if held else 0.0
+                cost -= avg * eqty
+                held -= eqty
+                if held <= 1e-9:
+                    held, cost = 0.0, 0.0
             ev_idx += 1
 
-        if currency == "PLN":
-            fx_rate = 1.0
-        else:
-            fx_rate = _forward_fill((fx_dates, fx_vals), day)
+        fx_rate = 1.0 if currency == "PLN" else _forward_fill((fx_dates, fx_vals), day)
         price_pln = round(pr["price"] * fx_rate, 4) if fx_rate is not None else None
         qty = round(held, 6) if held > 1e-9 else 0.0
         rows.append({
@@ -208,7 +215,33 @@ def instrument_history(conn: sqlite3.Connection, isin: str) -> dict | None:
             "price_pln": price_pln,
             "quantity": qty,
             "value_pln": round(qty * price_pln, 2) if price_pln is not None else None,
+            "cost_pln": round(cost, 2),
+            "_native_raw": pr["price"],
         })
+
+    # Kurs bazowy = kurs z pierwszego dnia z niezerową pozycją (moment wejścia).
+    baseline_fx = next((r["fx_rate"] for r in rows if r["quantity"] > 0 and r["fx_rate"] is not None), None)
+    for r in rows:
+        if baseline_fx is not None and r["quantity"] > 0:
+            r["value_const_fx"] = round(r["quantity"] * r["_native_raw"] * baseline_fx, 2)
+        else:
+            r["value_const_fx"] = r["value_pln"]
+        del r["_native_raw"]
+
+    # Atrybucja zysku na stan końcowy: total = z instrumentu + z waluty.
+    summary = None
+    last = rows[-1] if rows else None
+    if last and last["value_pln"] is not None and last["quantity"] > 0:
+        total_pl = round(last["value_pln"] - last["cost_pln"], 2)
+        fx_pl = round(last["value_pln"] - last["value_const_fx"], 2)
+        summary = {
+            "value_pln": last["value_pln"],
+            "cost_pln": last["cost_pln"],
+            "total_pl_pln": total_pl,
+            "fx_pl_pln": fx_pl,
+            "instrument_pl_pln": round(total_pl - fx_pl, 2),
+            "baseline_fx": round(baseline_fx, 4) if baseline_fx else None,
+        }
 
     return {
         "isin": isin,
@@ -217,6 +250,7 @@ def instrument_history(conn: sqlite3.Connection, isin: str) -> dict | None:
         "currency": currency,
         "category": inst["category"],
         "rows": rows,
+        "summary": summary,
     }
 
 

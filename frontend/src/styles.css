@@ -168,5 +168,10 @@ select.cell {
 }
 .modal-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 18px; gap: 12px; }
 .modal-head h2 { margin: 0; font-size: 18px; }
-.modal-scroll { max-height: 360px; overflow-y: auto; margin-top: 16px; }
+.modal-scroll { max-height: 320px; overflow-y: auto; margin-top: 16px; }
 .modal-scroll thead th { position: sticky; top: 0; background: var(--panel); }
+
+.attrib { display: flex; gap: 28px; flex-wrap: wrap; margin-bottom: 18px; padding: 14px 16px; background: var(--panel-2); border-radius: 10px; }
+.attrib-item .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 5px; }
+.attrib-item .value { font-size: 20px; font-weight: 650; }
+.attrib-item .value.small { font-size: 15px; }

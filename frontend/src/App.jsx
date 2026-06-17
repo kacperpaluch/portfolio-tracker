@@ -56,6 +56,11 @@ function Cards({ totals }) {
 }
 
 const LABELS = { value_pln: "Wartość konta", benchmark_pln: "Benchmark" };
+const DETAIL_LABELS = {
+  value_pln: "Wartość (rzeczywista)",
+  value_const_fx: "Wartość bez zmian kursu",
+  cost_pln: "Koszt (wpłacone)",
+};
 
 function HistoryChart({ data }) {
   if (!data || data.length === 0)
@@ -111,7 +116,30 @@ function InstrumentDetail({ data, onClose }) {
           <div className="spinner">Brak historii wycen. Uruchom „Backfill historii".</div>
         ) : (
           <>
-            <ResponsiveContainer width="100%" height={240}>
+            {data.summary && (
+              <div className="attrib">
+                <div className="attrib-item">
+                  <div className="label">Zysk / strata</div>
+                  <div className={`value ${cls(data.summary.total_pl_pln)}`}>{fmtPln(data.summary.total_pl_pln)}</div>
+                </div>
+                <div className="attrib-item">
+                  <div className="label">z instrumentu</div>
+                  <div className={`value small ${cls(data.summary.instrument_pl_pln)}`}>{fmtPln(data.summary.instrument_pl_pln)}</div>
+                </div>
+                <div className="attrib-item">
+                  <div className="label">z waluty (kurs PLN)</div>
+                  <div className={`value small ${cls(data.summary.fx_pl_pln)}`}>{fmtPln(data.summary.fx_pl_pln)}</div>
+                </div>
+                {!isPln && data.summary.baseline_fx && (
+                  <div className="attrib-item">
+                    <div className="label">Kurs wejścia → dziś</div>
+                    <div className="value small muted">{data.summary.baseline_fx} → {rows[rows.length - 1].fx_rate}</div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <ResponsiveContainer width="100%" height={250}>
               <ComposedChart data={rows} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
                 <defs>
                   <linearGradient id="gd" x1="0" y1="0" x2="0" y2="1">
@@ -121,22 +149,18 @@ function InstrumentDetail({ data, onClose }) {
                 </defs>
                 <CartesianGrid stroke="#2c3845" strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="date" tick={{ fill: "#8b97a6", fontSize: 11 }} minTickGap={40} stroke="#2c3845" />
-                <YAxis yAxisId="pln" tick={{ fill: "#8b97a6", fontSize: 11 }} stroke="#2c3845" width={56}
-                  tickFormatter={(v) => v.toFixed(0)} />
-                {!isPln && (
-                  <YAxis yAxisId="nat" orientation="right" tick={{ fill: "#8b97a6", fontSize: 11 }}
-                    stroke="#2c3845" width={48} tickFormatter={(v) => v.toFixed(1)} />
-                )}
+                <YAxis tick={{ fill: "#8b97a6", fontSize: 11 }} stroke="#2c3845" width={64}
+                  tickFormatter={(v) => `${Math.round(v)}`} />
                 <Tooltip
                   contentStyle={{ background: "#1a212b", border: "1px solid #2c3845", borderRadius: 8, color: "#e6edf3" }}
-                  formatter={(v, name) => [name === "price_pln" ? fmtPln(v) : `${v} ${data.currency}`,
-                    name === "price_pln" ? "Cena PLN" : "Cena giełdowa"]}
+                  formatter={(v, name) => [fmtPln(v), DETAIL_LABELS[name] || name]}
                 />
-                <Area yAxisId="pln" type="monotone" dataKey="price_pln" stroke="#3fb950" strokeWidth={2} fill="url(#gd)" />
+                <Legend formatter={(name) => DETAIL_LABELS[name] || name} wrapperStyle={{ fontSize: 12 }} />
+                <Area type="monotone" dataKey="value_pln" stroke="#3fb950" strokeWidth={2} fill="url(#gd)" />
                 {!isPln && (
-                  <Line yAxisId="nat" type="monotone" dataKey="price_native" stroke="#d29922"
-                    strokeWidth={1.5} strokeDasharray="5 4" dot={false} />
+                  <Line type="monotone" dataKey="value_const_fx" stroke="#d29922" strokeWidth={1.8} strokeDasharray="5 4" dot={false} />
                 )}
+                <Line type="monotone" dataKey="cost_pln" stroke="#8b97a6" strokeWidth={1.2} dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
 

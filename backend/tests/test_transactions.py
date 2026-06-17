@@ -88,6 +88,25 @@ def test_instrument_history():
     assert row["value_pln"] == pytest.approx(860.0)
 
 
+def test_instrument_history_fx_attribution():
+    conn = _db()
+    add_transaction(conn, ts="2026-06-10", isin="EUR1", name="Euro ETF", tx_type="BUY", quantity=10, price_pln=80.0)
+    conn.execute("UPDATE instruments SET currency = 'EUR' WHERE isin = 'EUR1'")
+    # Cena natywna stała (20 EUR), kurs rośnie 4.0 -> 4.4 -> cały zysk z waluty.
+    conn.execute("INSERT INTO prices (isin, date, price, source) VALUES ('EUR1','2026-06-10',20.0,'yf')")
+    conn.execute("INSERT INTO prices (isin, date, price, source) VALUES ('EUR1','2026-06-16',20.0,'yf')")
+    conn.execute("INSERT INTO fx_rates (date, currency, rate_to_pln) VALUES ('2026-06-10','EUR',4.0)")
+    conn.execute("INSERT INTO fx_rates (date, currency, rate_to_pln) VALUES ('2026-06-16','EUR',4.4)")
+    conn.commit()
+
+    s = history_mod.instrument_history(conn, "EUR1")["summary"]
+    assert s["baseline_fx"] == pytest.approx(4.0)
+    assert s["value_pln"] == pytest.approx(880.0)   # 10*20*4.4
+    assert s["total_pl_pln"] == pytest.approx(80.0)  # 880 - 800
+    assert s["fx_pl_pln"] == pytest.approx(80.0)     # cały zysk z kursu
+    assert s["instrument_pl_pln"] == pytest.approx(0.0)
+
+
 def test_instrument_history_missing():
     conn = _db()
     assert history_mod.instrument_history(conn, "NOPE") is None

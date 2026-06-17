@@ -32,8 +32,9 @@ stopę zwrotu oraz porównanie z benchmarkiem — **wszystko w PLN**.
 - **Import CSV** z biura maklerskiego (format GPW „historia PW", kodowanie CP1250) —
   idempotentny: CSV ze starymi + nowymi danymi importuje tylko nowe, starych nie rusza.
 - **Ręczne dodawanie/usuwanie transakcji** — formularz w UI (z dedupem jak w imporcie).
-- **Widok waloru** — klik w nazwę pokazuje historię dzień po dniu (cena giełdowa, kurs NBP,
-  cena w PLN, posiadane szt., wartość) + wykres ceny w PLN i natywnej.
+- **Widok waloru** — klik w nazwę pokazuje wykres wartości inwestycji w czasie (rzeczywista vs
+  przy stałym kursie) z **atrybucją zysku na instrument vs walutę** (ile dał ETF, a ile ruch
+  EUR/PLN) oraz tabelę dzień po dniu (cena giełdowa, kurs NBP, cena PLN, szt., wartość).
 - **Wycena w PLN** — instrumenty notowane w EUR/USD/GBP przeliczane bieżącym kursem NBP;
   **waluta wykrywana automatycznie** z notowania (z obsługą londyńskich pensów GBx → GBP).
 - **Zysk całkowity** = niezrealizowany (otwarte pozycje) **+** zrealizowany (ze sprzedaży).
