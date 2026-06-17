@@ -10,6 +10,10 @@ services:
       # Godzina codziennego odświeżania cen/kursów (czas TZ):
       - REFRESH_HOUR=21
       - REFRESH_MINUTE=0
+      # Godzina nocnego backupu bazy + ile kopii trzymać:
+      - BACKUP_HOUR=3
+      - BACKUP_MINUTE=0
+      - BACKUP_KEEP=14
     volumes:
       - portfolio_tracker_data:/app/data
 

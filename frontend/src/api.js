@@ -38,6 +38,8 @@ export const api = {
       body: JSON.stringify(body),
     }).then(json),
   deleteCash: (id) => fetch(`/api/cash/${id}`, { method: "DELETE" }).then(json),
+  backupNow: () => fetch("/api/backup-now", { method: "POST" }).then(json),
+  backups: () => fetch("/api/backups").then(json),
   allocation: () => fetch("/api/allocation").then(json),
   setAllocation: (targets) =>
     fetch("/api/allocation", {

@@ -77,7 +77,8 @@ backend/app/
   history.py     # backfill_all, portfolio_history (+benchmark), portfolio_xirr/twr, instrument_history
   returns.py     # czyste funkcje: xirr() (Newton+bisekcja), twr() (łańcuch podokresów)
   allocation.py  # compute (grupy vs cel + rebalans), get/set_targets
-  scheduler.py   # start_scheduler() — APScheduler cron refresh_job
+  backup.py      # backup_database (online copy + retencja), transactions_csv, list_backups
+  scheduler.py   # start_scheduler() — APScheduler: refresh_job (~21:00) + backup_job (~03:00)
 frontend/src/
   App.jsx        # cała aplikacja: zakładki, karty, wykresy, tabele, formularze, modal waloru
   api.js         # cienki klient REST (fetch)
@@ -92,8 +93,9 @@ importer.py → cash, instruments
 portfolio.py → cash, fx, prices
 history.py → fx, prices, returns
 allocation.py → cash, portfolio
+backup.py → db
 cash.py, fx.py, prices.py, instruments.py, returns.py, db.py → (liście, bez zależności wewn.)
-scheduler.py → cash, instruments, prices, fx, db
+scheduler.py → cash, instruments, prices, fx, db, backup
 ```
 
 `returns.py` jest czysto funkcyjny (łatwy do testów). `db.py` nie zależy od niczego z app.
@@ -144,6 +146,9 @@ odczyt
 | GET/PUT | `/api/allocation` | alokacja docelowa vs rzeczywista |
 | POST | `/api/refresh` | bieżące ceny + FX |
 | POST | `/api/backfill` | pełna historia cen + FX od pierwszej transakcji |
+| GET | `/api/export/transactions.csv` | eksport transakcji (CSV) |
+| GET | `/api/export/db` | pobranie spójnej kopii bazy SQLite |
+| GET/POST | `/api/backups` / `/api/backup-now` | lista kopii / backup na żądanie |
 | GET | `/api/health` | health check |
 
 Swagger: `/docs`.
@@ -201,6 +206,7 @@ aktywny tylko gdy katalog istnieje). Dockerfile robi to w etapie multi-stage.
 - **Dane osobiste** — prawdziwe CSV (`*.csv`) są gitignorowane; w repo jest tylko `backend/tests/sample_hisPW.csv` (fikcyjny, z wyjątkiem w `.gitignore`).
 - **Cron tylko w produkcji** — scheduler startuje w `lifespan`; pod `TestClient` bez bloku `with` się nie uruchamia. `init_db()` wołane przy imporcie modułu (niezależnie od lifespan).
 - **Atrybucja/positions czytają z cache** — bez `backfill`/`refresh` historia i wykresy będą puste.
+- **Backupy są w named volume** (`data/backup/` obok bazy) — czyli wewnątrz wolumenu Dockera. Nocny backup (~03:00, `BACKUP_HOUR`) + retencja (`BACKUP_KEEP`, domyślnie 14). Do trzymania kopii poza wolumenem użyj `/api/export/db` albo zbinduj `data/` na host.
 
 ## 12. Jak rozbudować — gdzie co dopisać
 

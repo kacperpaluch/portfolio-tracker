@@ -526,12 +526,46 @@ function AllocationPanel({ allocation, onSave }) {
   );
 }
 
+function DataPanel({ backups, onBackup, busy }) {
+  const list = backups?.backups || [];
+  return (
+    <div>
+      <div className="data-actions">
+        <a className="btn" href="/api/export/transactions.csv">⬇ Eksport transakcji (CSV)</a>
+        <a className="btn" href="/api/export/db">⬇ Pobierz całą bazę (.db)</a>
+        <button className="primary" onClick={onBackup} disabled={busy}>Backup teraz (na serwerze)</button>
+      </div>
+      <p className="tag" style={{ margin: "12px 0 18px" }}>
+        Automatyczny backup co noc (pora i retencja ustawiane w <code>docker-compose.yml</code>) do{" "}
+        <code>{backups?.dir || "data/backup"}</code>.
+      </p>
+      {list.length === 0 ? (
+        <div className="spinner">Brak kopii zapasowych — kliknij „Backup teraz".</div>
+      ) : (
+        <table>
+          <thead><tr><th>Plik</th><th>Rozmiar</th><th>Data</th></tr></thead>
+          <tbody>
+            {list.map((b) => (
+              <tr key={b.file}>
+                <td>{b.file}</td>
+                <td>{b.size_kb} KB</td>
+                <td>{b.modified.replace("T", " ")}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
 const TABS = [
   ["dashboard", "Pulpit"],
   ["transactions", "Transakcje"],
   ["allocation", "Alokacja"],
   ["cash", "Gotówka"],
   ["instruments", "Instrumenty"],
+  ["data", "Dane"],
 ];
 
 export default function App() {
@@ -541,6 +575,7 @@ export default function App() {
   const [transactions, setTransactions] = useState([]);
   const [cash, setCash] = useState(null);
   const [allocation, setAllocation] = useState(null);
+  const [backups, setBackups] = useState(null);
   const [detail, setDetail] = useState(null);
   const [tab, setTab] = useState("dashboard");
   const [benchmarkRate, setBenchmarkRate] = useState(5);
@@ -554,10 +589,10 @@ export default function App() {
   };
 
   const loadAll = async () => {
-    const [pf, hist, insts, txs, cs, alloc] = await Promise.all([
-      api.portfolio(), api.history(benchmarkRate / 100), api.instruments(), api.transactions(), api.cash(), api.allocation(),
+    const [pf, hist, insts, txs, cs, alloc, bk] = await Promise.all([
+      api.portfolio(), api.history(benchmarkRate / 100), api.instruments(), api.transactions(), api.cash(), api.allocation(), api.backups(),
     ]);
-    setPortfolio(pf); setHistory(hist); setInstruments(insts); setTransactions(txs); setCash(cs); setAllocation(alloc);
+    setPortfolio(pf); setHistory(hist); setInstruments(insts); setTransactions(txs); setCash(cs); setAllocation(alloc); setBackups(bk);
   };
 
   useEffect(() => {
@@ -696,6 +731,17 @@ export default function App() {
           <InstrumentsPanel
             instruments={instruments}
             onSave={(isin, body) => run(() => api.updateInstrument(isin, body), "Zapisano mapowanie.")}
+          />
+        </div>
+      )}
+
+      {tab === "data" && (
+        <div className="panel">
+          <h2>Dane i backup</h2>
+          <DataPanel
+            backups={backups}
+            busy={busy}
+            onBackup={() => run(() => api.backupNow(), "Backup zapisany na serwerze.")}
           />
         </div>
       )}

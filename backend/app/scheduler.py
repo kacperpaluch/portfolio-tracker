@@ -10,6 +10,7 @@ import os
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
+from . import backup as backup_mod
 from . import fx as fx_mod
 from . import instruments as instruments_mod
 from . import prices as prices_mod
@@ -19,6 +20,8 @@ log = logging.getLogger("scheduler")
 
 REFRESH_HOUR = int(os.environ.get("REFRESH_HOUR", "21"))
 REFRESH_MINUTE = int(os.environ.get("REFRESH_MINUTE", "0"))
+BACKUP_HOUR = int(os.environ.get("BACKUP_HOUR", "3"))
+BACKUP_MINUTE = int(os.environ.get("BACKUP_MINUTE", "0"))
 TIMEZONE = os.environ.get("TZ", "Europe/Warsaw")
 
 
@@ -45,17 +48,24 @@ def refresh_job() -> dict:
     return {"prices": prices_updated, "fx": fx_updated}
 
 
+def backup_job() -> dict:
+    """Nocna kopia bazy do BACKUP_DIR (z retencją)."""
+    path = backup_mod.backup_database()
+    log.info("Backup bazy: %s", path)
+    return {"file": str(path)}
+
+
 def start_scheduler() -> BackgroundScheduler:
     scheduler = BackgroundScheduler(timezone=TIMEZONE)
     scheduler.add_job(
-        refresh_job,
-        "cron",
-        hour=REFRESH_HOUR,
-        minute=REFRESH_MINUTE,
-        id="daily_refresh",
-        replace_existing=True,
+        refresh_job, "cron", hour=REFRESH_HOUR, minute=REFRESH_MINUTE,
+        id="daily_refresh", replace_existing=True,
+    )
+    scheduler.add_job(
+        backup_job, "cron", hour=BACKUP_HOUR, minute=BACKUP_MINUTE,
+        id="nightly_backup", replace_existing=True,
     )
     scheduler.start()
-    log.info("Scheduler wystartował — odświeżanie codziennie o %02d:%02d %s",
-             REFRESH_HOUR, REFRESH_MINUTE, TIMEZONE)
+    log.info("Scheduler: odświeżanie %02d:%02d, backup %02d:%02d (%s)",
+             REFRESH_HOUR, REFRESH_MINUTE, BACKUP_HOUR, BACKUP_MINUTE, TIMEZONE)
     return scheduler

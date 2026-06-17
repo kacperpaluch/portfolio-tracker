@@ -49,6 +49,8 @@ stopę zwrotu oraz porównanie z benchmarkiem — **wszystko w PLN**.
   liczona jako osobna grupa).
 - **Historia transakcji** — pełna lista kupna/sprzedaży.
 - **Mapowanie ISIN → ticker** ręcznie w UI (z wstępnym seedem dla znanych instrumentów).
+- **Eksport i backup** — pobranie transakcji (CSV) i całej bazy (.db) z UI; **nocny backup**
+  bazy z crona (~03:00) do `data/backup/` z retencją + „Backup teraz" na żądanie.
 - **Codzienne odświeżanie** cen i kursów (cron APScheduler, domyślnie ~21:00 Europe/Warsaw).
 
 ## Kluczowe koncepcje
@@ -128,6 +130,9 @@ Zmienne środowiskowe (ustawiane w `docker-compose.yml`):
 | `TZ` | `Europe/Warsaw` | strefa czasowa (harmonogram crona) |
 | `REFRESH_HOUR` | `21` | godzina dziennego odświeżania cen/kursów |
 | `REFRESH_MINUTE` | `0` | minuta dziennego odświeżania |
+| `BACKUP_HOUR` / `BACKUP_MINUTE` | `3` / `0` | pora nocnego backupu bazy |
+| `BACKUP_DIR` | `<dir bazy>/backup` | katalog kopii zapasowych |
+| `BACKUP_KEEP` | `14` | ile ostatnich kopii trzymać (retencja) |
 | `DB_PATH` | `/app/data/portfolio.db` | ścieżka pliku bazy SQLite |
 
 ## Sposób użycia
@@ -158,8 +163,9 @@ portfolio-tracker/
 │   │   ├── cash.py        # księga gotówki: saldo, wpłaty/wypłaty, przepływy z transakcji
 │   │   ├── allocation.py  # alokacja docelowa vs rzeczywista (grupy, rebalans)
 │   │   ├── history.py     # backfill cen/kursów, seria wartości w czasie, benchmark, XIRR
-│   │   ├── returns.py     # czysta implementacja XIRR (Newton + fallback bisekcja)
-│   │   └── scheduler.py   # APScheduler — dzienne odświeżanie cen i FX
+│   │   ├── returns.py     # czyste XIRR (Newton + bisekcja) i TWR (łańcuch podokresów)
+│   │   ├── backup.py      # backup bazy (online copy + retencja) + eksport transakcji do CSV
+│   │   └── scheduler.py   # APScheduler — odświeżanie cen/FX (~21:00) + nocny backup (~03:00)
 │   └── tests/             # pytest (+ sample_hisPW.csv — fikcyjne dane testowe)
 ├── frontend/              # Vite + React + Recharts (build serwowany przez FastAPI z /frontend/dist)
 │   └── src/
@@ -220,6 +226,9 @@ Pozycje nie są materializowane — liczone w locie z `transactions` (chronologi
 | `POST` / `DELETE` | `/api/cash[/{id}]` | dodaj / usuń wpłatę-wypłatę |
 | `POST` | `/api/refresh` | odświeżenie bieżących cen i kursów |
 | `POST` | `/api/backfill` | pełna historia cen i kursów od pierwszej transakcji |
+| `GET` | `/api/export/transactions.csv` | pobranie transakcji jako CSV |
+| `GET` | `/api/export/db` | pobranie całej bazy SQLite (spójna kopia) |
+| `GET` / `POST` | `/api/backups` / `/api/backup-now` | lista kopii / backup na żądanie |
 
 Interaktywna dokumentacja (Swagger): `http://localhost:8000/docs`.
 

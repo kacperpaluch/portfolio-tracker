@@ -51,6 +51,10 @@ button, .btn {
 button:hover, .btn:hover { background: #2b3644; border-color: #3a4858; }
 button:disabled { opacity: 0.5; cursor: default; }
 button.primary { background: var(--accent-dim); border-color: var(--accent); color: #cae2ff; }
+a.btn { text-decoration: none; display: inline-flex; align-items: center; }
+
+.data-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.data-actions code { background: var(--bg); padding: 1px 6px; border-radius: 4px; font-size: 12px; }
 
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 24px; }
 .card {

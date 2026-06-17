@@ -18,6 +18,7 @@ wyceny i pokazuje wartość, zysk/stratę oraz roczną stopę zwrotu — **wszys
 - **Alokacja docelowa** — kategorie ETF-ów, wagi modelu (np. 60/40) i porównanie z rebalansem.
 - **Widok waloru** — historia dzień po dniu + atrybucja zysku na instrument vs walutę (kurs PLN).
 - **Historia transakcji** i ręczne mapowanie ISIN → ticker.
+- **Eksport i backup** — pobranie transakcji (CSV) i całej bazy z UI + nocny backup bazy (cron).
 - **Codzienne odświeżanie** cen i kursów (cron ~21:00 Europe/Warsaw).
 
 ## Źródła danych

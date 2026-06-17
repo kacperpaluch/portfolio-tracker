@@ -1,14 +1,18 @@
 """FastAPI — API portfolio trackera + serwowanie frontendu."""
 from __future__ import annotations
 
+import tempfile
 from contextlib import asynccontextmanager
+from datetime import date
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from . import allocation as allocation_mod
+from . import backup as backup_mod
 from . import cash as cash_mod
 from . import history as history_mod
 from . import instruments as instruments_mod
@@ -131,6 +135,37 @@ def backfill() -> dict:
     """Pobiera pełną historię cen i kursów NBP od daty pierwszej transakcji."""
     with db_session() as conn:
         return history_mod.backfill_all(conn)
+
+
+@app.get("/api/export/transactions.csv")
+def export_transactions_csv() -> Response:
+    with db_session() as conn:
+        csv_text = backup_mod.transactions_csv(conn)
+    return Response(
+        content=csv_text,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="transakcje-{date.today().isoformat()}.csv"'},
+    )
+
+
+@app.get("/api/export/db")
+def export_db() -> FileResponse:
+    """Pobranie spójnej kopii całej bazy SQLite (do pliku tymczasowego, bez retencji serwerowej)."""
+    tmp = Path(tempfile.gettempdir()) / f"portfolio-{date.today().isoformat()}.db"
+    backup_mod.backup_database(dest=tmp)
+    return FileResponse(tmp, media_type="application/octet-stream", filename=tmp.name)
+
+
+@app.post("/api/backup-now")
+def backup_now() -> dict:
+    """Tworzy backup bazy po stronie serwera (do BACKUP_DIR, z retencją)."""
+    path = backup_mod.backup_database()
+    return {"file": path.name, "dir": str(path.parent), "backups": backup_mod.list_backups()}
+
+
+@app.get("/api/backups")
+def get_backups() -> dict:
+    return {"dir": str(backup_mod.BACKUP_DIR), "backups": backup_mod.list_backups()}
 
 
 @app.get("/api/transactions")
