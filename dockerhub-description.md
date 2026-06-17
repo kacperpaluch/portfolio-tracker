@@ -12,7 +12,8 @@ wyceny i pokazuje wartość, zysk/stratę oraz roczną stopę zwrotu — **wszys
 - **Zysk całkowity** — niezrealizowany (otwarte pozycje) + zrealizowany (sprzedaże).
 - **Konto gotówkowe** — ręczne wpłaty/wypłaty, śledzenie niezainwestowanej gotówki.
 - **Wykres wartości w czasie** + porównanie z konfigurowalnym benchmarkiem (np. 5%/rok).
-- **XIRR** — roczny zwrot money-weighted całego rachunku.
+- **XIRR i TWR** — roczny zwrot money-weighted (z timingiem wpłat) oraz time-weighted (wynik portfela).
+- **Alokacja docelowa** — kategorie ETF-ów, wagi modelu (np. 60/40) i porównanie z rebalansem.
 - **Historia transakcji** i ręczne mapowanie ISIN → ticker.
 - **Codzienne odświeżanie** cen i kursów (cron ~21:00 Europe/Warsaw).
 
