@@ -116,3 +116,64 @@ def import_transactions(conn: sqlite3.Connection, content: bytes) -> dict:
         "skipped_duplicates": skipped,
         "new_instruments": sorted(new_instruments),
     }
+
+
+def _normalize_ts(ts: str) -> str:
+    """Akceptuje datę, datetime-local lub pełny ISO; zwraca ISO 8601."""
+    ts = ts.strip()
+    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d.%m.%Y"):
+        try:
+            return datetime.strptime(ts, fmt).isoformat()
+        except ValueError:
+            continue
+    return ts
+
+
+def add_transaction(
+    conn: sqlite3.Connection,
+    *,
+    ts: str,
+    isin: str,
+    name: str | None,
+    tx_type: str,
+    quantity: float,
+    price_pln: float,
+    commission_pln: float = 0.0,
+) -> dict:
+    """Dodaje pojedynczą transakcję ręcznie. Idempotentne (ten sam hash co import)."""
+    ts = _normalize_ts(ts)
+    isin = isin.strip()
+    tx_type = tx_type.upper()
+    if tx_type not in ("BUY", "SELL"):
+        raise ValueError("type musi być 'BUY' lub 'SELL'")
+    value_pln = round(quantity * price_pln, 2)
+    import_hash = hashlib.sha1(
+        f"{ts}|{isin}|{tx_type}|{quantity}|{price_pln}".encode()
+    ).hexdigest()
+
+    ensure_instrument(conn, isin, (name or isin).strip())
+    cur = conn.execute(
+        """
+        INSERT OR IGNORE INTO transactions
+            (ts, isin, type, quantity, price_pln, value_pln, commission_pln, import_hash)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (ts, isin, tx_type, quantity, price_pln, value_pln, commission_pln, import_hash),
+    )
+    if cur.rowcount == 1:
+        cash_mod.record_trade_cash(conn, ts, tx_type, value_pln, import_hash)
+        conn.commit()
+        return {"created": True, "id": cur.lastrowid}
+    conn.commit()
+    return {"created": False, "reason": "duplicate"}
+
+
+def delete_transaction(conn: sqlite3.Connection, tx_id: int) -> bool:
+    """Usuwa transakcję i powiązany przepływ gotówki."""
+    row = conn.execute("SELECT import_hash FROM transactions WHERE id = ?", (tx_id,)).fetchone()
+    if row is None:
+        return False
+    conn.execute("DELETE FROM transactions WHERE id = ?", (tx_id,))
+    cash_mod.remove_trade_cash(conn, row["import_hash"])
+    conn.commit()
+    return True

@@ -22,6 +22,14 @@ export const api = {
   refresh: () => fetch("/api/refresh", { method: "POST" }).then(json),
   backfill: () => fetch("/api/backfill", { method: "POST" }).then(json),
   transactions: () => fetch("/api/transactions").then(json),
+  addTransaction: (body) =>
+    fetch("/api/transactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then(json),
+  deleteTransaction: (id) => fetch(`/api/transactions/${id}`, { method: "DELETE" }).then(json),
+  instrumentHistory: (isin) => fetch(`/api/instruments/${isin}/history`).then(json),
   cash: () => fetch("/api/cash").then(json),
   addCash: (body) =>
     fetch("/api/cash", {

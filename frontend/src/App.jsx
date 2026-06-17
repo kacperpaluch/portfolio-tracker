@@ -89,7 +89,91 @@ function HistoryChart({ data }) {
   );
 }
 
-function PositionsTable({ positions, totals }) {
+function InstrumentDetail({ data, onClose }) {
+  if (!data) return null;
+  const rows = data.rows || [];
+  const isPln = data.currency === "PLN";
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <div>
+            <h2>{data.name}</h2>
+            <div className="tag">
+              {data.ticker || data.isin} · {data.currency}
+              {data.category ? ` · ${data.category}` : ""} · {data.isin}
+            </div>
+          </div>
+          <button onClick={onClose}>Zamknij ✕</button>
+        </div>
+
+        {rows.length === 0 ? (
+          <div className="spinner">Brak historii wycen. Uruchom „Backfill historii".</div>
+        ) : (
+          <>
+            <ResponsiveContainer width="100%" height={240}>
+              <ComposedChart data={rows} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="gd" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#3fb950" stopOpacity={0.3} />
+                    <stop offset="100%" stopColor="#3fb950" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke="#2c3845" strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="date" tick={{ fill: "#8b97a6", fontSize: 11 }} minTickGap={40} stroke="#2c3845" />
+                <YAxis yAxisId="pln" tick={{ fill: "#8b97a6", fontSize: 11 }} stroke="#2c3845" width={56}
+                  tickFormatter={(v) => v.toFixed(0)} />
+                {!isPln && (
+                  <YAxis yAxisId="nat" orientation="right" tick={{ fill: "#8b97a6", fontSize: 11 }}
+                    stroke="#2c3845" width={48} tickFormatter={(v) => v.toFixed(1)} />
+                )}
+                <Tooltip
+                  contentStyle={{ background: "#1a212b", border: "1px solid #2c3845", borderRadius: 8, color: "#e6edf3" }}
+                  formatter={(v, name) => [name === "price_pln" ? fmtPln(v) : `${v} ${data.currency}`,
+                    name === "price_pln" ? "Cena PLN" : "Cena giełdowa"]}
+                />
+                <Area yAxisId="pln" type="monotone" dataKey="price_pln" stroke="#3fb950" strokeWidth={2} fill="url(#gd)" />
+                {!isPln && (
+                  <Line yAxisId="nat" type="monotone" dataKey="price_native" stroke="#d29922"
+                    strokeWidth={1.5} strokeDasharray="5 4" dot={false} />
+                )}
+              </ComposedChart>
+            </ResponsiveContainer>
+
+            <div className="modal-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Data</th>
+                    <th>Cena giełdowa</th>
+                    <th>Kurs NBP</th>
+                    <th>Cena PLN</th>
+                    <th>Szt.</th>
+                    <th>Wartość PLN</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...rows].reverse().map((r) => (
+                    <tr key={r.date}>
+                      <td>{r.date}</td>
+                      <td>{r.price_native} {data.currency}</td>
+                      <td>{r.fx_rate == null ? "—" : r.fx_rate}</td>
+                      <td>{fmtPln(r.price_pln)}</td>
+                      <td>{r.quantity || "—"}</td>
+                      <td>{r.value_pln ? fmtPln(r.value_pln) : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PositionsTable({ positions, totals, onOpen }) {
   if (!positions || positions.length === 0)
     return <div className="spinner">Brak pozycji. Zaimportuj plik CSV.</div>;
   return (
@@ -110,7 +194,8 @@ function PositionsTable({ positions, totals }) {
         {positions.map((p) => (
           <tr key={p.isin}>
             <td>
-              {p.name} {p.needs_config && <span className="badge">brak tickera</span>}
+              <span className="link" onClick={() => onOpen?.(p.isin)}>{p.name}</span>
+              {" "}{p.needs_config && <span className="badge">brak tickera</span>}
               <div className="tag">{p.ticker || p.isin} · {p.currency || "?"}</div>
             </td>
             <td>{p.quantity}</td>
@@ -141,32 +226,75 @@ function PositionsTable({ positions, totals }) {
   );
 }
 
-function TransactionsTable({ transactions }) {
+function TransactionForm({ instruments, onAdd }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const empty = { ts: today, isin: "", type: "BUY", quantity: "", price_pln: "", newIsin: "", newName: "" };
+  const [f, setF] = useState(empty);
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const adding = f.isin === "__new__";
+
+  const submit = () => {
+    const isin = adding ? f.newIsin.trim() : f.isin;
+    const qty = parseFloat(f.quantity);
+    const price = parseFloat(f.price_pln);
+    if (!isin || !qty || qty <= 0 || isNaN(price) || price < 0) return;
+    onAdd({
+      ts: f.ts, isin, name: adding ? f.newName.trim() : undefined,
+      type: f.type, quantity: qty, price_pln: price,
+    });
+    setF({ ...empty, ts: f.ts });
+  };
+
+  return (
+    <div className="tx-form">
+      <input className="cell" type="date" value={f.ts} onChange={(e) => set("ts", e.target.value)} />
+      <select className="cell" value={f.isin} onChange={(e) => set("isin", e.target.value)}>
+        <option value="">— wybierz walor —</option>
+        {instruments.map((i) => <option key={i.isin} value={i.isin}>{i.name}</option>)}
+        <option value="__new__">➕ nowy walor…</option>
+      </select>
+      {adding && (
+        <>
+          <input className="cell narrow" placeholder="ISIN" value={f.newIsin} onChange={(e) => set("newIsin", e.target.value)} />
+          <input className="cell" placeholder="nazwa" value={f.newName} onChange={(e) => set("newName", e.target.value)} />
+        </>
+      )}
+      <select className="cell narrow" value={f.type} onChange={(e) => set("type", e.target.value)}>
+        <option value="BUY">Kupno</option>
+        <option value="SELL">Sprzedaż</option>
+      </select>
+      <input className="cell narrow" type="number" step="any" placeholder="szt." value={f.quantity} onChange={(e) => set("quantity", e.target.value)} />
+      <input className="cell narrow" type="number" step="any" placeholder="cena PLN" value={f.price_pln} onChange={(e) => set("price_pln", e.target.value)} />
+      <button className="primary" onClick={submit}>Dodaj</button>
+    </div>
+  );
+}
+
+function TransactionsTable({ transactions, onOpen, onDelete }) {
   if (!transactions || transactions.length === 0)
-    return <div className="spinner">Brak transakcji.</div>;
+    return <div className="spinner">Brak transakcji. Dodaj ręcznie lub zaimportuj CSV.</div>;
   return (
     <table>
       <thead>
         <tr>
-          <th>Data</th>
-          <th>Instrument</th>
-          <th>Typ</th>
-          <th>Szt.</th>
-          <th>Cena</th>
-          <th>Wartość</th>
+          <th>Data</th><th>Instrument</th><th>Typ</th><th>Szt.</th><th>Cena</th><th>Wartość</th><th></th>
         </tr>
       </thead>
       <tbody>
         {transactions.map((t) => (
           <tr key={t.id}>
             <td>{fmtDate(t.ts)}</td>
-            <td>{t.name || t.isin}<div className="tag">{t.ticker || t.isin}</div></td>
+            <td>
+              <span className="link" onClick={() => onOpen?.(t.isin)}>{t.name || t.isin}</span>
+              <div className="tag">{t.ticker || t.isin}</div>
+            </td>
             <td className={t.type === "BUY" ? "pos" : "neg"}>{t.type === "BUY" ? "Kupno" : "Sprzedaż"}</td>
             <td>{t.quantity}</td>
             <td>{fmtPln(t.price_pln)}</td>
             <td className={t.type === "BUY" ? "neg" : "pos"}>
               {t.type === "BUY" ? "−" : "+"}{fmtPln(t.value_pln)}
             </td>
+            <td><button onClick={() => onDelete?.(t.id)}>Usuń</button></td>
           </tr>
         ))}
       </tbody>
@@ -389,6 +517,7 @@ export default function App() {
   const [transactions, setTransactions] = useState([]);
   const [cash, setCash] = useState(null);
   const [allocation, setAllocation] = useState(null);
+  const [detail, setDetail] = useState(null);
   const [tab, setTab] = useState("dashboard");
   const [benchmarkRate, setBenchmarkRate] = useState(5);
   const [busy, setBusy] = useState(false);
@@ -427,6 +556,10 @@ export default function App() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const openDetail = (isin) => {
+    api.instrumentHistory(isin).then(setDetail).catch((e) => flash(`Błąd: ${e.message}`, false));
   };
 
   const onImport = (e) => {
@@ -489,7 +622,7 @@ export default function App() {
           </div>
           <div className="panel">
             <h2>Pozycje</h2>
-            <PositionsTable positions={portfolio?.positions} totals={portfolio?.totals || {}} />
+            <PositionsTable positions={portfolio?.positions} totals={portfolio?.totals || {}} onOpen={openDetail} />
           </div>
         </>
       )}
@@ -497,7 +630,18 @@ export default function App() {
       {tab === "transactions" && (
         <div className="panel">
           <h2>Historia transakcji</h2>
-          <TransactionsTable transactions={transactions} />
+          <TransactionForm
+            instruments={instruments}
+            onAdd={(body) => run(async () => {
+              const r = await api.addTransaction(body);
+              flash(r.created ? "Dodano transakcję." : "Pominięto — taka transakcja już istnieje.", r.created);
+            })}
+          />
+          <TransactionsTable
+            transactions={transactions}
+            onOpen={openDetail}
+            onDelete={(id) => run(() => api.deleteTransaction(id), "Usunięto transakcję.")}
+          />
         </div>
       )}
 
@@ -531,6 +675,8 @@ export default function App() {
           />
         </div>
       )}
+
+      {detail && <InstrumentDetail data={detail} onClose={() => setDetail(null)} />}
     </div>
   );
 }

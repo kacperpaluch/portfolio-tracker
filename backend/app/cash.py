@@ -79,6 +79,12 @@ def record_trade_cash(conn: sqlite3.Connection, ts: str, tx_type: str, value_pln
     )
 
 
+def remove_trade_cash(conn: sqlite3.Connection, import_hash: str) -> None:
+    """Usuwa przepływ gotówki powiązany z transakcją (po jej import_hash)."""
+    h = hashlib.sha1(f"cash|{import_hash}".encode()).hexdigest()
+    conn.execute("DELETE FROM cash_flows WHERE import_hash = ?", (h,))
+
+
 def _normalize_ts(ts: str) -> str:
     ts = ts.strip()
     for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d.%m.%Y"):

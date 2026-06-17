@@ -30,7 +30,10 @@ stopę zwrotu oraz porównanie z benchmarkiem — **wszystko w PLN**.
 ## Funkcje
 
 - **Import CSV** z biura maklerskiego (format GPW „historia PW", kodowanie CP1250) —
-  idempotentny (ponowny import nie dubluje transakcji).
+  idempotentny: CSV ze starymi + nowymi danymi importuje tylko nowe, starych nie rusza.
+- **Ręczne dodawanie/usuwanie transakcji** — formularz w UI (z dedupem jak w imporcie).
+- **Widok waloru** — klik w nazwę pokazuje historię dzień po dniu (cena giełdowa, kurs NBP,
+  cena w PLN, posiadane szt., wartość) + wykres ceny w PLN i natywnej.
 - **Wycena w PLN** — instrumenty notowane w EUR/USD/GBP przeliczane bieżącym kursem NBP;
   **waluta wykrywana automatycznie** z notowania (z obsługą londyńskich pensów GBx → GBP).
 - **Zysk całkowity** = niezrealizowany (otwarte pozycje) **+** zrealizowany (ze sprzedaży).
@@ -207,7 +210,9 @@ Pozycje nie są materializowane — liczone w locie z `transactions` (chronologi
 | `POST` | `/api/import` | import CSV (multipart `file`) |
 | `GET` | `/api/portfolio?refresh=false` | pozycje + sumy (wartość, P/L zreal./niezreal., gotówka, XIRR) |
 | `GET` | `/api/history?benchmark_rate=0.05` | dzienna seria `value_pln` + `benchmark_pln` |
-| `GET` | `/api/transactions` | historia transakcji (z nazwą instrumentu) |
+| `GET` / `POST` | `/api/transactions` | historia transakcji / ręczne dodanie |
+| `DELETE` | `/api/transactions/{id}` | usunięcie transakcji (i jej przepływu gotówki) |
+| `GET` | `/api/instruments/{isin}/history` | dzienna historia waloru (cena natywna, kurs, PLN, ilość) |
 | `GET` / `PUT` | `/api/allocation` | alokacja docelowa vs rzeczywista (grupy + gotówka) |
 | `GET` / `PUT` | `/api/instruments[/{isin}]` | podgląd / edycja mapowań ISIN→ticker |
 | `GET` | `/api/cash` | saldo gotówki + lista wpłat/wypłat |

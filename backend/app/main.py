@@ -15,6 +15,7 @@ from . import instruments as instruments_mod
 from . import portfolio as portfolio_mod
 from . import prices as prices_mod
 from . import fx as fx_mod
+from . import importer
 from .db import db_session, init_db
 from .importer import import_transactions
 
@@ -146,6 +147,54 @@ def get_transactions() -> list[dict]:
             """
         ).fetchall()
         return [dict(r) for r in rows]
+
+
+class TransactionIn(BaseModel):
+    ts: str
+    isin: str
+    name: str | None = None
+    type: str  # 'BUY' | 'SELL'
+    quantity: float
+    price_pln: float
+    commission_pln: float = 0.0
+
+
+@app.post("/api/transactions")
+def add_transaction(payload: TransactionIn) -> dict:
+    """Dodaje pojedynczą transakcję ręcznie (idempotentnie, jak import)."""
+    with db_session() as conn:
+        try:
+            return importer.add_transaction(
+                conn,
+                ts=payload.ts,
+                isin=payload.isin,
+                name=payload.name,
+                tx_type=payload.type,
+                quantity=payload.quantity,
+                price_pln=payload.price_pln,
+                commission_pln=payload.commission_pln,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.delete("/api/transactions/{tx_id}")
+def delete_transaction(tx_id: int) -> dict:
+    with db_session() as conn:
+        ok = importer.delete_transaction(conn, tx_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Transakcja nie znaleziona")
+    return {"deleted": tx_id}
+
+
+@app.get("/api/instruments/{isin}/history")
+def get_instrument_history(isin: str) -> dict:
+    """Dzienna historia waloru: cena natywna, kurs NBP, cena w PLN, posiadana ilość."""
+    with db_session() as conn:
+        result = history_mod.instrument_history(conn, isin)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Instrument not found")
+    return result
 
 
 @app.get("/api/cash")

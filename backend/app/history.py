@@ -159,6 +159,67 @@ def portfolio_history(conn: sqlite3.Connection, benchmark_rate: float = 0.05) ->
     return out
 
 
+def instrument_history(conn: sqlite3.Connection, isin: str) -> dict | None:
+    """Dzienna historia jednego waloru: cena natywna, kurs NBP, cena w PLN i posiadana ilość."""
+    inst = conn.execute("SELECT * FROM instruments WHERE isin = ?", (isin,)).fetchone()
+    if inst is None:
+        return None
+    currency = inst["currency"] or "PLN"
+
+    price_rows = conn.execute(
+        "SELECT date, price FROM prices WHERE isin = ? ORDER BY date ASC", (isin,)
+    ).fetchall()
+
+    fx_rows = conn.execute(
+        "SELECT date, rate_to_pln FROM fx_rates WHERE currency = ? ORDER BY date ASC", (currency,)
+    ).fetchall()
+    fx_dates = [r["date"] for r in fx_rows]
+    fx_vals = [r["rate_to_pln"] for r in fx_rows]
+
+    # Zdarzenia zmiany ilości (sygnowane) posortowane po dniu.
+    tx_rows = conn.execute(
+        "SELECT ts, type, quantity FROM transactions WHERE isin = ? ORDER BY ts ASC", (isin,)
+    ).fetchall()
+    events = sorted(
+        (t["ts"][:10], t["quantity"] if t["type"] == "BUY" else -t["quantity"]) for t in tx_rows
+    )
+
+    rows = []
+    held = 0.0
+    ev_idx = 0
+    for pr in price_rows:
+        day = pr["date"]
+        # Dolicz wszystkie transakcje z datą <= bieżący dzień.
+        while ev_idx < len(events) and events[ev_idx][0] <= day:
+            held += events[ev_idx][1]
+            ev_idx += 1
+
+        if currency == "PLN":
+            fx_rate = 1.0
+        else:
+            fx_rate = _forward_fill((fx_dates, fx_vals), day)
+        price_pln = round(pr["price"] * fx_rate, 4) if fx_rate is not None else None
+        qty = round(held, 6) if held > 1e-9 else 0.0
+        rows.append({
+            "date": day,
+            "price_native": round(pr["price"], 4),
+            "currency": currency,
+            "fx_rate": round(fx_rate, 4) if fx_rate is not None else None,
+            "price_pln": price_pln,
+            "quantity": qty,
+            "value_pln": round(qty * price_pln, 2) if price_pln is not None else None,
+        })
+
+    return {
+        "isin": isin,
+        "name": inst["name"],
+        "ticker": inst["ticker"],
+        "currency": currency,
+        "category": inst["category"],
+        "rows": rows,
+    }
+
+
 def portfolio_twr(conn: sqlite3.Connection) -> float | None:
     """Roczny TWR całego konta — z dziennej serii wartości i przepływów zewnętrznych."""
     series_rows = portfolio_history(conn)
