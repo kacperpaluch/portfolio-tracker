@@ -38,7 +38,11 @@ stopę zwrotu oraz porównanie z benchmarkiem — **wszystko w PLN**.
   (kupno −, sprzedaż +). Wartość konta = wycena ETF + gotówka.
 - **Wykres wartości konta w czasie** z porównaniem do **benchmarku** (konfigurowalna stała
   stopa roczna, np. 5%) liczonego metodą money-weighted.
-- **XIRR** — roczny zwrot money-weighted całego rachunku (z wpłat/wypłat i wartości końcowej).
+- **XIRR i TWR** — roczny zwrot money-weighted (z timingiem wpłat) **oraz** time-weighted
+  (wynik samego portfela, niezależny od timingu). Różnica = wpływ timingu Twoich dopłat.
+- **Alokacja docelowa** — przypisz ETF-om kategorie (akcje/obligacje/…), ustaw wagi modelu
+  (np. 60/40) i porównaj docelowy vs rzeczywisty udział grup z kwotą do rebalansu (gotówka
+  liczona jako osobna grupa).
 - **Historia transakcji** — pełna lista kupna/sprzedaży.
 - **Mapowanie ISIN → ticker** ręcznie w UI (z wstępnym seedem dla znanych instrumentów).
 - **Codzienne odświeżanie** cen i kursów (cron APScheduler, domyślnie ~21:00 Europe/Warsaw).
@@ -148,6 +152,7 @@ portfolio-tracker/
 │   │   ├── fx.py          # klient NBP + cache fx_rates, lookback na weekendy/święta
 │   │   ├── portfolio.py   # agregacja pozycji (średni koszt), wycena, P/L (zreal. + niezreal.)
 │   │   ├── cash.py        # księga gotówki: saldo, wpłaty/wypłaty, przepływy z transakcji
+│   │   ├── allocation.py  # alokacja docelowa vs rzeczywista (grupy, rebalans)
 │   │   ├── history.py     # backfill cen/kursów, seria wartości w czasie, benchmark, XIRR
 │   │   ├── returns.py     # czysta implementacja XIRR (Newton + fallback bisekcja)
 │   │   └── scheduler.py   # APScheduler — dzienne odświeżanie cen i FX
@@ -170,7 +175,8 @@ SQLite, 5 tabel (schemat w `backend/app/db.py`):
 
 | Tabela | Klucz | Zawartość |
 |---|---|---|
-| `instruments` | `isin` | nazwa, `ticker`, `currency` (EUR/USD/GBP/PLN), `source` (yfinance/stooq), `needs_config` |
+| `instruments` | `isin` | nazwa, `ticker`, `currency` (EUR/USD/GBP/PLN), `source` (yfinance/stooq), `category`, `needs_config` |
+| `target_allocation` | `category` | docelowy udział grupy (`weight_pct`) |
 | `transactions` | `id` | `ts`, `isin`, `type` (BUY/SELL), `quantity`, `price_pln`, `value_pln`, `import_hash` (unikalny — dedup) |
 | `prices` | (`isin`,`date`) | cena dzienna w walucie natywnej (cache) |
 | `fx_rates` | (`date`,`currency`) | kurs do PLN z NBP (cache) |
@@ -202,6 +208,7 @@ Pozycje nie są materializowane — liczone w locie z `transactions` (chronologi
 | `GET` | `/api/portfolio?refresh=false` | pozycje + sumy (wartość, P/L zreal./niezreal., gotówka, XIRR) |
 | `GET` | `/api/history?benchmark_rate=0.05` | dzienna seria `value_pln` + `benchmark_pln` |
 | `GET` | `/api/transactions` | historia transakcji (z nazwą instrumentu) |
+| `GET` / `PUT` | `/api/allocation` | alokacja docelowa vs rzeczywista (grupy + gotówka) |
 | `GET` / `PUT` | `/api/instruments[/{isin}]` | podgląd / edycja mapowań ISIN→ticker |
 | `GET` | `/api/cash` | saldo gotówki + lista wpłat/wypłat |
 | `POST` / `DELETE` | `/api/cash[/{id}]` | dodaj / usuń wpłatę-wypłatę |

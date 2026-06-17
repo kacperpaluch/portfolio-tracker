@@ -16,8 +16,15 @@ CREATE TABLE IF NOT EXISTS instruments (
     ticker       TEXT,
     currency     TEXT,                       -- 'EUR' | 'PLN'
     source       TEXT,                       -- 'yfinance' | 'stooq'
+    category     TEXT,                       -- klasa aktywów: 'Akcje' | 'Obligacje' | ...
     active       INTEGER NOT NULL DEFAULT 1,
     needs_config INTEGER NOT NULL DEFAULT 1
+);
+
+-- Model docelowy alokacji: kategoria -> docelowy udział %.
+CREATE TABLE IF NOT EXISTS target_allocation (
+    category   TEXT PRIMARY KEY,
+    weight_pct REAL NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS transactions (
@@ -70,11 +77,19 @@ def get_connection() -> sqlite3.Connection:
     return conn
 
 
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Lekkie migracje dla istniejących baz (CREATE IF NOT EXISTS nie dodaje kolumn)."""
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(instruments)")}
+    if "category" not in cols:
+        conn.execute("ALTER TABLE instruments ADD COLUMN category TEXT")
+
+
 def init_db(conn: sqlite3.Connection | None = None) -> None:
     own = conn is None
     conn = conn or get_connection()
     try:
         conn.executescript(SCHEMA)
+        _migrate(conn)
         conn.commit()
     finally:
         if own:

@@ -148,3 +148,5 @@ select.cell {
   padding: 6px 8px;
   font-size: 13px;
 }
+
+.alloc-actions { display: flex; align-items: center; gap: 14px; margin-top: 16px; }

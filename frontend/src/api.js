@@ -30,4 +30,11 @@ export const api = {
       body: JSON.stringify(body),
     }).then(json),
   deleteCash: (id) => fetch(`/api/cash/${id}`, { method: "DELETE" }).then(json),
+  allocation: () => fetch("/api/allocation").then(json),
+  setAllocation: (targets) =>
+    fetch("/api/allocation", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targets }),
+    }).then(json),
 };

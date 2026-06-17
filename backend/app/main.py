@@ -8,6 +8,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from . import allocation as allocation_mod
 from . import cash as cash_mod
 from . import history as history_mod
 from . import instruments as instruments_mod
@@ -66,6 +67,7 @@ class InstrumentUpdate(BaseModel):
     ticker: str | None = None
     currency: str | None = None
     source: str | None = None
+    category: str | None = None
     active: bool | None = None
 
 
@@ -78,11 +80,31 @@ def put_instrument(isin: str, payload: InstrumentUpdate) -> dict:
             ticker=payload.ticker,
             currency=payload.currency,
             source=payload.source,
+            category=payload.category,
             active=payload.active,
         )
     if updated is None:
         raise HTTPException(status_code=404, detail="Instrument not found")
     return updated
+
+
+@app.get("/api/allocation")
+def get_allocation() -> dict:
+    """Porównanie alokacji docelowej z rzeczywistą (grupy + gotówka)."""
+    with db_session() as conn:
+        return allocation_mod.compute(conn)
+
+
+class TargetAllocationIn(BaseModel):
+    targets: dict[str, float]
+
+
+@app.put("/api/allocation")
+def put_allocation(payload: TargetAllocationIn) -> dict:
+    """Ustawia model docelowy (kategoria -> docelowy %)."""
+    with db_session() as conn:
+        allocation_mod.set_targets(conn, payload.targets)
+        return allocation_mod.compute(conn)
 
 
 @app.get("/api/portfolio")

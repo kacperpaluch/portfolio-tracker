@@ -45,6 +45,7 @@ def compute_positions(conn: sqlite3.Connection) -> tuple[list[dict], float]:
                 "name": inst.get("name", isin),
                 "currency": inst.get("currency"),
                 "ticker": inst.get("ticker"),
+                "category": inst.get("category"),
                 "needs_config": bool(inst.get("needs_config", 1)),
                 "quantity": round(s["qty"], 6),
                 "cost_pln": round(s["cost"], 2),
