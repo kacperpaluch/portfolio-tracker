@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+backend/.venv/
+.venv/
+.pytest_cache/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Dane aplikacji (baza SQLite)
+data/
+*.db
+
+# Dane osobiste — eksporty z brokera (NIE commitować, zawierają realne transakcje)
+*.csv
+
+# System / różne
+.DS_Store
+*.log
+.env.local

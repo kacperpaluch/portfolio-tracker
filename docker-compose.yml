@@ -1,0 +1,17 @@
+services:
+  portfolio-tracker:
+    image: kpa90/portfolio-tracker:latest
+    container_name: portfolio-tracker
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - TZ=Europe/Warsaw
+      # Godzina codziennego odświeżania cen/kursów (czas TZ):
+      - REFRESH_HOUR=21
+      - REFRESH_MINUTE=0
+    volumes:
+      - portfolio_tracker_data:/app/data
+
+volumes:
+  portfolio_tracker_data:

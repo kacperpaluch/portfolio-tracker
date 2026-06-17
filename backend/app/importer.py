@@ -1,0 +1,118 @@
+"""Import historii transakcji z CSV biura maklerskiego (format GPW „historia PW").
+
+Cechy pliku:
+- kodowanie CP1250 (Windows-1250),
+- separator ';', liczby z przecinkiem dziesiętnym,
+- data 'DD.MM.YYYY HH:MM:SS',
+- kolumna typu: 'K' = kupno (BUY), 'S' = sprzedaż (SELL).
+"""
+from __future__ import annotations
+
+import hashlib
+import sqlite3
+from datetime import datetime
+
+from . import cash as cash_mod
+from .instruments import ensure_instrument
+
+ENCODING = "cp1250"
+# Kolejność kolumn (po pozycji — nagłówek bywa zniekształcony przez kodowanie):
+# data; papier; isin; ilość; [K/S]; cena; wartość; prowizja; po prowizji; waluta
+COL_COUNT = 10
+
+
+def parse_number(raw: str) -> float:
+    """'34,3375' / '1 234,56' -> float."""
+    return float(raw.replace("\xa0", "").replace(" ", "").replace(",", "."))
+
+
+def parse_csv(content: bytes) -> list[dict]:
+    """Parsuje surowe bajty CSV do listy znormalizowanych transakcji.
+
+    Funkcja czysta (bez DB) — łatwa do testowania. Pomija nagłówek i puste linie.
+    """
+    text = content.decode(ENCODING)
+    rows: list[dict] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split(";")
+        if len(parts) < COL_COUNT:
+            continue
+        # Pomiń wiersz nagłówka (pierwsza kolumna nie jest datą).
+        try:
+            ts = datetime.strptime(parts[0].strip(), "%d.%m.%Y %H:%M:%S")
+        except ValueError:
+            continue
+
+        kind = parts[4].strip().upper()
+        tx_type = {"K": "BUY", "S": "SELL"}.get(kind)
+        if tx_type is None:
+            continue
+
+        isin = parts[2].strip()
+        name = parts[1].strip()
+        quantity = parse_number(parts[3])
+        price_pln = parse_number(parts[5])
+        value_pln = parse_number(parts[6])
+        commission_pln = parse_number(parts[7]) if parts[7].strip() else 0.0
+
+        import_hash = hashlib.sha1(
+            f"{ts.isoformat()}|{isin}|{tx_type}|{quantity}|{price_pln}".encode()
+        ).hexdigest()
+
+        rows.append(
+            {
+                "ts": ts.isoformat(),
+                "isin": isin,
+                "name": name,
+                "type": tx_type,
+                "quantity": quantity,
+                "price_pln": price_pln,
+                "value_pln": value_pln,
+                "commission_pln": commission_pln,
+                "import_hash": import_hash,
+            }
+        )
+    return rows
+
+
+def import_transactions(conn: sqlite3.Connection, content: bytes) -> dict:
+    """Importuje transakcje do bazy. Idempotentny — duplikaty (import_hash) pomijane."""
+    rows = parse_csv(content)
+    imported = 0
+    skipped = 0
+    new_instruments: set[str] = set()
+
+    for r in rows:
+        before = conn.execute(
+            "SELECT 1 FROM instruments WHERE isin = ?", (r["isin"],)
+        ).fetchone()
+        ensure_instrument(conn, r["isin"], r["name"])
+        if before is None:
+            new_instruments.add(r["isin"])
+
+        cur = conn.execute(
+            """
+            INSERT OR IGNORE INTO transactions
+                (ts, isin, type, quantity, price_pln, value_pln, commission_pln, import_hash)
+            VALUES (:ts, :isin, :type, :quantity, :price_pln, :value_pln, :commission_pln, :import_hash)
+            """,
+            r,
+        )
+        if cur.rowcount == 1:
+            imported += 1
+        else:
+            skipped += 1
+
+        # Wpływ transakcji na gotówkę (idempotentny po import_hash).
+        cash_mod.record_trade_cash(conn, r["ts"], r["type"], r["value_pln"], r["import_hash"])
+
+    conn.commit()
+    return {
+        "parsed": len(rows),
+        "imported": imported,
+        "skipped_duplicates": skipped,
+        "new_instruments": sorted(new_instruments),
+    }
