@@ -37,9 +37,14 @@ function Cards({ totals }) {
         </div>
       </div>
       <div className="card">
-        <div className="label">Zwrot całkowity</div>
-        <div className={`value ${cls(t.total_return_pct)}`}>{fmtPct(t.total_return_pct)}</div>
-        <div className="tag">XIRR {t.xirr == null ? "—" : fmtPct(t.xirr * 100)}</div>
+        <div className="label">XIRR</div>
+        <div className={`value ${cls(t.xirr)}`}>{t.xirr == null ? "—" : fmtPct(t.xirr * 100)}</div>
+        <div className="tag">zwrot z Twojego kapitału (z timingiem wpłat)</div>
+      </div>
+      <div className="card">
+        <div className="label">TWR</div>
+        <div className={`value ${cls(t.twr)}`}>{t.twr == null ? "—" : fmtPct(t.twr * 100)}</div>
+        <div className="tag">wynik portfela (bez wpływu timingu wpłat)</div>
       </div>
       <div className="card">
         <div className="label">Gotówka</div>

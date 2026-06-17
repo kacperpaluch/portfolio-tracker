@@ -8,6 +8,30 @@ from __future__ import annotations
 from datetime import date
 
 
+def twr(series: list[tuple[date, float]], cashflows: dict[date, float]) -> float | None:
+    """Roczny TWR (time-weighted) — zwrot portfela niezależny od timingu wpłat.
+
+    Łańcuch dziennych zwrotów z neutralizacją przepływów (konwencja „początek dnia":
+    wpłata wchodzi do bazy kapitału danego dnia). `series` to dzienne (data, wartość_konta)
+    rosnąco, `cashflows` to suma wpłat/wypłat per dzień (wpłata +, wypłata −).
+    """
+    if len(series) < 2:
+        return None
+    growth = 1.0
+    prev_val = series[0][1]
+    for day, v_end in series[1:]:
+        base = prev_val + cashflows.get(day, 0.0)
+        if base > 1e-9:
+            growth *= v_end / base
+        prev_val = v_end
+
+    total = growth - 1.0
+    days = (series[-1][0] - series[0][0]).days
+    if days <= 0:
+        return total
+    return (1.0 + total) ** (365.0 / days) - 1.0
+
+
 def _xnpv(rate: float, cashflows: list[tuple[date, float]]) -> float:
     t0 = cashflows[0][0]
     return sum(cf / (1.0 + rate) ** ((d - t0).days / 365.0) for d, cf in cashflows)

@@ -6,7 +6,7 @@ import sqlite3
 from datetime import date, timedelta
 
 from . import fx, prices
-from .returns import xirr
+from .returns import twr, xirr
 
 
 def backfill_all(conn: sqlite3.Connection) -> dict:
@@ -157,6 +157,24 @@ def portfolio_history(conn: sqlite3.Connection, benchmark_rate: float = 0.05) ->
         out.append({"date": day, "value_pln": round(total, 2), "benchmark_pln": round(bench, 2)})
         d += timedelta(days=1)
     return out
+
+
+def portfolio_twr(conn: sqlite3.Connection) -> float | None:
+    """Roczny TWR całego konta — z dziennej serii wartości i przepływów zewnętrznych."""
+    series_rows = portfolio_history(conn)
+    if len(series_rows) < 2:
+        return None
+    series = [(date.fromisoformat(r["date"]), r["value_pln"]) for r in series_rows]
+
+    flows = conn.execute(
+        "SELECT ts, amount_pln FROM cash_flows WHERE kind IN ('deposit', 'withdrawal')"
+    ).fetchall()
+    cf_by_day: dict[date, float] = {}
+    for f in flows:
+        d = date.fromisoformat(f["ts"][:10])
+        cf_by_day[d] = cf_by_day.get(d, 0.0) + f["amount_pln"]
+
+    return twr(series, cf_by_day)
 
 
 def portfolio_xirr(

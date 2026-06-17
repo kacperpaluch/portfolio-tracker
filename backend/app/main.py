@@ -93,6 +93,7 @@ def get_portfolio(refresh: bool = False) -> dict:
         etf_value = totals["value_pln_partial"]
         portfolio_value = totals.get("portfolio_value_pln") or (etf_value + totals.get("cash_pln", 0))
         totals["xirr"] = history_mod.portfolio_xirr(conn, etf_value, portfolio_value)
+        totals["twr"] = history_mod.portfolio_twr(conn)
         return result
 
 

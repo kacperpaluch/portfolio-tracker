@@ -5,7 +5,7 @@ from datetime import date
 
 import pytest
 
-from app.returns import xirr
+from app.returns import twr, xirr
 
 
 def test_xirr_simple_doubling_one_year():
@@ -33,3 +33,20 @@ def test_xirr_multiple_contributions():
 def test_xirr_requires_sign_change():
     assert xirr([(date(2025, 1, 1), -100.0), (date(2026, 1, 1), -50.0)]) is None
     assert xirr([(date(2025, 1, 1), 100.0)]) is None
+
+
+def test_twr_no_cashflows_equals_simple_return():
+    series = [(date(2025, 1, 1), 1000.0), (date(2026, 1, 1), 1100.0)]
+    assert twr(series, {}) == pytest.approx(0.10, abs=1e-6)
+
+
+def test_twr_neutralizes_deposit_timing():
+    # +6,67% w I poł. roku, potem wpłata 500, +10% w II poł. -> TWR ~17,33% (wpłata nie zaburza).
+    series = [
+        (date(2025, 1, 1), 1000.0),
+        (date(2025, 7, 1), 1600.0),  # 1000 -> 1066.67 (wzrost) + 500 wpłaty
+        (date(2026, 1, 1), 1760.0),  # 1600 -> 1760 (+10%)
+    ]
+    cf = {date(2025, 7, 1): 500.0}
+    result = twr(series, cf)
+    assert result == pytest.approx(0.1733, abs=1e-3)
