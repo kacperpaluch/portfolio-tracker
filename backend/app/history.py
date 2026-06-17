@@ -47,12 +47,16 @@ def _series_map(rows) -> dict[str, list]:
 
 
 def _forward_fill(series: tuple[list, list] | None, day: str) -> float | None:
-    """Ostatnia wartość z datą <= day (forward-fill)."""
+    """Ostatnia wartość z datą <= day. Przed pierwszą znaną datą zwraca najwcześniejszą
+    wartość (back-fill startu), żeby walor z późniejszym pierwszym notowaniem nie „wskakiwał"
+    z 0 do pełnej wartości — co psułoby TWR i wykres."""
     if not series:
         return None
     dates, values = series
+    if not dates:
+        return None
     idx = bisect.bisect_right(dates, day) - 1
-    return values[idx] if idx >= 0 else None
+    return values[idx] if idx >= 0 else values[0]
 
 
 def _cash_timeline(conn: sqlite3.Connection):

@@ -7,6 +7,14 @@ maklerskie (np. konto IKE). Importuje historię transakcji z CSV, pobiera bież�
 przelicza waluty kursem NBP i pokazuje wartość, zysk/stratę (zrealizowany + niezrealizowany),
 stopę zwrotu oraz porównanie z benchmarkiem — **wszystko w PLN**.
 
+## Zrzuty ekranu
+
+> Dane na zrzutach są przykładowe (fikcyjne), wygenerowane na potrzeby dokumentacji.
+
+| Pulpit | Alokacja | Transakcje |
+|---|---|---|
+| ![Pulpit](docs/screenshots/dashboard.png) | ![Alokacja](docs/screenshots/allocation.png) | ![Transakcje](docs/screenshots/transactions.png) |
+
 ---
 
 ## Spis treści

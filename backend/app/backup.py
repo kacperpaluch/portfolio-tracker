@@ -20,7 +20,7 @@ def backup_database(dest: Path | None = None) -> Path:
     """Tworzy spójną kopię bazy (online backup API). Domyślnie do BACKUP_DIR/portfolio-<data>.db."""
     if dest is None:
         BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now().strftime("%Y-%m-%d")
+        stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")  # z czasem — kilka kopii dziennie
         dest = BACKUP_DIR / f"portfolio-{stamp}.db"
     else:
         dest.parent.mkdir(parents=True, exist_ok=True)

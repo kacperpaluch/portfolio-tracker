@@ -87,8 +87,8 @@ function HistoryChart({ data }) {
           formatter={(v, name) => [fmtPln(v), LABELS[name] || name]}
         />
         <Legend formatter={(name) => LABELS[name] || name} wrapperStyle={{ fontSize: 12 }} />
-        <Area type="monotone" dataKey="value_pln" stroke="#4493f8" strokeWidth={2} fill="url(#g)" />
-        <Line type="monotone" dataKey="benchmark_pln" stroke="#d29922" strokeWidth={2} strokeDasharray="5 4" dot={false} />
+        <Area type="monotone" isAnimationActive={false} dataKey="value_pln" stroke="#4493f8" strokeWidth={2} fill="url(#g)" />
+        <Line type="monotone" isAnimationActive={false} dataKey="benchmark_pln" stroke="#d29922" strokeWidth={2} strokeDasharray="5 4" dot={false} />
       </ComposedChart>
     </ResponsiveContainer>
   );
@@ -156,11 +156,11 @@ function InstrumentDetail({ data, onClose }) {
                   formatter={(v, name) => [fmtPln(v), DETAIL_LABELS[name] || name]}
                 />
                 <Legend formatter={(name) => DETAIL_LABELS[name] || name} wrapperStyle={{ fontSize: 12 }} />
-                <Area type="monotone" dataKey="value_pln" stroke="#3fb950" strokeWidth={2} fill="url(#gd)" />
+                <Area type="monotone" isAnimationActive={false} dataKey="value_pln" stroke="#3fb950" strokeWidth={2} fill="url(#gd)" />
                 {!isPln && (
-                  <Line type="monotone" dataKey="value_const_fx" stroke="#d29922" strokeWidth={1.8} strokeDasharray="5 4" dot={false} />
+                  <Line type="monotone" isAnimationActive={false} dataKey="value_const_fx" stroke="#d29922" strokeWidth={1.8} strokeDasharray="5 4" dot={false} />
                 )}
-                <Line type="monotone" dataKey="cost_pln" stroke="#8b97a6" strokeWidth={1.2} dot={false} />
+                <Line type="monotone" isAnimationActive={false} dataKey="cost_pln" stroke="#8b97a6" strokeWidth={1.2} dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
 
@@ -559,13 +559,26 @@ function DataPanel({ backups, onBackup, busy }) {
   );
 }
 
+function BackupModal({ backups, onBackup, onClose, busy }) {
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <h2>Backup i eksport danych</h2>
+          <button onClick={onClose}>Zamknij ✕</button>
+        </div>
+        <DataPanel backups={backups} onBackup={onBackup} busy={busy} />
+      </div>
+    </div>
+  );
+}
+
 const TABS = [
   ["dashboard", "Pulpit"],
   ["transactions", "Transakcje"],
   ["allocation", "Alokacja"],
   ["cash", "Gotówka"],
   ["instruments", "Instrumenty"],
-  ["data", "Dane"],
 ];
 
 export default function App() {
@@ -576,8 +589,9 @@ export default function App() {
   const [cash, setCash] = useState(null);
   const [allocation, setAllocation] = useState(null);
   const [backups, setBackups] = useState(null);
+  const [showBackup, setShowBackup] = useState(false);
   const [detail, setDetail] = useState(null);
-  const [tab, setTab] = useState("dashboard");
+  const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get("tab") || "dashboard");
   const [benchmarkRate, setBenchmarkRate] = useState(5);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
@@ -643,6 +657,7 @@ export default function App() {
           <button onClick={() => fileRef.current?.click()} disabled={busy}>Importuj CSV</button>
           <button onClick={() => run(() => api.refresh(), "Odświeżono ceny i kursy.")} disabled={busy}>Odśwież ceny</button>
           <button onClick={() => run(() => api.backfill(), "Pobrano historię wycen.")} disabled={busy}>Backfill historii</button>
+          <button onClick={() => setShowBackup(true)} disabled={busy}>Backup</button>
         </div>
       </header>
 
@@ -735,15 +750,13 @@ export default function App() {
         </div>
       )}
 
-      {tab === "data" && (
-        <div className="panel">
-          <h2>Dane i backup</h2>
-          <DataPanel
-            backups={backups}
-            busy={busy}
-            onBackup={() => run(() => api.backupNow(), "Backup zapisany na serwerze.")}
-          />
-        </div>
+      {showBackup && (
+        <BackupModal
+          backups={backups}
+          busy={busy}
+          onBackup={() => run(() => api.backupNow(), "Backup zapisany na serwerze.")}
+          onClose={() => setShowBackup(false)}
+        />
       )}
 
       {detail && <InstrumentDetail data={detail} onClose={() => setDetail(null)} />}
