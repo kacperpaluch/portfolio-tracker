@@ -6,7 +6,9 @@ wyceny i pokazuje wartość, zysk/stratę oraz roczną stopę zwrotu — **wszys
 
 ## Funkcje
 
-- **Import CSV** z biura maklerskiego (format GPW „historia PW", CP1250) — idempotentny.
+- **Import CSV** z biura maklerskiego (format GPW „historia PW", CP1250) — idempotentny
+  (CSV ze starymi + nowymi danymi importuje tylko nowe).
+- **Ręczne dodawanie/usuwanie transakcji** w UI (z tym samym dedupem co import).
 - **Wycena w PLN** — ETF-y notowane w EUR/USD/GBP przeliczane bieżącym kursem NBP;
   waluta wykrywana automatycznie (z obsługą londyńskich pensów GBx).
 - **Zysk całkowity** — niezrealizowany (otwarte pozycje) + zrealizowany (sprzedaże).
@@ -14,6 +16,7 @@ wyceny i pokazuje wartość, zysk/stratę oraz roczną stopę zwrotu — **wszys
 - **Wykres wartości w czasie** + porównanie z konfigurowalnym benchmarkiem (np. 5%/rok).
 - **XIRR i TWR** — roczny zwrot money-weighted (z timingiem wpłat) oraz time-weighted (wynik portfela).
 - **Alokacja docelowa** — kategorie ETF-ów, wagi modelu (np. 60/40) i porównanie z rebalansem.
+- **Widok waloru** — historia dzień po dniu + atrybucja zysku na instrument vs walutę (kurs PLN).
 - **Historia transakcji** i ręczne mapowanie ISIN → ticker.
 - **Codzienne odświeżanie** cen i kursów (cron ~21:00 Europe/Warsaw).
 
