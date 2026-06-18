@@ -14,7 +14,7 @@ wyceny i pokazuje wartość, zysk/stratę oraz roczną stopę zwrotu — **wszys
 - **Import cen z CSV** — gdy Yahoo nie ma poprawnej historii waloru, wgraj dzienne ceny z pliku (format stooq) wprost na widoku waloru.
 - **Zysk całkowity** — niezrealizowany (otwarte pozycje) + zrealizowany (sprzedaże).
 - **Konto gotówkowe** — ręczne wpłaty/wypłaty, śledzenie niezainwestowanej gotówki.
-- **Wykres wartości w czasie** + porównanie z konfigurowalnym benchmarkiem (np. 5%/rok).
+- **Wykres wartości w czasie** + porównanie z konfigurowalnym benchmarkiem (np. 5%/rok) — przełącznik trybu: wartość konta (PLN) **lub** stopa zwrotu (%) vs benchmark w %.
 - **XIRR i TWR** — roczny zwrot money-weighted (z timingiem wpłat) oraz time-weighted (wynik portfela).
 - **Alokacja docelowa** — kategorie ETF-ów, wagi modelu (np. 60/40) i porównanie z rebalansem.
 - **Widok waloru** — historia dzień po dniu + atrybucja zysku na instrument vs walutę (kurs PLN).

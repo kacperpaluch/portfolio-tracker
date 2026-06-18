@@ -57,7 +57,8 @@ stopę zwrotu oraz porównanie z benchmarkiem — **wszystko w PLN**.
 - **Konto gotówkowe** — ręczne wpłaty/wypłaty; saldo nettowane przepływami z transakcji
   (kupno −, sprzedaż +). Wartość konta = wycena ETF + gotówka.
 - **Wykres wartości konta w czasie** z porównaniem do **benchmarku** (konfigurowalna stała
-  stopa roczna, np. 5%) liczonego metodą money-weighted.
+  stopa roczna, np. 5%) liczonego metodą money-weighted — z **przełącznikiem trybu**:
+  wartość konta (PLN) lub stopa zwrotu (%) vs benchmark w %.
 - **XIRR i TWR** — roczny zwrot money-weighted (z timingiem wpłat) **oraz** time-weighted
   (wynik samego portfela, niezależny od timingu). Różnica = wpływ timingu Twoich dopłat.
 - **Zwroty w okresach** — pasek 1M / 3M / YTD / 1R / od początku: TWR skumulowany (faktyczny

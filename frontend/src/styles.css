@@ -82,6 +82,18 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .sub { color: var(--muted); font-size: 13px; }
 .panel-head .sub { font-size: 12px; }
 
+.chart-toggle { display: flex; gap: 6px; margin-bottom: 10px; }
+.chart-toggle .tg {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 5px 12px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+.chart-toggle .tg:hover { color: var(--text); }
+.chart-toggle .tg.on { background: var(--accent-dim); border-color: var(--accent); color: #cae2ff; }
+
 .returns-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
 .ret { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
 .ret-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }

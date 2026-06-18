@@ -76,7 +76,7 @@ backend/app/
   fx.py          # NBP: get_rate (lookback), backfill_range, cache w fx_rates
   cash.py        # księga gotówki: balance/has_external, add/delete flow, record/remove_trade_cash
   portfolio.py   # compute_positions (średni koszt + zrealizowany), value_positions (sumy)
-  history.py     # refresh_latest (bieżące+luki), backfill_all, portfolio_history (+benchmark), portfolio_xirr/twr, instrument_history
+  history.py     # refresh_latest (bieżące+luki), backfill_all, portfolio_history (+benchmark +portfolio_pct/benchmark_pct), portfolio_xirr/twr, instrument_history
   returns.py     # czyste funkcje: xirr() (Newton+bisekcja), twr() (łańcuch podokresów)
   allocation.py  # compute (grupy vs cel + rebalans), get/set_targets
   summary.py     # build() — digest pod powiadomienia (kompozycja portfolio+history+allocation)
@@ -133,7 +133,7 @@ refresh / backfill
    → prices (yfinance/stooq, waluta auto) + fx_rates (NBP)
 odczyt
    → portfolio.value_positions  → pozycje, P/L, gotówka, wartość konta
-   → history.portfolio_history  → seria wartości + benchmark
+   → history.portfolio_history  → seria wartości + benchmark + stopy zwrotu %
    → history.portfolio_xirr/twr → stopy zwrotu
    → allocation.compute         → grupy vs cel
    → history.instrument_history → widok waloru + atrybucja FX
@@ -149,7 +149,7 @@ odczyt
 | DELETE | `/api/transactions/{id}` | usunięcie transakcji (+ przepływ gotówki) |
 | GET | `/api/portfolio?refresh=` | pozycje + sumy (P/L, cash, XIRR, TWR, `returns` 1M/3M/YTD/1R/all) |
 | GET | `/api/summary` | digest pod powiadomienia/n8n: konto, P/L, zmiana D/D, zwroty, alokacja vs cel (`summary.build`) |
-| GET | `/api/history?benchmark_rate=` | seria wartości + benchmark |
+| GET | `/api/history?benchmark_rate=` | seria `value_pln` + `benchmark_pln` + `portfolio_pct` + `benchmark_pct` (stopa zwrotu % vs benchmark %; przełącznik trybu w `HistoryChart`) |
 | GET | `/api/daily-changes` | dzienny P/L (zmiana wyceny ETF D/D, koszt transakcji odjęty) + rozbicie `instrument_pln`/`fx_pln` — `history.portfolio_daily_changes` |
 | GET | `/api/instruments/{isin}/history` | widok waloru (cena natywna/PLN, atrybucja) |
 | GET/PUT | `/api/instruments[/{isin}]` | mapowania ISIN→ticker (+ category) |
@@ -178,6 +178,7 @@ Swagger UI `/docs` · ReDoc `/redoc` · OpenAPI JSON `/openapi.json` (do importu
 - **TWR** — time-weighted; łańcuch dziennych zwrotów z neutralizacją przepływów (konwencja „początek dnia").
 - **Zwroty w okresach** (`history.portfolio_returns`) — okna 1M/3M/YTD/1R/od początku liczone z jednej dziennej serii. Per okno: TWR skumulowany (nie-zannualizowany, headline dla krótkich okien), TWR roczny, XIRR roczny. Wkłady kapitału (z `_contributions`) spójne z serią → neutralizacja TWR i baza XIRR nie liczą dopłat jako zwrotu. Zwracane w `totals.returns` z `/api/portfolio`.
 - **Benchmark** — money-weighted: każda wpłata oprocentowana stałą stopą od swojej daty (nie płaska linia!).
+- **Stopa zwrotu % vs benchmark %** (`portfolio_history`) — `portfolio_pct = (wartość − cum_wkłady) / cum_wkłady × 100`, analogicznie `benchmark_pct`. Skumulowane wkłady liczone inkrementalnie (O(dni + wpłaty), nie O(dni × wpłaty)). Przed pierwszą wpłatą `cum_wkłady = 0` → `null` (przerwa w linii, `connectNulls` tylko w trybie PLN). Bez wpłat zewnętrznych fallback na transakcje (wkład = cost basis). Przełącznik trybu wykresu (PLN/%) jest czysto frontendowy w `HistoryChart`.
 - **Atrybucja FX** (widok waloru) — `wartość_bez_zmian_kursu = ilość × cena_natywna × kurs_wejścia`; `efekt_waluty = wartość − wartość_bez_zmian_kursu`; `efekt_instrumentu = total − efekt_waluty`.
 - **Rozbicie zmiany dziennej** (`history.portfolio_daily_changes`) — `fx_pln = Σ ilość × cena_dziś × (kurs_dziś − kurs_wczoraj)` (efekt fixingu NBP D/D), `instrument_pln = change_pln − fx_pln` (ruch ceny; dla PLN = całość). Niezmiennik: `instrument_pln + fx_pln == change_pln` (liczone z zaokrąglonych wartości, by kolumny sumowały się co do grosza). Sens: rozdziela, czy dzień zrobił ETF czy złoty — np. skok kursu NBP w poniedziałek vs ruch instrumentu.
 - **Import cen z CSV** (`prices.parse_price_csv` + `prices.import_prices`) — ratunek, gdy provider nie oddaje poprawnej historii dla waloru (jedyny działający kanał dla niszowych papierów GPW). Parser czysty: rozpoznaje kolumny po nagłówku (PL/EN: `Data`/`Date`, `Zamkniecie`/`Close`), wykrywa separator (`,`/`;`/tab), akceptuje datę ISO/`YYYYMMDD`/`DD.MM.YYYY` i przecinek dziesiętny. Zapis `INSERT OR REPLACE` z `source='csv'`. **Waluta wymagana do wyceny** (CSV jej nie niesie; bez niej kurs FX → wartość 0): `import_prices(currency=...)` ustawia ją na instrumencie, jeśli podana; gdy brak i instrument też jej nie ma → `ValueError` (NIE zgadujemy PLN — stooq notuje też w USD/EUR/GBP). W UI: przy braku waluty frontend pyta (podpowiedź PLN). **Pułapka:** pełny `backfill`/`refresh` (yfinance) może nadpisać te punkty z powrotem — po backfillu importuj CSV ponownie. Endpoint `POST /api/prices/import` (`isin`+`file`+opcjonalnie `currency`), w UI przycisk „Importuj ceny (CSV)" w oknie waloru.

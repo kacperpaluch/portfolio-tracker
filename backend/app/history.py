@@ -169,6 +169,13 @@ def portfolio_history(conn: sqlite3.Connection, benchmark_rate: float = 0.05) ->
     cash_vals = [c[1] for c in cash_cum]
     contributions = _contributions(conn, has_external)
 
+    # Skumulowane wkłady kapitału per dzień — do przeliczenia serii na stopę zwrotu (%).
+    # Budowane raz (O(wpłaty)); w pętli dziennej tylko inkrementalnie dodajemy deltę dnia.
+    contrib_by_day: dict[str, float] = {}
+    for cdate, amount in contributions:
+        d = cdate.isoformat()
+        contrib_by_day[d] = contrib_by_day.get(d, 0.0) + amount
+
     instr_ccy = {r["isin"]: r["currency"] for r in conn.execute("SELECT isin, currency FROM instruments")}
     price_map = _series_map([(r["isin"], r["date"], r["price"]) for r in conn.execute("SELECT isin, date, price FROM prices")])
     fx_map = _series_map([(r["currency"], r["date"], r["rate_to_pln"]) for r in conn.execute("SELECT currency, date, rate_to_pln FROM fx_rates")])
@@ -184,6 +191,7 @@ def portfolio_history(conn: sqlite3.Connection, benchmark_rate: float = 0.05) ->
     start = date.fromisoformat(txs[0]["ts"][:10])
     end = date.today()
     holdings: dict[str, float] = {}
+    cum_contrib = 0.0  # skumulowane wkłady kapitału (do_stopa_zwrotu %)
     out = []
     d = start
     while d <= end:
@@ -217,7 +225,23 @@ def portfolio_history(conn: sqlite3.Connection, benchmark_rate: float = 0.05) ->
                 years = (d - cdate).days / 365.0
                 bench += amount * (1.0 + benchmark_rate) ** years
 
-        out.append({"date": day, "value_pln": round(total, 2), "benchmark_pln": round(bench, 2)})
+        # Stopa zwrotu (%) vs benchmark — inkrementalnie, O(dni + wpłaty).
+        # Przed pierwszą wpłatą (cum_contrib <= 0) → null (przerwa w linii).
+        cum_contrib += contrib_by_day.get(day, 0.0)
+        if cum_contrib > 1e-9:
+            portfolio_pct = round((total - cum_contrib) / cum_contrib * 100, 2)
+            benchmark_pct = round((bench - cum_contrib) / cum_contrib * 100, 2)
+        else:
+            portfolio_pct = None
+            benchmark_pct = None
+
+        out.append({
+            "date": day,
+            "value_pln": round(total, 2),
+            "benchmark_pln": round(bench, 2),
+            "portfolio_pct": portfolio_pct,
+            "benchmark_pct": benchmark_pct,
+        })
         d += timedelta(days=1)
     return out
 

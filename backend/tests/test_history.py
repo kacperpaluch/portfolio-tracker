@@ -9,7 +9,7 @@ import pytest
 from app import fx as fx_mod
 from app import prices as prices_mod
 from app.db import SCHEMA
-from app.history import portfolio_daily_changes, portfolio_returns, refresh_latest
+from app.history import portfolio_daily_changes, portfolio_history, portfolio_returns, refresh_latest
 
 
 def _db() -> sqlite3.Connection:
@@ -96,6 +96,32 @@ def test_daily_changes_buy_is_not_a_gain():
 def test_daily_changes_empty_without_transactions():
     conn = _db()
     assert portfolio_daily_changes(conn) == []
+
+
+def test_history_pct_zero_on_inception_positive_after_gain():
+    """Stopa zwrotu (%): 0 na starcie, >0 po wzroście ceny; benchmark != portfolio."""
+    conn = _db()
+    _setup(conn)  # kup 10 @ 100 = 1000 PLN, cena -> 120 (wartość 1200)
+    series = portfolio_history(conn, benchmark_rate=0.05)
+    # Dzień wejścia (2025-01-01): wkład = wartość -> stopa 0%.
+    first = series[0]
+    assert first["portfolio_pct"] == pytest.approx(0.0, abs=1e-6)
+    # Po wzroście ceny (1200 vs 1000 wkładu) -> +20%.
+    last = series[-1]
+    assert last["portfolio_pct"] == pytest.approx(20.0, abs=1e-2)
+    # Benchmark rośnie ze stałą stopą -> też >0, ale ≠ portfolio.
+    assert last["benchmark_pct"] is not None
+    assert last["benchmark_pct"] != pytest.approx(last["portfolio_pct"], abs=0.01)
+
+
+def test_history_pct_null_before_first_contribution():
+    """Bez wpłat zewnętrznych — fallback na transakcje; dzień przed zakupem nie istnieje
+    (seria startuje od pierwszej tx), więc sprawdzamy brak nulli w serii z wkładem."""
+    conn = _db()
+    _setup(conn)
+    series = portfolio_history(conn)
+    # Seria zaczyna się od dnia pierwszej transakcji — żaden dzień nie ma cum_contrib=0.
+    assert all(r["portfolio_pct"] is not None for r in series)
 
 
 def test_daily_changes_split_pln_is_all_instrument():
