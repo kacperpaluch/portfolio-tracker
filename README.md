@@ -173,6 +173,7 @@ portfolio-tracker/
 │   │   ├── portfolio.py   # agregacja pozycji (średni koszt), wycena, P/L (zreal. + niezreal.)
 │   │   ├── cash.py        # księga gotówki: saldo, wpłaty/wypłaty, przepływy z transakcji
 │   │   ├── allocation.py  # alokacja docelowa vs rzeczywista (grupy, rebalans)
+│   │   ├── summary.py     # digest pod powiadomienia/n8n (wartość, P/L, zwroty, alokacja vs cel)
 │   │   ├── history.py     # backfill cen/kursów, seria wartości w czasie, benchmark, XIRR
 │   │   ├── returns.py     # czyste XIRR (Newton + bisekcja) i TWR (łańcuch podokresów)
 │   │   ├── backup.py      # backup bazy (online copy + retencja) + eksport transakcji do CSV
@@ -227,6 +228,7 @@ Pozycje nie są materializowane — liczone w locie z `transactions` (chronologi
 |---|---|---|
 | `POST` | `/api/import` | import CSV (multipart `file`) |
 | `GET` | `/api/portfolio?refresh=false` | pozycje + sumy (wartość, P/L zreal./niezreal., gotówka, XIRR, TWR, zwroty w okresach) |
+| `GET` | `/api/summary` | zwięzły digest (wartość, P/L, zmiana D/D, zwroty, alokacja vs cel) — pod powiadomienia/n8n |
 | `GET` | `/api/history?benchmark_rate=0.05` | dzienna seria `value_pln` + `benchmark_pln` |
 | `GET` / `POST` | `/api/transactions` | historia transakcji / ręczne dodanie |
 | `DELETE` | `/api/transactions/{id}` | usunięcie transakcji (i jej przepływu gotówki) |

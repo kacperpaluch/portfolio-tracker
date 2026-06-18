@@ -18,6 +18,7 @@ from . import history as history_mod
 from . import instruments as instruments_mod
 from . import portfolio as portfolio_mod
 from . import prices as prices_mod
+from . import summary as summary_mod
 from . import fx as fx_mod
 from . import importer
 from .db import db_session, init_db
@@ -123,6 +124,16 @@ def get_portfolio(refresh: bool = False) -> dict:
         totals["twr"] = history_mod.portfolio_twr(conn)
         totals["returns"] = history_mod.portfolio_returns(conn)
         return result
+
+
+@app.get("/api/summary")
+def get_summary() -> dict:
+    """Zwięzły digest portfela (wartość, P/L, zmiana D/D, zwroty, alokacja vs cel).
+
+    Pod powiadomienia/n8n — gotowy „jednym GET-em". Czyta z cache; odpalaj po cronie.
+    """
+    with db_session() as conn:
+        return summary_mod.build(conn)
 
 
 @app.get("/api/history")

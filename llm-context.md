@@ -78,6 +78,7 @@ backend/app/
   history.py     # backfill_all, portfolio_history (+benchmark), portfolio_xirr/twr, instrument_history
   returns.py     # czyste funkcje: xirr() (Newton+bisekcja), twr() (łańcuch podokresów)
   allocation.py  # compute (grupy vs cel + rebalans), get/set_targets
+  summary.py     # build() — digest pod powiadomienia (kompozycja portfolio+history+allocation)
   backup.py      # backup_database (online copy + retencja), transactions_csv, list_backups
   scheduler.py   # start_scheduler() — APScheduler: refresh_job (~21:00) + backup_job (~03:00)
 frontend/src/
@@ -94,6 +95,7 @@ importer.py → cash, instruments
 portfolio.py → cash, fx, prices
 history.py → fx, prices, returns
 allocation.py → cash, portfolio
+summary.py → portfolio, history, allocation
 backup.py → db
 cash.py, fx.py, prices.py, instruments.py, returns.py, db.py → (liście, bez zależności wewn.)
 scheduler.py → cash, instruments, prices, fx, db, backup
@@ -140,6 +142,7 @@ odczyt
 | GET/POST | `/api/transactions` | lista / ręczne dodanie transakcji |
 | DELETE | `/api/transactions/{id}` | usunięcie transakcji (+ przepływ gotówki) |
 | GET | `/api/portfolio?refresh=` | pozycje + sumy (P/L, cash, XIRR, TWR, `returns` 1M/3M/YTD/1R/all) |
+| GET | `/api/summary` | digest pod powiadomienia/n8n: konto, P/L, zmiana D/D, zwroty, alokacja vs cel (`summary.build`) |
 | GET | `/api/history?benchmark_rate=` | seria wartości + benchmark |
 | GET | `/api/instruments/{isin}/history` | widok waloru (cena natywna/PLN, atrybucja) |
 | GET/PUT | `/api/instruments[/{isin}]` | mapowania ISIN→ticker (+ category) |
