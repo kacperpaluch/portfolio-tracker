@@ -306,6 +306,47 @@ def test_refresh_new_instrument_backfills_from_first_transaction(monkeypatch):
     assert calls["fx_range"] == [("2025-01-01", date.today().isoformat())]
 
 
+def test_refresh_skips_fully_sold_instrument(monkeypatch):
+    """Walor sprzedany do zera nie jest już odpytywany o bieżącą wycenę (tylko trzymane)."""
+    conn = _db()
+    # HELD: kup 10 PL01 (trzymany). SOLD: kup 5 i sprzedaj 5 EU01 (saldo 0).
+    conn.execute(
+        "INSERT INTO instruments (isin, name, ticker, currency, source, active, needs_config) "
+        "VALUES ('PL01', 'Held ETF', 'H.WA', 'PLN', 'yfinance', 1, 0)"
+    )
+    conn.execute(
+        "INSERT INTO instruments (isin, name, ticker, currency, source, active, needs_config) "
+        "VALUES ('EU01', 'Sold ETF', 'S.DE', 'EUR', 'yfinance', 1, 0)"
+    )
+    conn.execute(
+        "INSERT INTO transactions (ts, isin, type, quantity, price_pln, value_pln, commission_pln, import_hash) "
+        "VALUES ('2025-01-01T10:00:00', 'PL01', 'BUY', 10, 100, 1000, 0, 'h1')"
+    )
+    conn.execute(
+        "INSERT INTO transactions (ts, isin, type, quantity, price_pln, value_pln, commission_pln, import_hash) "
+        "VALUES ('2025-02-01T10:00:00', 'EU01', 'BUY', 5, 400, 2000, 0, 'h2')"
+    )
+    conn.execute(
+        "INSERT INTO transactions (ts, isin, type, quantity, price_pln, value_pln, commission_pln, import_hash) "
+        "VALUES ('2025-03-01T10:00:00', 'EU01', 'SELL', 5, 420, 2100, 0, 'h3')"
+    )
+    conn.commit()
+
+    seen = {"hist": [], "latest": []}
+    monkeypatch.setattr(prices_mod, "fetch_history",
+                        lambda conn, inst, start, end: seen["hist"].append(inst["isin"]) or 0)
+    monkeypatch.setattr(prices_mod, "fetch_latest",
+                        lambda conn, inst: seen["latest"].append(inst["isin"]) or None)
+    monkeypatch.setattr(fx_mod, "backfill_range", lambda conn, cur, start, end: 0)
+    monkeypatch.setattr(fx_mod, "get_rate", lambda conn, cur, day=None: ("", 4.3))
+
+    refresh_latest(conn)
+
+    # Tylko trzymany PL01 odpytany; sprzedany EU01 całkowicie pominięty.
+    assert seen["latest"] == ["PL01"]
+    assert "EU01" not in seen["hist"]
+
+
 def test_refresh_same_day_does_not_refetch_history(monkeypatch):
     """Drugi refresh tego samego dnia (cache = dziś) → żadnego pobrania historii."""
     conn = _db()

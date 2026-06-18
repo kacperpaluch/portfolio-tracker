@@ -90,3 +90,31 @@ def test_import_prices_writes_cache_and_overwrites():
     overwritten = next(r for r in rows if r["date"] == "2026-06-18")
     assert overwritten["price"] == 4.565
     assert overwritten["source"] == "csv"
+
+
+def _price(conn, isin, day):
+    row = conn.execute("SELECT price, source FROM prices WHERE isin = ? AND date = ?", (isin, day)).fetchone()
+    return (row["price"], row["source"]) if row else None
+
+
+def test_yfinance_does_not_overwrite_csv_price():
+    """Punkt z importu CSV jest „święty" — yfinance (backfill/refresh) go NIE nadpisuje."""
+    conn = _db()
+    prices_mod.import_prices(conn, "SE0024738389", STOOQ_CSV)  # zapisuje 'csv'
+    # yfinance próbuje wpisać inną cenę na ten sam dzień:
+    prices_mod._cache_put(conn, "SE0024738389", "2026-06-18", 9.99, "yfinance")
+    conn.commit()
+    # CSV przeżywa — cena i źródło bez zmian.
+    assert _price(conn, "SE0024738389", "2026-06-18") == (4.565, "csv")
+
+
+def test_yfinance_fills_gaps_and_updates_own_points():
+    """yfinance wypełnia brakujące dni i aktualizuje WŁASNE punkty (nie-CSV)."""
+    conn = _db()
+    # Brakujący dzień → wypełnienie.
+    prices_mod._cache_put(conn, "SE0024738389", "2026-05-01", 5.0, "yfinance")
+    assert _price(conn, "SE0024738389", "2026-05-01") == (5.0, "yfinance")
+    # Istniejący punkt yfinance → aktualizacja (np. świeży fixing dnia).
+    prices_mod._cache_put(conn, "SE0024738389", "2026-05-01", 5.5, "yfinance")
+    conn.commit()
+    assert _price(conn, "SE0024738389", "2026-05-01") == (5.5, "yfinance")

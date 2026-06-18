@@ -50,15 +50,22 @@ stopę zwrotu oraz porównanie z benchmarkiem — **wszystko w PLN**.
   `Data,…,Zamkniecie`) wprost na widoku waloru. Nadpisuje błędne punkty w cache i naprawia
   wykres wartości w czasie, zmiany dzienne oraz atrybucję. Waluta jest wymagana do wyceny
   (CSV jej nie niesie) — jeśli instrument jej nie ma, aplikacja o nią zapyta przy imporcie.
+  **Punkty z CSV są chronione** — automatyczny backfill/refresh (yfinance) ich nie nadpisze,
+  więc nie trzeba ich wgrywać ponownie po każdym odświeżeniu (re-import nadpisuje, gdy chcesz).
 - **Świeżość cen** — przy każdej pozycji znacznik „kiedy ostatnia cena" (dziś / wczoraj /
   N dni temu); gdy notowanie się starzeje (np. yfinance milczy dla danego waloru) — ⚠️
   ostrzeżenie sygnalizujące, że czas na ręczny import CSV.
 - **Zysk całkowity** = niezrealizowany (otwarte pozycje) **+** zrealizowany (ze sprzedaży).
 - **Konto gotówkowe** — ręczne wpłaty/wypłaty; saldo nettowane przepływami z transakcji
   (kupno −, sprzedaż +). Wartość konta = wycena ETF + gotówka.
-- **Wykres wartości konta w czasie** z porównaniem do **benchmarku** (konfigurowalna stała
-  stopa roczna, np. 5%) liczonego metodą money-weighted — z **przełącznikiem trybu**:
-  wartość konta (PLN) lub stopa zwrotu (%) vs benchmark w %.
+- **Wykres wartości konta w czasie** z porównaniem do **dwóch benchmarków** (oba
+  money-weighted), każdy z osobnym przełącznikiem włącz/wyłącz:
+  1. **stała stopa roczna** (konfigurowalna, np. 5%),
+  2. **inflacja + X%** — realny indeks inflacji (Eurostat HICP dla Polski, miesięczny)
+     powiększony o konfigurowalną premię (np. inflacja +2%); pokazuje, czy portfel bije
+     wzrost cen, a nie tylko arbitralny próg.
+
+  Plus **przełącznik trybu**: wartość konta (PLN) lub stopa zwrotu (%) vs benchmarki w %.
 - **XIRR i TWR** — roczny zwrot money-weighted (z timingiem wpłat) **oraz** time-weighted
   (wynik samego portfela, niezależny od timingu). Różnica = wpływ timingu Twoich dopłat.
 - **Zwroty w okresach** — pasek 1M / 3M / YTD / 1R / od początku: TWR skumulowany (faktyczny
@@ -81,7 +88,9 @@ stopę zwrotu oraz porównanie z benchmarkiem — **wszystko w PLN**.
   bazy z crona (~03:00) do `data/backup/` z retencją + „Backup teraz" na żądanie.
 - **Codzienne odświeżanie** cen i kursów (cron APScheduler, domyślnie ~21:00 Europe/Warsaw) —
   pobiera bieżące notowania i **dociąga ewentualne luki w historii** (np. po awarii sieci),
-  zawsze od ostatniego dnia w cache, nigdy całości od początku.
+  zawsze od ostatniego dnia w cache, nigdy całości od początku. Odpytuje **tylko aktualnie
+  trzymane** walory (saldo > 0) — sprzedany do zera ETF nie jest już pobierany ani nie zaśmieca
+  bazy nowymi punktami (jego historia z okresu posiadania zostaje w cache).
 
 ## Kluczowe koncepcje
 
@@ -123,6 +132,7 @@ Zrozumienie tych założeń wyjaśnia, dlaczego liczby wychodzą tak, a nie inac
 |---|---|
 | Wyceny instrumentów | [yfinance](https://github.com/ranaroussi/yfinance); ratunek dla papierów spoza pokrycia Yahoo: import CSV (format stooq) |
 | Kursy walut | [NBP API](https://api.nbp.pl) (tabela A, darmowe, bez klucza) |
+| Inflacja (benchmark) | [Eurostat HICP](https://ec.europa.eu/eurostat) (`prc_hicp_midx`, miesięczny, PL, darmowe, bez klucza) — GUS BDL ma CPI tylko rocznie/kwartalnie, więc dla rozdzielczości miesięcznej używamy HICP |
 
 ## Uruchomienie
 
@@ -176,6 +186,9 @@ Zmienne środowiskowe (ustawiane w `docker-compose.yml`):
    (zasila wykres wartości w czasie).
 5. **Gotówka** (opcjonalnie) — dodaj swoje wpłaty/wypłaty, aby śledzić niezainwestowaną
    gotówkę i policzyć XIRR oraz benchmark całego rachunku.
+6. **Pobierz inflację** (opcjonalnie) — zaciąga serię HICP z Eurostatu pod benchmark
+   „inflacja + X%". Osobny przycisk **niezależny od cen** — nie odpala yfinance, więc nie
+   nadpisze ręcznie zaimportowanych cen z CSV. (Robi to też nocny cron przy okazji odświeżania.)
 
 ## Architektura
 
@@ -189,11 +202,12 @@ portfolio-tracker/
 │   │   ├── instruments.py # tworzenie instrumentów z importu, seed ISIN→ticker, edycja mapowań
 │   │   ├── prices.py      # providery yfinance/stooq, auto-detekcja waluty (GBx→GBP), cache
 │   │   ├── fx.py          # klient NBP + cache fx_rates, lookback na weekendy/święta
+│   │   ├── cpi.py         # klient Eurostat HICP + cache cpi_index (inflacja pod benchmark)
 │   │   ├── portfolio.py   # agregacja pozycji (średni koszt), wycena, P/L (zreal. + niezreal.)
 │   │   ├── cash.py        # księga gotówki: saldo, wpłaty/wypłaty, przepływy z transakcji
 │   │   ├── allocation.py  # alokacja docelowa vs rzeczywista (grupy, rebalans)
 │   │   ├── summary.py     # digest pod powiadomienia/n8n (wartość, P/L, zwroty, alokacja vs cel)
-│   │   ├── history.py     # backfill cen/kursów, seria wartości w czasie, benchmark, XIRR
+│   │   ├── history.py     # backfill cen/kursów, seria wartości w czasie, benchmarki, XIRR
 │   │   ├── returns.py     # czyste XIRR (Newton + bisekcja) i TWR (łańcuch podokresów)
 │   │   ├── backup.py      # backup bazy (online copy + retencja) + eksport transakcji do CSV
 │   │   └── scheduler.py   # APScheduler — odświeżanie cen/FX (~21:00) + nocny backup (~03:00)
@@ -214,7 +228,7 @@ portfolio-tracker/
 
 ## Model danych
 
-SQLite, 6 tabel (schemat w `backend/app/db.py`):
+SQLite, 7 tabel (schemat w `backend/app/db.py`):
 
 | Tabela | Klucz | Zawartość |
 |---|---|---|
@@ -223,6 +237,7 @@ SQLite, 6 tabel (schemat w `backend/app/db.py`):
 | `transactions` | `id` | `ts`, `isin`, `type` (BUY/SELL), `quantity`, `price_pln`, `value_pln`, `import_hash` (unikalny — dedup) |
 | `prices` | (`isin`,`date`) | cena dzienna w walucie natywnej (cache) |
 | `fx_rates` | (`date`,`currency`) | kurs do PLN z NBP (cache) |
+| `cpi_index` | `month` | miesięczny indeks inflacji HICP (Eurostat, baza 2015=100) — cache pod benchmark „inflacja + X%" |
 | `cash_flows` | `id` | `ts`, `kind` (deposit/withdrawal/buy/sell), `amount_pln` (znak = wpływ na saldo) |
 
 Pozycje nie są materializowane — liczone w locie z `transactions` (chronologicznie, średni koszt).
@@ -239,7 +254,11 @@ Pozycje nie są materializowane — liczone w locie z `transactions` (chronologi
 - **Historia** (`history.py`): dla każdego dnia od pierwszej transakcji liczona suma
   `ilość_w_tym_dniu × cena_hist × kurs_hist` z forward-fill (dni bez notowań wypełnia ostatnia
   wartość). Gdy są wpłaty — doliczane jest saldo gotówki (pełna wartość konta).
-- **Benchmark** (`history.py`): `Σ wpłat do danego dnia × (1 + stopa)^(lata_od_wpłaty)`.
+- **Benchmarki** (`history.py`) — dwa, oba money-weighted (każda wpłata oprocentowana od swojej daty):
+  - stała stopa: `Σ wpłat × (1 + stopa)^(lata_od_wpłaty)`;
+  - inflacja + X%: `Σ wpłat × (indeks_HICP_dziś / indeks_HICP_wpłata) × (1 + X)^(lata)` — realny
+    wzrost cen (Eurostat, interpolacja liniowa między miesiącami) powiększony o premię X. Bez
+    danych CPI w cache pola benchmarku inflacyjnego = `null` (linia się nie pokazuje).
 - **XIRR** (`returns.py`): money-weighted; przepływy zewnętrzne (wpłata −, wypłata +) +
   wartość końcowa konta. Bez wpłat — fallback na przepływy z transakcji. Newton z fallbackiem na bisekcję.
 
@@ -251,7 +270,7 @@ Pozycje nie są materializowane — liczone w locie z `transactions` (chronologi
 | `POST` | `/api/prices/import` | import dziennych cen waloru z CSV (multipart `isin` + `file` + opcjonalnie `currency`, format stooq) — ratunek, gdy Yahoo nie ma historii; waluta wymagana do wyceny |
 | `GET` | `/api/portfolio?refresh=false` | pozycje + sumy (wartość, P/L zreal./niezreal., gotówka, XIRR, TWR, zwroty w okresach) |
 | `GET` | `/api/summary` | zwięzły digest (wartość, P/L, zmiana D/D, zwroty, alokacja vs cel) — pod powiadomienia/n8n |
-| `GET` | `/api/history?benchmark_rate=0.05` | dzienna seria `value_pln` + `benchmark_pln` |
+| `GET` | `/api/history?benchmark_rate=0.05&cpi_spread=0.02` | dzienna seria `value_pln` + dwa benchmarki: `benchmark_pln` (stała stopa) i `benchmark_cpi_pln` (inflacja HICP + `cpi_spread`); + warianty `_pct` |
 | `GET` | `/api/daily-changes` | dzienny zysk/strata (zmiana wyceny ETF D/D, koszt transakcji odjęty) + rozbicie `instrument_pln` / `fx_pln` |
 | `GET` | `/api/drawdown` | obsunięcie portfela (drawdown) na indeksie TWR: krzywa „pod wodą" + max/bieżące DD z datami szczytu/dołka/odbicia |
 | `GET` / `POST` | `/api/transactions` | historia transakcji / ręczne dodanie |
@@ -263,6 +282,7 @@ Pozycje nie są materializowane — liczone w locie z `transactions` (chronologi
 | `POST` / `DELETE` | `/api/cash[/{id}]` | dodaj / usuń wpłatę-wypłatę |
 | `POST` | `/api/refresh` | odświeżenie bieżących cen i kursów + dociągnięcie luk w historii (od ostatniego dnia w cache) |
 | `POST` | `/api/backfill` | pełna historia cen i kursów od pierwszej transakcji |
+| `POST` | `/api/cpi/refresh` | pobranie serii inflacji (Eurostat HICP) pod benchmark „inflacja + X%" — **niezależne od cen** (nie dotyka tabeli `prices`, bezpieczne dla walorów z importu CSV) |
 | `GET` | `/api/export/transactions.csv` | pobranie transakcji jako CSV |
 | `GET` | `/api/export/daily-changes.csv` | pobranie dziennych zmian wartości jako CSV |
 | `GET` | `/api/export/db` | pobranie całej bazy SQLite (spójna kopia) |
@@ -304,9 +324,10 @@ zysk, księgę gotówki, sumy całkowite oraz XIRR.
 
 Najczęstsze kierunki rozwoju i gdzie ich szukać:
 
-- **Realny benchmark** (zamiast stałej stopy) — w `history.py` podmień wzór benchmarku na serię
-  cen wybranego ETF-a (np. MSCI ACWI) pobieraną przez `prices.py`; logika oprocentowania wkładów
-  zadziała 1:1 (zamiast `(1+stopa)^lata` użyj `cena_ETF(dzień)/cena_ETF(data_wpłaty)`).
+- **Realny benchmark ETF** (np. MSCI ACWI) — wzorem benchmarku inflacyjnego (`cpi.py` +
+  `history.portfolio_history`): pobierz serię cen przez `prices.py` i zamiast `(1+stopa)^lata`
+  użyj `cena_ETF(dzień)/cena_ETF(data_wpłaty)`. Benchmark „inflacja + X%" (Eurostat HICP) jest
+  już zrobiony w ten sposób — najłatwiej dorobić trzeci benchmark kopiując ten wzorzec.
 - **FIFO / realizowany zysk per instrument** — rozszerz pętlę w `portfolio.compute_positions`
   (obecnie średni koszt) o kolejkę lotów; zwracaj rozbicie zrealizowanego zysku po ISIN.
 - **Dywidendy / podatki** — dodaj typy w `cash_flows` (`dividend`, `tax`) i obsłuż je w imporcie

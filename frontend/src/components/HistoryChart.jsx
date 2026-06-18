@@ -12,29 +12,44 @@ import {
 } from "recharts";
 import { fmtPln, fmtPct } from "../format.js";
 
-const LABELS = {
-  value_pln: "Wartość konta",
-  benchmark_pln: "Benchmark",
-  portfolio_pct: "Stopa zwrotu",
-  benchmark_pct: "Benchmark %",
-};
-
-export default function HistoryChart({ data }) {
+export default function HistoryChart({ data, benchmarkRate = 5, cpiSpread = 2 }) {
   const [mode, setMode] = useState("pln"); // "pln" | "pct"
+  const [showBench, setShowBench] = useState(true);
+  const [showCpi, setShowCpi] = useState(true);
+
   if (!data || data.length === 0)
     return <div className="spinner">Brak danych historycznych — kliknij „Backfill historii".</div>;
+
+  // Benchmark inflacyjny pokazujemy tylko gdy backend zwrócił dane CPI (Eurostat pobrany).
+  const hasCpi = data.some((d) => d.benchmark_cpi_pln != null);
 
   const isPct = mode === "pct";
   const valueKey = isPct ? "portfolio_pct" : "value_pln";
   const benchKey = isPct ? "benchmark_pct" : "benchmark_pln";
+  const cpiKey = isPct ? "benchmark_cpi_pct" : "benchmark_cpi_pln";
   const yFmt = isPct ? (v) => `${v}%` : (v) => `${Math.round(v / 1000)}k`;
   const tipFmt = (v) => (isPct ? fmtPct(v) : fmtPln(v));
+
+  const labels = {
+    [valueKey]: isPct ? "Stopa zwrotu" : "Wartość konta",
+    [benchKey]: `Benchmark ${benchmarkRate}%`,
+    [cpiKey]: `Inflacja +${cpiSpread}%`,
+  };
 
   return (
     <>
       <div className="chart-toggle">
         <button className={`tg ${!isPct ? "on" : ""}`} onClick={() => setMode("pln")}>Wartość (PLN)</button>
         <button className={`tg ${isPct ? "on" : ""}`} onClick={() => setMode("pct")}>Stopa zwrotu (%)</button>
+        <span className="chart-toggle-sep" />
+        <button className={`tg ${showBench ? "on" : ""}`} onClick={() => setShowBench((v) => !v)}>
+          Benchmark {benchmarkRate}%
+        </button>
+        {hasCpi && (
+          <button className={`tg ${showCpi ? "on" : ""}`} onClick={() => setShowCpi((v) => !v)}>
+            Inflacja +{cpiSpread}%
+          </button>
+        )}
       </div>
       <ResponsiveContainer width="100%" height={300}>
         <ComposedChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
@@ -54,9 +69,9 @@ export default function HistoryChart({ data }) {
           />
           <Tooltip
             contentStyle={{ background: "#1a212b", border: "1px solid #2c3845", borderRadius: 8, color: "#e6edf3" }}
-            formatter={(v, name) => [tipFmt(v), LABELS[name] || name]}
+            formatter={(v, name) => [tipFmt(v), labels[name] || name]}
           />
-          <Legend formatter={(name) => LABELS[name] || name} wrapperStyle={{ fontSize: 12 }} />
+          <Legend formatter={(name) => labels[name] || name} wrapperStyle={{ fontSize: 12 }} />
           <Area
             type="monotone"
             isAnimationActive={false}
@@ -66,16 +81,30 @@ export default function HistoryChart({ data }) {
             fill="url(#g)"
             connectNulls={!isPct}
           />
-          <Line
-            type="monotone"
-            isAnimationActive={false}
-            dataKey={benchKey}
-            stroke="#d29922"
-            strokeWidth={2}
-            strokeDasharray="5 4"
-            dot={false}
-            connectNulls={!isPct}
-          />
+          {showBench && (
+            <Line
+              type="monotone"
+              isAnimationActive={false}
+              dataKey={benchKey}
+              stroke="#d29922"
+              strokeWidth={2}
+              strokeDasharray="5 4"
+              dot={false}
+              connectNulls={!isPct}
+            />
+          )}
+          {hasCpi && showCpi && (
+            <Line
+              type="monotone"
+              isAnimationActive={false}
+              dataKey={cpiKey}
+              stroke="#a371f7"
+              strokeWidth={2}
+              strokeDasharray="2 3"
+              dot={false}
+              connectNulls={!isPct}
+            />
+          )}
         </ComposedChart>
       </ResponsiveContainer>
     </>

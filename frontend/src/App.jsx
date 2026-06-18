@@ -37,6 +37,7 @@ export default function App() {
   const [detail, setDetail] = useState(null);
   const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get("tab") || "dashboard");
   const [benchmarkRate, setBenchmarkRate] = useState(5);
+  const [cpiSpread, setCpiSpread] = useState(2);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
   const fileRef = useRef();
@@ -48,7 +49,7 @@ export default function App() {
 
   const loadAll = async () => {
     const [pf, hist, insts, txs, cs, alloc, daily, dd, bk] = await Promise.all([
-      api.portfolio(), api.history(benchmarkRate / 100), api.instruments(), api.transactions(), api.cash(), api.allocation(), api.dailyChanges(), api.drawdown(), api.backups(),
+      api.portfolio(), api.history(benchmarkRate / 100, cpiSpread / 100), api.instruments(), api.transactions(), api.cash(), api.allocation(), api.dailyChanges(), api.drawdown(), api.backups(),
     ]);
     setPortfolio(pf); setHistory(hist); setInstruments(insts); setTransactions(txs); setCash(cs); setAllocation(alloc); setDailyChanges(daily); setDrawdown(dd); setBackups(bk);
   };
@@ -57,10 +58,10 @@ export default function App() {
     loadAll().catch((e) => flash(`Błąd ładowania: ${e.message}`, false));
   }, []);
 
-  // Przeładuj samą historię po zmianie stopy benchmarku.
+  // Przeładuj samą historię po zmianie parametrów benchmarków (stała stopa / inflacja+X%).
   useEffect(() => {
-    api.history(benchmarkRate / 100).then(setHistory).catch(() => {});
-  }, [benchmarkRate]);
+    api.history(benchmarkRate / 100, cpiSpread / 100).then(setHistory).catch(() => {});
+  }, [benchmarkRate, cpiSpread]);
 
   const run = async (fn, okMsg) => {
     setBusy(true);
@@ -119,6 +120,7 @@ export default function App() {
           <button onClick={() => fileRef.current?.click()} disabled={busy}>Importuj CSV</button>
           <button onClick={() => run(() => api.refresh(), "Odświeżono ceny i kursy.")} disabled={busy}>Odśwież ceny</button>
           <button onClick={() => run(() => api.backfill(), "Pobrano historię wycen.")} disabled={busy}>Backfill historii</button>
+          <button onClick={() => run(() => api.refreshCpi(), "Pobrano dane inflacji (HICP).")} disabled={busy}>Pobierz inflację</button>
           <button onClick={() => setShowBackup(true)} disabled={busy}>Backup</button>
         </div>
       </header>
@@ -143,19 +145,32 @@ export default function App() {
           <div className="panel">
             <div className="panel-head">
               <h2>Wartość konta vs benchmark</h2>
-              <label className="bench-ctrl">
-                Benchmark:
-                <input
-                  type="number"
-                  step="0.5"
-                  className="cell narrow"
-                  value={benchmarkRate}
-                  onChange={(e) => setBenchmarkRate(parseFloat(e.target.value) || 0)}
-                />
-                % rocznie
-              </label>
+              <div className="bench-ctrls">
+                <label className="bench-ctrl">
+                  Stała stopa:
+                  <input
+                    type="number"
+                    step="0.5"
+                    className="cell narrow"
+                    value={benchmarkRate}
+                    onChange={(e) => setBenchmarkRate(parseFloat(e.target.value) || 0)}
+                  />
+                  % rocznie
+                </label>
+                <label className="bench-ctrl">
+                  Inflacja +
+                  <input
+                    type="number"
+                    step="0.5"
+                    className="cell narrow"
+                    value={cpiSpread}
+                    onChange={(e) => setCpiSpread(parseFloat(e.target.value) || 0)}
+                  />
+                  % rocznie
+                </label>
+              </div>
             </div>
-            <HistoryChart data={history} />
+            <HistoryChart data={history} benchmarkRate={benchmarkRate} cpiSpread={cpiSpread} />
           </div>
           <div className="panel">
             <div className="panel-head">

@@ -25,6 +25,7 @@ XIRR/TWR, benchmark, alokację docelową oraz atrybucję zysku (instrument vs wa
 | Wyceny | **yfinance** (Yahoo Finance) | główne źródło; pokrywa Xetra `.DE`, LSE `.L`, GPW `.WA` |
 | Wyceny (ratunek) | **import CSV** | dla papierów bez pokrycia w yfinance (niszowy GPW); stooq jako live-source martwy (PoW) |
 | Kursy walut | **NBP API** (api.nbp.pl, tabela A) | darmowe, bez klucza, tylko dni robocze |
+| Inflacja (benchmark) | **Eurostat HICP** (`prc_hicp_midx`, PL, miesięczny) | darmowe, bez klucza; GUS BDL ma CPI tylko rocznie/kwartalnie |
 | Harmonogram | **APScheduler** (BackgroundScheduler) | dzienne odświeżanie ~21:00 |
 | Klient HTTP | **httpx** | zapytania do NBP/stooq |
 | Frontend | **React 18** + **Vite 5** + **Recharts 2** | SPA, build serwowany statycznie |
@@ -62,6 +63,7 @@ do komponentów w `components/`. Świadomie proste. Helpery formatujące współ
 
 - **Yahoo Finance** — nieoficjalne, przez `yfinance`. Może się zmienić/zepsuć.
 - **NBP** — oficjalne, stabilne, rate-limit łagodny.
+- **Eurostat** — oficjalne, stabilne, bez klucza. `prc_hicp_midx?geo=PL&coicop=CP00&unit=I15` = miesięczny indeks HICP (baza 2015=100), 1996→teraz. Świadomie HICP, nie CPI GUS: GUS BDL API ma indeks cen tylko rocznie (`P2955`) i kwartalnie (`P2496`), miesięcznego nie ma wcale (tylko HTML). HICP vs CPI GUS różni się ~0,2 pp/rok — w skali benchmarku nieistotne.
 - **stooq** — martwe jako źródło: JS proof-of-work blokuje klientów bez JS nawet z domowego IP (usunięte z UI; szkielet kodu zostaje). Format eksportu CSV ze stooq jest nadal wejściem dla importu cen.
 
 ## 4. Architektura i moduły
@@ -74,9 +76,10 @@ backend/app/
   instruments.py # ensure_instrument (+ SEED ISIN->ticker), list/update_instrument
   prices.py      # yfinance/stooq: fetch_latest/fetch_history, auto-detekcja waluty (GBx->GBP), cache; parse_price_csv/import_prices (import cen z CSV stooq)
   fx.py          # NBP: get_rate (lookback), backfill_range, cache w fx_rates
+  cpi.py         # Eurostat HICP: refresh_cpi (cache cpi_index), load_points, index_at (interpolacja) — pod benchmark inflacyjny
   cash.py        # księga gotówki: balance/has_external, add/delete flow, record/remove_trade_cash
   portfolio.py   # compute_positions (średni koszt + zrealizowany), value_positions (sumy)
-  history.py     # refresh_latest (bieżące+luki), backfill_all, portfolio_history (+benchmark +portfolio_pct/benchmark_pct), portfolio_xirr/twr, portfolio_drawdown, instrument_history
+  history.py     # refresh_latest (bieżące+luki, TYLKO trzymane), backfill_all, portfolio_history (+2 benchmarki: stała stopa + inflacja, +_pct), portfolio_xirr/twr, portfolio_drawdown, instrument_history
   returns.py     # czyste funkcje: xirr() (Newton+bisekcja), twr()/twr_index() (łańcuch podokresów, indeks growth-of-1)
   allocation.py  # compute (grupy vs cel + rebalans), get/set_targets
   summary.py     # build() — digest pod powiadomienia (kompozycja portfolio+history+allocation)
@@ -95,14 +98,14 @@ frontend/src/
 ### Zależności między modułami (kierunek importów)
 
 ```
-main.py → importer, instruments, prices, fx, cash, portfolio, history, allocation, scheduler
+main.py → importer, instruments, prices, fx, cpi, cash, portfolio, history, allocation, scheduler
 importer.py → cash, instruments
 portfolio.py → cash, fx, prices
-history.py → fx, prices, returns
+history.py → cpi, fx, prices, returns
 allocation.py → cash, portfolio
 summary.py → portfolio, history, allocation
 backup.py → db
-cash.py, fx.py, prices.py, instruments.py, returns.py, db.py → (liście, bez zależności wewn.)
+cash.py, fx.py, cpi.py, prices.py, instruments.py, returns.py, db.py → (liście, bez zależności wewn.)
 scheduler.py → cash, instruments, prices, fx, db, backup
 ```
 
@@ -116,6 +119,7 @@ scheduler.py → cash, instruments, prices, fx, db, backup
 | `transactions` | `id` | ts, isin→, type(BUY/SELL), quantity, price_pln, value_pln, commission_pln, **import_hash UNIQUE** | handel |
 | `prices` | (isin,date) | price (waluta natywna), source | cache wycen |
 | `fx_rates` | (date,currency) | rate_to_pln | cache kursów NBP |
+| `cpi_index` | `month` | idx (HICP, baza 2015=100) | cache inflacji (miesięczny, `month`='YYYY-MM-01') |
 | `cash_flows` | `id` | ts, kind(deposit/withdrawal/buy/sell), amount_pln, note, **import_hash UNIQUE** | księga gotówki |
 | `target_allocation` | `category` | weight_pct | model docelowy |
 
@@ -149,15 +153,16 @@ odczyt
 | DELETE | `/api/transactions/{id}` | usunięcie transakcji (+ przepływ gotówki) |
 | GET | `/api/portfolio?refresh=` | pozycje + sumy (P/L, cash, XIRR, TWR, `returns` 1M/3M/YTD/1R/all) |
 | GET | `/api/summary` | digest pod powiadomienia/n8n: konto, P/L, zmiana D/D, zwroty, alokacja vs cel (`summary.build`) |
-| GET | `/api/history?benchmark_rate=` | seria `value_pln` + `benchmark_pln` + `portfolio_pct` + `benchmark_pct` (stopa zwrotu % vs benchmark %; przełącznik trybu w `HistoryChart`) |
+| GET | `/api/history?benchmark_rate=&cpi_spread=` | seria `value_pln` + 2 benchmarki: `benchmark_pln` (stała stopa) i `benchmark_cpi_pln` (inflacja HICP + `cpi_spread`) + warianty `_pct` + `portfolio_pct` (przełącznik trybu PLN/% i widoczności benchmarków w `HistoryChart`) |
 | GET | `/api/daily-changes` | dzienny P/L (zmiana wyceny ETF D/D, koszt transakcji odjęty) + rozbicie `instrument_pln`/`fx_pln` — `history.portfolio_daily_changes` |
 | GET | `/api/drawdown` | obsunięcie portfela (drawdown) na indeksie TWR: krzywa „pod wodą" + max/bieżące DD z datami szczytu/dołka/odbicia — `history.portfolio_drawdown` |
 | GET | `/api/instruments/{isin}/history` | widok waloru (cena natywna/PLN, atrybucja) |
 | GET/PUT | `/api/instruments[/{isin}]` | mapowania ISIN→ticker (+ category) |
 | GET | `/api/cash` / POST / DELETE `/{id}` | księga gotówki |
 | GET/PUT | `/api/allocation` | alokacja docelowa vs rzeczywista |
-| POST | `/api/refresh` | bieżące ceny + FX + dociągnięcie luk od ostatniego dnia w cache (`history.refresh_latest`) |
-| POST | `/api/backfill` | pełna historia cen + FX od pierwszej transakcji |
+| POST | `/api/refresh` | bieżące ceny + FX + dociągnięcie luk od ostatniego dnia w cache, TYLKO trzymane walory (`history.refresh_latest`); odświeża też CPI |
+| POST | `/api/backfill` | pełna historia cen + FX od pierwszej transakcji (wszystkie walory); odświeża też CPI |
+| POST | `/api/cpi/refresh` | pobranie serii inflacji (Eurostat HICP) — **niezależne od cen**, nie dotyka `prices` (bezpieczne dla walorów z CSV) (`cpi.refresh_cpi`) |
 | GET | `/api/export/transactions.csv` | eksport transakcji (CSV) |
 | GET | `/api/export/daily-changes.csv` | eksport dziennych zmian wartości (CSV) — `backup.daily_changes_csv` |
 | GET | `/api/export/db` | pobranie spójnej kopii bazy SQLite |
@@ -178,14 +183,15 @@ Swagger UI `/docs` · ReDoc `/redoc` · OpenAPI JSON `/openapi.json` (do importu
 - **XIRR** — money-weighted; przepływy = wpłaty/wypłaty (lub fallback transakcje) + wartość końcowa.
 - **TWR** — time-weighted; łańcuch dziennych zwrotów z neutralizacją przepływów (konwencja „początek dnia").
 - **Zwroty w okresach** (`history.portfolio_returns`) — okna 1M/3M/YTD/1R/od początku liczone z jednej dziennej serii. Per okno: TWR skumulowany (nie-zannualizowany, headline dla krótkich okien), TWR roczny, XIRR roczny. Wkłady kapitału (z `_contributions`) spójne z serią → neutralizacja TWR i baza XIRR nie liczą dopłat jako zwrotu. Zwracane w `totals.returns` z `/api/portfolio`.
-- **Benchmark** — money-weighted: każda wpłata oprocentowana stałą stopą od swojej daty (nie płaska linia!).
+- **Benchmarki** (`portfolio_history`) — DWA, oba money-weighted (każda wpłata oprocentowana od swojej daty, nie płaska linia): (1) **stała stopa** `amount × (1+benchmark_rate)^lata`; (2) **inflacja + X%** `amount × indeks_HICP(d)/indeks_HICP(wpłata) × (1+cpi_spread)^lata`. Indeks HICP z cache `cpi_index` (`cpi.load_points`), interpolacja liniowa między miesiącami + forward-fill końca (`cpi.index_at`). Bazowy indeks per wkład liczony raz przed pętlą. Gdy cache CPI pusty (`has_cpi=False`) → pola `benchmark_cpi_*` = `None` (front nie rysuje linii). Pola wyjściowe: `benchmark_pln`/`benchmark_pct` (stała), `benchmark_cpi_pln`/`benchmark_cpi_pct` (inflacja). Front: `HistoryChart` ma osobne przełączniki widoczności obu benchmarków, działa w trybie PLN i %.
 - **Drawdown** (`history.portfolio_drawdown` + `returns.twr_index`) — obsunięcie liczone na **indeksie wzrostu TWR** (growth-of-1, ta sama neutralizacja przepływów co `twr_detail`), NIE na surowej wartości PLN: wpłaty IKE nie maskują spadków, wypłaty nie udają obsunięć. `drawdown[d] = indeks/dotychczasowy_szczyt − 1` (≤ 0). Zwraca dzienną krzywą „pod wodą" (`series`), `max_drawdown` z datami szczytu/dołka (`..._from`/`..._to`), `recovery_date` (pierwszy dzień powrotu do poziomu szczytu sprzed obsunięcia) oraz `current_drawdown`/`in_drawdown`. Front: `DrawdownChart` (czerwona krzywa pod osią 0 + pasek podsumowania) na Pulpicie pod wykresem wartości.
 - **Stopa zwrotu % vs benchmark %** (`portfolio_history`) — `portfolio_pct = (wartość − cum_wkłady) / cum_wkłady × 100`, analogicznie `benchmark_pct`. Skumulowane wkłady liczone inkrementalnie (O(dni + wpłaty), nie O(dni × wpłaty)). Przed pierwszą wpłatą `cum_wkłady = 0` → `null` (przerwa w linii, `connectNulls` tylko w trybie PLN). Bez wpłat zewnętrznych fallback na transakcje (wkład = cost basis). Przełącznik trybu wykresu (PLN/%) jest czysto frontendowy w `HistoryChart`.
 - **Atrybucja FX** (widok waloru) — `wartość_bez_zmian_kursu = ilość × cena_natywna × kurs_wejścia`; `efekt_waluty = wartość − wartość_bez_zmian_kursu`; `efekt_instrumentu = total − efekt_waluty`.
 - **Rozbicie zmiany dziennej** (`history.portfolio_daily_changes`) — `fx_pln = Σ ilość × cena_dziś × (kurs_dziś − kurs_wczoraj)` (efekt fixingu NBP D/D), `instrument_pln = change_pln − fx_pln` (ruch ceny; dla PLN = całość). Niezmiennik: `instrument_pln + fx_pln == change_pln` (liczone z zaokrąglonych wartości, by kolumny sumowały się co do grosza). Sens: rozdziela, czy dzień zrobił ETF czy złoty — np. skok kursu NBP w poniedziałek vs ruch instrumentu.
-- **Import cen z CSV** (`prices.parse_price_csv` + `prices.import_prices`) — ratunek, gdy provider nie oddaje poprawnej historii dla waloru (jedyny działający kanał dla niszowych papierów GPW). Parser czysty: rozpoznaje kolumny po nagłówku (PL/EN: `Data`/`Date`, `Zamkniecie`/`Close`), wykrywa separator (`,`/`;`/tab), akceptuje datę ISO/`YYYYMMDD`/`DD.MM.YYYY` i przecinek dziesiętny. Zapis `INSERT OR REPLACE` z `source='csv'`. **Waluta wymagana do wyceny** (CSV jej nie niesie; bez niej kurs FX → wartość 0): `import_prices(currency=...)` ustawia ją na instrumencie, jeśli podana; gdy brak i instrument też jej nie ma → `ValueError` (NIE zgadujemy PLN — stooq notuje też w USD/EUR/GBP). W UI: przy braku waluty frontend pyta (podpowiedź PLN). **Pułapka:** pełny `backfill`/`refresh` (yfinance) może nadpisać te punkty z powrotem — po backfillu importuj CSV ponownie. Endpoint `POST /api/prices/import` (`isin`+`file`+opcjonalnie `currency`), w UI przycisk „Importuj ceny (CSV)" w oknie waloru.
+- **Import cen z CSV** (`prices.parse_price_csv` + `prices.import_prices`) — ratunek, gdy provider nie oddaje poprawnej historii dla waloru (jedyny działający kanał dla niszowych papierów GPW). Parser czysty: rozpoznaje kolumny po nagłówku (PL/EN: `Data`/`Date`, `Zamkniecie`/`Close`), wykrywa separator (`,`/`;`/tab), akceptuje datę ISO/`YYYYMMDD`/`DD.MM.YYYY` i przecinek dziesiętny. Zapis przez `prices._cache_put` z `source='csv'`. **Waluta wymagana do wyceny** (CSV jej nie niesie; bez niej kurs FX → wartość 0): `import_prices(currency=...)` ustawia ją na instrumencie, jeśli podana; gdy brak i instrument też jej nie ma → `ValueError` (NIE zgadujemy PLN — stooq notuje też w USD/EUR/GBP). W UI: przy braku waluty frontend pyta (podpowiedź PLN). **Punkty CSV są chronione przed nadpisaniem** (patrz `_cache_put` niżej) — backfill/refresh yfinance ich NIE skasuje, więc stara pułapka „re-importuj CSV po backfillu" już nie istnieje (re-import nadal nadpisuje, gdy chcesz). Endpoint `POST /api/prices/import` (`isin`+`file`+opcjonalnie `currency`), w UI przycisk „Importuj ceny (CSV)" w oknie waloru.
 - **Świeżość cen (UI)** — `value_positions` zwraca `price_date` per pozycja; front (`PositionsTable`/`PriceAge`, `format.daysSince`) pokazuje „dziś/wczoraj/N dni temu", a przy `> 4` dniach kalendarzowych (poza weekend+święto) ⚠️ — sygnał, że provider milczy i czas na import CSV. Czysto frontendowe, backend już miał `price_date`.
-- **Refresh dociąga luki** (`history.refresh_latest`) — odświeżenie pobiera bieżący punkt (`fetch_latest`/`get_rate`) ORAZ uzupełnia brakujący zakres od ostatniego dnia w cache do dziś (`fetch_history`/`backfill_range`). Okno zawsze od ostatniego cache (instrument bez cache → od pierwszej transakcji), NIGDY całość co odświeżenie — świadomie, ze względu na limity API. Współdzielone przez `/api/refresh` i cron.
+- **Refresh dociąga luki, tylko trzymane** (`history.refresh_latest`) — odświeżenie pobiera bieżący punkt (`fetch_latest`/`get_rate`) ORAZ uzupełnia brakujący zakres od ostatniego dnia w cache do dziś (`fetch_history`/`backfill_range`). Okno zawsze od ostatniego cache (instrument bez cache → od pierwszej transakcji), NIGDY całość co odświeżenie — świadomie, ze względu na limity API. **Odpytuje tylko AKTUALNIE TRZYMANE walory** (`held` = `SUM(BUY−SELL) > 0` liczone z `transactions`, NIE ręczna flaga `active`, której nikt nie zmienia po sprzedaży) — sprzedany do zera ETF nie jest pobierany ani nie zaśmieca `prices` punktami pod bieżącą datą; jego historia z okresu posiadania zostaje w cache. FX gated tym samym (waluty tylko trzymanych). Pełną rekonstrukcję wszystkich walorów robi ręczny `backfill_all`. Współdzielone przez `/api/refresh` i cron.
+- **Ochrona danych z CSV** (`prices._cache_put`) — ręczny import (`source='csv'`) jest „święty": automatyczny provider (yfinance, `source != 'csv'`) używa UPSERT `ON CONFLICT(isin,date) DO UPDATE … WHERE prices.source IS NOT 'csv'` — wypełnia brakujące dni i aktualizuje WŁASNE punkty, ale NIE nadpisuje wierszy z CSV. Re-import CSV (ścieżka `source='csv'`) używa `INSERT OR REPLACE` → zawsze wygrywa. Dzięki temu backfill/refresh są bezpieczne dla papierów ratowanych z CSV.
 
 ## 9. Build / uruchomienie / testy
 
@@ -235,7 +241,7 @@ aktywny tylko gdy katalog istnieje). Dockerfile robi to w etapie multi-stage.
 |---|---|
 | Nowy format importu (inny broker) | `importer.py` — nowy parser + auto-detekcja po nagłówku; mapuj do `transactions`+`instruments`+`cash_flows` |
 | Nowe źródło cen | `prices.py` — funkcje `_xxx_last/_xxx_hist` + nowa wartość `source` |
-| Realny benchmark (indeks zamiast %) | `history.py:portfolio_history` — zamiast `(1+stopa)^lata` użyj serii cen ETF-a z `prices` |
+| Kolejny benchmark (np. realny indeks ETF) | skopiuj wzorzec benchmarku inflacyjnego: klient+cache jak `cpi.py`, nowe pole w `portfolio_history` (mnożnik `seria(d)/seria(wpłata)`), param w `/api/history`, linia + przełącznik w `HistoryChart` |
 | FIFO / realizowany P/L per lot | `portfolio.compute_positions` — kolejka lotów zamiast średniego kosztu |
 | Dywidendy / podatki | nowe `kind` w `cash_flows` + obsługa w imporcie i `cash.balance`; uwzględnij w XIRR |
 | Nowe metryki/raporty | endpoint w `main.py` + funkcja w module backendu + nowy komponent w `frontend/src/components/` podpięty jedną linią w `App.jsx` |

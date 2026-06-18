@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from . import allocation as allocation_mod
 from . import backup as backup_mod
 from . import cash as cash_mod
+from . import cpi as cpi_mod
 from . import history as history_mod
 from . import instruments as instruments_mod
 from . import portfolio as portfolio_mod
@@ -159,9 +160,11 @@ def get_summary() -> dict:
 
 
 @app.get("/api/history")
-def get_history(benchmark_rate: float = 0.05) -> list[dict]:
+def get_history(benchmark_rate: float = 0.05, cpi_spread: float = 0.0) -> list[dict]:
     with db_session() as conn:
-        return history_mod.portfolio_history(conn, benchmark_rate=benchmark_rate)
+        return history_mod.portfolio_history(
+            conn, benchmark_rate=benchmark_rate, cpi_spread=cpi_spread
+        )
 
 
 @app.get("/api/daily-changes")
@@ -194,6 +197,17 @@ def backfill() -> dict:
     """Pobiera pełną historię cen i kursów NBP od daty pierwszej transakcji."""
     with db_session() as conn:
         return history_mod.backfill_all(conn)
+
+
+@app.post("/api/cpi/refresh")
+def refresh_cpi() -> dict:
+    """Pobiera serię inflacji (Eurostat HICP) pod benchmark „inflacja + X%".
+
+    Niezależne od cen — NIE dotyka tabeli `prices`, więc bezpieczne dla walorów
+    z ręcznym importem CSV (yfinance ich nie nadpisze).
+    """
+    with db_session() as conn:
+        return {"cpi": cpi_mod.refresh_cpi(conn)}
 
 
 @app.get("/api/export/transactions.csv")

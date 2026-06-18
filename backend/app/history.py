@@ -5,7 +5,7 @@ import bisect
 import sqlite3
 from datetime import date, timedelta
 
-from . import fx, prices
+from . import cpi, fx, prices
 from .returns import twr, twr_detail, twr_index, xirr
 
 
@@ -31,7 +31,9 @@ def backfill_all(conn: sqlite3.Connection) -> dict:
     for cur in currencies:
         fx_points += fx.backfill_range(conn, cur, start, end)
 
-    return {"prices": price_points, "fx": fx_points, "start": start, "end": end}
+    cpi_points = cpi.refresh_cpi(conn)
+
+    return {"prices": price_points, "fx": fx_points, "cpi": cpi_points, "start": start, "end": end}
 
 
 def refresh_latest(conn: sqlite3.Connection, fill_gaps: bool = True) -> dict:
@@ -49,10 +51,21 @@ def refresh_latest(conn: sqlite3.Connection, fill_gaps: bool = True) -> dict:
     first_day = row["first_ts"][:10] if row and row["first_ts"] else None
     end = date.today().isoformat()
 
+    # Tylko AKTUALNIE TRZYMANE walory (suma BUY−SELL > 0). Sprzedany do zera ETF nie
+    # potrzebuje już bieżącej wyceny — przestajemy go odpytywać i zaśmiecać cache nowymi
+    # punktami pod dzisiejszą datą. Historia z okresu posiadania zostaje w cache nietknięta;
+    # pełną rekonstrukcję od zera robi dopiero ręczny `backfill_all` (obejmuje wszystkie walory).
+    held = {
+        r["isin"] for r in conn.execute(
+            "SELECT isin FROM transactions GROUP BY isin "
+            "HAVING SUM(CASE WHEN type = 'BUY' THEN quantity ELSE -quantity END) > 1e-9"
+        )
+    }
     instruments = [
         dict(r) for r in conn.execute(
             "SELECT * FROM instruments WHERE active = 1 AND needs_config = 0"
         )
+        if r["isin"] in held
     ]
 
     prices_updated = 0
@@ -84,11 +97,14 @@ def refresh_latest(conn: sqlite3.Connection, fill_gaps: bool = True) -> dict:
         except Exception:
             pass
 
+    cpi_points = cpi.refresh_cpi(conn)
+
     return {
         "prices": prices_updated,
         "fx": fx_updated,
         "gap_prices": gap_prices,
         "gap_fx": gap_fx,
+        "cpi": cpi_points,
         "instruments": len(instruments),
     }
 
@@ -149,14 +165,20 @@ def _contributions(conn: sqlite3.Connection, has_external: bool) -> list[tuple[d
     ]
 
 
-def portfolio_history(conn: sqlite3.Connection, benchmark_rate: float = 0.05) -> list[dict]:
+def portfolio_history(
+    conn: sqlite3.Connection, benchmark_rate: float = 0.05, cpi_spread: float = 0.0
+) -> list[dict]:
     """Dzienna seria wartości portfela w PLN od pierwszej transakcji do dziś.
 
     Gdy istnieją wpłaty/wypłaty, do wyceny ETF doliczane jest saldo gotówki
     (pełna wartość konta). Bez wpłat seria pokazuje samą wycenę instrumentów.
 
-    Dla każdego dnia liczony jest też `benchmark_pln`: te same wkłady kapitału
-    oprocentowane stałą stopą `benchmark_rate` rocznie od daty wpłaty.
+    Dla każdego dnia liczone są DWA benchmarki (oba money-weighted — każdy wkład
+    oprocentowany od swojej daty):
+      * `benchmark_pln`/`benchmark_pct` — stała stopa roczna `benchmark_rate`.
+      * `benchmark_cpi_pln`/`benchmark_cpi_pct` — inflacja (indeks HICP) + `cpi_spread`
+        rocznie: wkład × indeks(dzień)/indeks(data_wpłaty) × (1+cpi_spread)^lata.
+        Gdy brak danych CPI w cache (Eurostat niepobrany) → pola = None (linia się nie pokaże).
     """
     txs = conn.execute(
         "SELECT ts, isin, type, quantity FROM transactions ORDER BY ts ASC"
@@ -168,6 +190,14 @@ def portfolio_history(conn: sqlite3.Connection, benchmark_rate: float = 0.05) ->
     cash_dates = [c[0] for c in cash_cum]
     cash_vals = [c[1] for c in cash_cum]
     contributions = _contributions(conn, has_external)
+
+    # Benchmark inflacyjny: indeks HICP na dzień wpłaty (baza dla mnożnika inflacji).
+    cpi_points = cpi.load_points(conn)
+    has_cpi = bool(cpi_points)
+    contrib_cpi = (
+        [(cdate, amount, cpi.index_at(cpi_points, cdate)) for cdate, amount in contributions]
+        if has_cpi else []
+    )
 
     # Skumulowane wkłady kapitału per dzień — do przeliczenia serii na stopę zwrotu (%).
     # Budowane raz (O(wpłaty)); w pętli dziennej tylko inkrementalnie dodajemy deltę dnia.
@@ -218,29 +248,43 @@ def portfolio_history(conn: sqlite3.Connection, benchmark_rate: float = 0.05) ->
         if has_external:
             total += _forward_fill((cash_dates, cash_vals), day) or 0.0
 
-        # Benchmark: wkłady oprocentowane stałą stopą roczną od daty wpłaty.
+        # Benchmark 1: wkłady oprocentowane stałą stopą roczną od daty wpłaty.
         bench = 0.0
         for cdate, amount in contributions:
             if cdate <= d:
                 years = (d - cdate).days / 365.0
                 bench += amount * (1.0 + benchmark_rate) ** years
 
-        # Stopa zwrotu (%) vs benchmark — inkrementalnie, O(dni + wpłaty).
+        # Benchmark 2: inflacja (indeks HICP) + cpi_spread. Mnożnik inflacji od daty wpłaty
+        # = indeks(dziś)/indeks(wpłata); plus stała premia (1+spread)^lata.
+        bench_cpi = 0.0
+        if has_cpi:
+            idx_now = cpi.index_at(cpi_points, d)
+            for cdate, amount, idx_base in contrib_cpi:
+                if cdate <= d and idx_base:
+                    years = (d - cdate).days / 365.0
+                    bench_cpi += amount * (idx_now / idx_base) * (1.0 + cpi_spread) ** years
+
+        # Stopa zwrotu (%) vs benchmarki — inkrementalnie, O(dni + wpłaty).
         # Przed pierwszą wpłatą (cum_contrib <= 0) → null (przerwa w linii).
         cum_contrib += contrib_by_day.get(day, 0.0)
         if cum_contrib > 1e-9:
             portfolio_pct = round((total - cum_contrib) / cum_contrib * 100, 2)
             benchmark_pct = round((bench - cum_contrib) / cum_contrib * 100, 2)
+            benchmark_cpi_pct = round((bench_cpi - cum_contrib) / cum_contrib * 100, 2) if has_cpi else None
         else:
             portfolio_pct = None
             benchmark_pct = None
+            benchmark_cpi_pct = None
 
         out.append({
             "date": day,
             "value_pln": round(total, 2),
             "benchmark_pln": round(bench, 2),
+            "benchmark_cpi_pln": round(bench_cpi, 2) if has_cpi else None,
             "portfolio_pct": portfolio_pct,
             "benchmark_pct": benchmark_pct,
+            "benchmark_cpi_pct": benchmark_cpi_pct,
         })
         d += timedelta(days=1)
     return out

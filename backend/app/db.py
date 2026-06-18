@@ -55,6 +55,12 @@ CREATE TABLE IF NOT EXISTS fx_rates (
     PRIMARY KEY (date, currency)
 );
 
+-- Miesięczny indeks cen HICP (Eurostat, baza 2015=100) — pod benchmark „inflacja + X%".
+CREATE TABLE IF NOT EXISTS cpi_index (
+    month TEXT PRIMARY KEY,                  -- 'YYYY-MM-01' (pierwszy dzień miesiąca)
+    idx   REAL NOT NULL                      -- indeks HICP, baza 2015=100
+);
+
 -- Księga gotówki. amount_pln = wpływ na saldo: wpłata +, wypłata −, kupno −, sprzedaż +.
 -- Saldo gotówki = SUM(amount_pln). Kind 'deposit'/'withdrawal' to przepływy zewnętrzne
 -- (do XIRR); 'buy'/'sell' to ruchy wewnętrzne (gotówka <-> ETF) tworzone przy imporcie.

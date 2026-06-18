@@ -77,12 +77,14 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .panel h2 { font-size: 14px; font-weight: 600; margin: 0 0 14px; color: var(--text); }
 .panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; flex-wrap: wrap; gap: 8px; }
 .panel-head h2 { margin: 0; }
+.bench-ctrls { display: flex; flex-wrap: wrap; gap: 8px 18px; }
 .bench-ctrl { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
 .bench-ctrl input.cell.narrow { width: 64px; }
 .sub { color: var(--muted); font-size: 13px; }
 .panel-head .sub { font-size: 12px; }
 
-.chart-toggle { display: flex; gap: 6px; margin-bottom: 10px; }
+.chart-toggle { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
+.chart-toggle-sep { width: 1px; align-self: stretch; background: var(--border); margin: 2px 4px; }
 .chart-toggle .tg {
   background: var(--bg);
   border: 1px solid var(--border);

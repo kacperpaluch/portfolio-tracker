@@ -6,7 +6,8 @@ const json = (r) => {
 
 export const api = {
   portfolio: (refresh = false) => fetch(`/api/portfolio?refresh=${refresh}`).then(json),
-  history: (benchmarkRate = 0.05) => fetch(`/api/history?benchmark_rate=${benchmarkRate}`).then(json),
+  history: (benchmarkRate = 0.05, cpiSpread = 0) =>
+    fetch(`/api/history?benchmark_rate=${benchmarkRate}&cpi_spread=${cpiSpread}`).then(json),
   instruments: () => fetch("/api/instruments").then(json),
   updateInstrument: (isin, body) =>
     fetch(`/api/instruments/${isin}`, {
@@ -28,6 +29,7 @@ export const api = {
   },
   refresh: () => fetch("/api/refresh", { method: "POST" }).then(json),
   backfill: () => fetch("/api/backfill", { method: "POST" }).then(json),
+  refreshCpi: () => fetch("/api/cpi/refresh", { method: "POST" }).then(json),
   transactions: () => fetch("/api/transactions").then(json),
   addTransaction: (body) =>
     fetch("/api/transactions", {

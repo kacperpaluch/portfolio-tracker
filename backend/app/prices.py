@@ -18,10 +18,24 @@ STOOQ_LAST = "https://stooq.pl/q/l/?s={ticker}&f=sd2t2ohlc&e=csv"
 
 
 def _cache_put(conn: sqlite3.Connection, isin: str, day: str, price: float, source: str) -> None:
-    conn.execute(
-        "INSERT OR REPLACE INTO prices (isin, date, price, source) VALUES (?, ?, ?, ?)",
-        (isin, day, price, source),
-    )
+    """Zapis ceny do cache. Ręczny import z CSV (`source='csv'`) jest „święty":
+    automatyczny provider (yfinance) go NIE nadpisuje — inaczej backfill/refresh skasowałby
+    dane wgrane dla papierów, których Yahoo nie obsługuje. Re-import CSV nadpisuje wszystko.
+    """
+    if source == "csv":
+        conn.execute(
+            "INSERT OR REPLACE INTO prices (isin, date, price, source) VALUES (?, ?, ?, ?)",
+            (isin, day, price, source),
+        )
+    else:
+        # UPSERT: wypełnij brakujący dzień / zaktualizuj punkt z yfinance, ale NIE ruszaj
+        # istniejącego wiersza pochodzącego z importu CSV.
+        conn.execute(
+            "INSERT INTO prices (isin, date, price, source) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(isin, date) DO UPDATE SET price = excluded.price, source = excluded.source "
+            "WHERE prices.source IS NOT 'csv'",
+            (isin, day, price, source),
+        )
 
 
 def _normalize_ccy(currency: str | None, price: float) -> tuple[str | None, float]:
