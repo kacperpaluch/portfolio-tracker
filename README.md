@@ -50,6 +50,9 @@ stopę zwrotu oraz porównanie z benchmarkiem — **wszystko w PLN**.
   `Data,…,Zamkniecie`) wprost na widoku waloru. Nadpisuje błędne punkty w cache i naprawia
   wykres wartości w czasie, zmiany dzienne oraz atrybucję. Waluta jest wymagana do wyceny
   (CSV jej nie niesie) — jeśli instrument jej nie ma, aplikacja o nią zapyta przy imporcie.
+- **Świeżość cen** — przy każdej pozycji znacznik „kiedy ostatnia cena" (dziś / wczoraj /
+  N dni temu); gdy notowanie się starzeje (np. yfinance milczy dla danego waloru) — ⚠️
+  ostrzeżenie sygnalizujące, że czas na ręczny import CSV.
 - **Zysk całkowity** = niezrealizowany (otwarte pozycje) **+** zrealizowany (ze sprzedaży).
 - **Konto gotówkowe** — ręczne wpłaty/wypłaty; saldo nettowane przepływami z transakcji
   (kupno −, sprzedaż +). Wartość konta = wycena ETF + gotówka.

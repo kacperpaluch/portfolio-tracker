@@ -1,4 +1,18 @@
-import { fmtPln, fmtPct, cls } from "../format.js";
+import { fmtPln, fmtPct, cls, daysSince } from "../format.js";
+
+// Znacznik świeżości ceny. Pokazuje „kiedy ostatnia cena"; gdy nieświeża (> weekend +
+// ewentualne święto) — ostrzeżenie, że czas ręcznie zaimportować CSV.
+function PriceAge({ date }) {
+  const d = daysSince(date);
+  if (d == null) return null;
+  const stale = d > 4;
+  const label = d <= 0 ? "dziś" : d === 1 ? "wczoraj" : `${d} dni temu`;
+  return (
+    <div className={`tag ${stale ? "stale" : ""}`} title={`Ostatnia cena z ${date}`}>
+      {stale ? "⚠️ " : ""}{label}
+    </div>
+  );
+}
 
 export default function PositionsTable({ positions, totals, onOpen }) {
   if (!positions || positions.length === 0)
@@ -31,6 +45,7 @@ export default function PositionsTable({ positions, totals, onOpen }) {
             <td>
               {p.price == null ? "—" : p.price}
               {p.fx_rate && p.fx_rate !== 1 ? <div className="tag">×{p.fx_rate}</div> : null}
+              <PriceAge date={p.price_date} />
             </td>
             <td>{fmtPln(p.value_pln)}</td>
             <td className={cls(p.pl_pln)}>{fmtPln(p.pl_pln)}</td>

@@ -101,6 +101,7 @@ tfoot td { font-weight: 650; border-top: 2px solid var(--border); padding-top: 1
 .muted { color: var(--muted); }
 .badge { display: inline-block; background: #6e210033; color: #ffb86b; border: 1px solid #b9710033; border-radius: 6px; padding: 2px 8px; font-size: 11px; }
 .tag { color: var(--muted); font-size: 12px; }
+.tag.stale { color: #ffb86b; font-weight: 600; }
 
 input.cell {
   background: var(--bg);
