@@ -144,6 +144,7 @@ odczyt
 | GET | `/api/portfolio?refresh=` | pozycje + sumy (P/L, cash, XIRR, TWR, `returns` 1M/3M/YTD/1R/all) |
 | GET | `/api/summary` | digest pod powiadomienia/n8n: konto, P/L, zmiana D/D, zwroty, alokacja vs cel (`summary.build`) |
 | GET | `/api/history?benchmark_rate=` | seria wartości + benchmark |
+| GET | `/api/daily-changes` | dzienny P/L (zmiana wyceny ETF D/D, koszt transakcji odjęty) — `history.portfolio_daily_changes` |
 | GET | `/api/instruments/{isin}/history` | widok waloru (cena natywna/PLN, atrybucja) |
 | GET/PUT | `/api/instruments[/{isin}]` | mapowania ISIN→ticker (+ category) |
 | GET | `/api/cash` / POST / DELETE `/{id}` | księga gotówki |
@@ -151,6 +152,7 @@ odczyt
 | POST | `/api/refresh` | bieżące ceny + FX |
 | POST | `/api/backfill` | pełna historia cen + FX od pierwszej transakcji |
 | GET | `/api/export/transactions.csv` | eksport transakcji (CSV) |
+| GET | `/api/export/daily-changes.csv` | eksport dziennych zmian wartości (CSV) — `backup.daily_changes_csv` |
 | GET | `/api/export/db` | pobranie spójnej kopii bazy SQLite |
 | GET/POST | `/api/backups` / `/api/backup-now` | lista kopii / backup na żądanie |
 | GET | `/api/health` | health check |

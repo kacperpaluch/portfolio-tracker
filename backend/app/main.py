@@ -142,6 +142,24 @@ def get_history(benchmark_rate: float = 0.05) -> list[dict]:
         return history_mod.portfolio_history(conn, benchmark_rate=benchmark_rate)
 
 
+@app.get("/api/daily-changes")
+def get_daily_changes() -> list[dict]:
+    """Dzienna zmiana wartości portfela (zysk/strata D/D, bez wpływu wpłat)."""
+    with db_session() as conn:
+        return history_mod.portfolio_daily_changes(conn)
+
+
+@app.get("/api/export/daily-changes.csv")
+def export_daily_changes_csv() -> Response:
+    with db_session() as conn:
+        csv_text = backup_mod.daily_changes_csv(conn)
+    return Response(
+        content=csv_text,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="zmiany-dzienne-{date.today().isoformat()}.csv"'},
+    )
+
+
 @app.post("/api/backfill")
 def backfill() -> dict:
     """Pobiera pełną historię cen i kursów NBP od daty pierwszej transakcji."""

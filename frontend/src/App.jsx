@@ -609,11 +609,43 @@ function BackupModal({ backups, onBackup, onClose, busy }) {
 
 const TABS = [
   ["dashboard", "Pulpit"],
+  ["daily", "Zmiany dzienne"],
   ["transactions", "Transakcje"],
   ["allocation", "Alokacja"],
   ["cash", "Gotówka"],
   ["instruments", "Instrumenty"],
 ];
+
+function DailyChangesTable({ rows }) {
+  if (!rows || rows.length === 0)
+    return <div className="spinner">Brak danych — kliknij „Backfill historii", aby zasilić serię wartości.</div>;
+  // Najnowsze u góry.
+  const ordered = [...rows].reverse();
+  return (
+    <table>
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Wartość ETF</th>
+          <th>Kupno/sprzedaż</th>
+          <th>Zmiana (zł)</th>
+          <th>Zmiana (%)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {ordered.map((r) => (
+          <tr key={r.date}>
+            <td>{r.date}</td>
+            <td>{fmtPln(r.value_pln)}</td>
+            <td className="muted">{r.flow_pln ? fmtPln(r.flow_pln) : "—"}</td>
+            <td className={cls(r.change_pln)}>{fmtPln(r.change_pln)}</td>
+            <td className={cls(r.change_pct)}>{r.change_pct == null ? "—" : fmtPct(r.change_pct)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
 
 export default function App() {
   const [portfolio, setPortfolio] = useState(null);
@@ -622,6 +654,7 @@ export default function App() {
   const [transactions, setTransactions] = useState([]);
   const [cash, setCash] = useState(null);
   const [allocation, setAllocation] = useState(null);
+  const [dailyChanges, setDailyChanges] = useState([]);
   const [backups, setBackups] = useState(null);
   const [showBackup, setShowBackup] = useState(false);
   const [detail, setDetail] = useState(null);
@@ -637,10 +670,10 @@ export default function App() {
   };
 
   const loadAll = async () => {
-    const [pf, hist, insts, txs, cs, alloc, bk] = await Promise.all([
-      api.portfolio(), api.history(benchmarkRate / 100), api.instruments(), api.transactions(), api.cash(), api.allocation(), api.backups(),
+    const [pf, hist, insts, txs, cs, alloc, daily, bk] = await Promise.all([
+      api.portfolio(), api.history(benchmarkRate / 100), api.instruments(), api.transactions(), api.cash(), api.allocation(), api.dailyChanges(), api.backups(),
     ]);
-    setPortfolio(pf); setHistory(hist); setInstruments(insts); setTransactions(txs); setCash(cs); setAllocation(alloc); setBackups(bk);
+    setPortfolio(pf); setHistory(hist); setInstruments(insts); setTransactions(txs); setCash(cs); setAllocation(alloc); setDailyChanges(daily); setBackups(bk);
   };
 
   useEffect(() => {
@@ -734,6 +767,20 @@ export default function App() {
             <PositionsTable positions={portfolio?.positions} totals={portfolio?.totals || {}} onOpen={openDetail} />
           </div>
         </>
+      )}
+
+      {tab === "daily" && (
+        <div className="panel">
+          <div className="panel-head">
+            <h2>Zmiany dzienne (zysk/strata D/D)</h2>
+            <a className="btn" href="/api/export/daily-changes.csv">⬇ Eksport CSV</a>
+          </div>
+          <div className="sub" style={{ marginBottom: 12 }}>
+            Zmiana to wynik <strong>rynkowy</strong> dnia (sama wycena ETF) — koszt kupna/sprzedaży jest
+            odjęty, więc zakup nie liczy się jako zysk. Gotówka pominięta (nie ma stopy zwrotu).
+          </div>
+          <DailyChangesTable rows={dailyChanges} />
+        </div>
       )}
 
       {tab === "transactions" && (

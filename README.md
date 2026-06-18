@@ -58,6 +58,8 @@ stopę zwrotu oraz porównanie z benchmarkiem — **wszystko w PLN**.
 - **Alokacja docelowa** — przypisz ETF-om kategorie (akcje/obligacje/…), ustaw wagi modelu
   (np. 60/40) i porównaj docelowy vs rzeczywisty udział grup z kwotą do rebalansu (gotówka
   liczona jako osobna grupa).
+- **Zmiany dzienne** — tabela zysku/straty dzień-po-dniu (wynik rynkowy ETF, z odjętym kosztem
+  kupna/sprzedaży, więc zakup nie liczy się jako zysk) z eksportem do CSV.
 - **Historia transakcji** — pełna lista kupna/sprzedaży.
 - **Mapowanie ISIN → ticker** ręcznie w UI (z wstępnym seedem dla znanych instrumentów).
 - **Eksport i backup** — pobranie transakcji (CSV) i całej bazy (.db) z UI; **nocny backup**
@@ -230,6 +232,7 @@ Pozycje nie są materializowane — liczone w locie z `transactions` (chronologi
 | `GET` | `/api/portfolio?refresh=false` | pozycje + sumy (wartość, P/L zreal./niezreal., gotówka, XIRR, TWR, zwroty w okresach) |
 | `GET` | `/api/summary` | zwięzły digest (wartość, P/L, zmiana D/D, zwroty, alokacja vs cel) — pod powiadomienia/n8n |
 | `GET` | `/api/history?benchmark_rate=0.05` | dzienna seria `value_pln` + `benchmark_pln` |
+| `GET` | `/api/daily-changes` | dzienny zysk/strata (zmiana wyceny ETF D/D, koszt transakcji odjęty) |
 | `GET` / `POST` | `/api/transactions` | historia transakcji / ręczne dodanie |
 | `DELETE` | `/api/transactions/{id}` | usunięcie transakcji (i jej przepływu gotówki) |
 | `GET` | `/api/instruments/{isin}/history` | dzienna historia waloru (cena natywna, kurs, PLN, ilość) |
@@ -240,6 +243,7 @@ Pozycje nie są materializowane — liczone w locie z `transactions` (chronologi
 | `POST` | `/api/refresh` | odświeżenie bieżących cen i kursów |
 | `POST` | `/api/backfill` | pełna historia cen i kursów od pierwszej transakcji |
 | `GET` | `/api/export/transactions.csv` | pobranie transakcji jako CSV |
+| `GET` | `/api/export/daily-changes.csv` | pobranie dziennych zmian wartości jako CSV |
 | `GET` | `/api/export/db` | pobranie całej bazy SQLite (spójna kopia) |
 | `GET` / `POST` | `/api/backups` / `/api/backup-now` | lista kopii / backup na żądanie |
 

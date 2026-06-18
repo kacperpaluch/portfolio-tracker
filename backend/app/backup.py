@@ -74,3 +74,16 @@ def transactions_csv(conn: sqlite3.Connection) -> str:
         w.writerow([r["ts"], r["isin"], r["name"], r["type"], r["quantity"],
                     r["price_pln"], r["value_pln"], r["commission_pln"]])
     return buf.getvalue()
+
+
+def daily_changes_csv(conn: sqlite3.Connection) -> str:
+    """Eksport dziennych zmian wartości portfela do CSV (UTF-8, przecinek)."""
+    from . import history as history_mod
+
+    rows = history_mod.portfolio_daily_changes(conn)
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["date", "value_pln", "flow_pln", "change_pln", "change_pct"])
+    for r in rows:
+        w.writerow([r["date"], r["value_pln"], r["flow_pln"], r["change_pln"], r["change_pct"]])
+    return buf.getvalue()

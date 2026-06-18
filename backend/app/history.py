@@ -276,6 +276,75 @@ def portfolio_twr(conn: sqlite3.Connection) -> float | None:
     return twr(series, cf_by_day)
 
 
+def portfolio_daily_changes(conn: sqlite3.Connection) -> list[dict]:
+    """Dzienny zysk/strata portfela (zmiana wartości rynkowej ETF dzień-do-dnia).
+
+    Liczone na wartości samych instrumentów (gotówka nie ma stopy zwrotu, więc P/L
+    jej nie dotyczy). `change_pln = wartość_ETF[d] − wartość_ETF[d−1] − przepływ_handlowy[d]`,
+    gdzie przepływ = koszt kupna (+) / przychód ze sprzedaży (−) tego dnia — dzięki temu sam
+    zakup nie liczy się jako zysk. `flow_pln` pokazuje ten przepływ (czytelność skoków).
+    Seria rosnąco po dacie; dni bez notowań mają zmianę 0 (forward-fill ceny).
+    """
+    txs = conn.execute(
+        "SELECT ts, isin, type, quantity, value_pln FROM transactions ORDER BY ts ASC"
+    ).fetchall()
+    if not txs:
+        return []
+
+    instr_ccy = {r["isin"]: r["currency"] for r in conn.execute("SELECT isin, currency FROM instruments")}
+    price_map = _series_map([(r["isin"], r["date"], r["price"]) for r in conn.execute("SELECT isin, date, price FROM prices")])
+    fx_map = _series_map([(r["currency"], r["date"], r["rate_to_pln"]) for r in conn.execute("SELECT currency, date, rate_to_pln FROM fx_rates")])
+
+    events: dict[str, dict[str, float]] = {}
+    trade_flow: dict[str, float] = {}
+    for t in txs:
+        day = t["ts"][:10]
+        delta = t["quantity"] if t["type"] == "BUY" else -t["quantity"]
+        events.setdefault(day, {}).setdefault(t["isin"], 0.0)
+        events[day][t["isin"]] += delta
+        trade_flow[day] = trade_flow.get(day, 0.0) + (t["value_pln"] if t["type"] == "BUY" else -t["value_pln"])
+
+    start = date.fromisoformat(txs[0]["ts"][:10])
+    end = date.today()
+    holdings: dict[str, float] = {}
+    out = []
+    prev_val: float | None = None
+    d = start
+    while d <= end:
+        day = d.isoformat()
+        if day in events:
+            for isin, delta in events[day].items():
+                holdings[isin] = holdings.get(isin, 0.0) + delta
+
+        total = 0.0
+        for isin, qty in holdings.items():
+            if qty <= 1e-9:
+                continue
+            price = _forward_fill(price_map.get(isin), day)
+            if price is None:
+                continue
+            ccy = instr_ccy.get(isin)
+            rate = 1.0 if ccy == "PLN" else _forward_fill(fx_map.get(ccy), day)
+            if rate is None:
+                continue
+            total += qty * price * rate
+
+        if prev_val is not None:
+            flow = trade_flow.get(day, 0.0)
+            change = total - prev_val - flow
+            base = prev_val + flow
+            out.append({
+                "date": day,
+                "value_pln": round(total, 2),
+                "flow_pln": round(flow, 2),
+                "change_pln": round(change, 2),
+                "change_pct": round(change / base * 100, 2) if abs(base) > 1e-9 else None,
+            })
+        prev_val = total
+        d += timedelta(days=1)
+    return out
+
+
 def _window_returns(
     series: list[tuple[date, float]],
     cf_by_day: dict[date, float],
