@@ -8,12 +8,15 @@ from __future__ import annotations
 from datetime import date
 
 
-def twr(series: list[tuple[date, float]], cashflows: dict[date, float]) -> float | None:
-    """Roczny TWR (time-weighted) — zwrot portfela niezależny od timingu wpłat.
+def twr_detail(
+    series: list[tuple[date, float]], cashflows: dict[date, float]
+) -> tuple[float, float] | None:
+    """Zwraca (zwrot_skumulowany, zwrot_roczny) time-weighted dla danej serii.
 
-    Łańcuch dziennych zwrotów z neutralizacją przepływów (konwencja „początek dnia":
-    wpłata wchodzi do bazy kapitału danego dnia). `series` to dzienne (data, wartość_konta)
-    rosnąco, `cashflows` to suma wpłat/wypłat per dzień (wpłata +, wypłata −).
+    Skumulowany = łączny wynik portfela w całym oknie (np. 0.12 = +12% za okres),
+    roczny = ten sam wynik zannualizowany. Dla krótkich okien (YTD w styczniu)
+    skumulowany jest sensowniejszy niż roczny (annualizacja go wyolbrzymia).
+    `cashflows` to suma wkładów per dzień (wpłata/kupno +, wypłata/sprzedaż −).
     """
     if len(series) < 2:
         return None
@@ -28,8 +31,19 @@ def twr(series: list[tuple[date, float]], cashflows: dict[date, float]) -> float
     total = growth - 1.0
     days = (series[-1][0] - series[0][0]).days
     if days <= 0:
-        return total
-    return (1.0 + total) ** (365.0 / days) - 1.0
+        return total, total
+    return total, (1.0 + total) ** (365.0 / days) - 1.0
+
+
+def twr(series: list[tuple[date, float]], cashflows: dict[date, float]) -> float | None:
+    """Roczny TWR (time-weighted) — zwrot portfela niezależny od timingu wpłat.
+
+    Łańcuch dziennych zwrotów z neutralizacją przepływów (konwencja „początek dnia":
+    wpłata wchodzi do bazy kapitału danego dnia). `series` to dzienne (data, wartość_konta)
+    rosnąco, `cashflows` to suma wpłat/wypłat per dzień (wpłata +, wypłata −).
+    """
+    detail = twr_detail(series, cashflows)
+    return detail[1] if detail is not None else None
 
 
 def _xnpv(rate: float, cashflows: list[tuple[date, float]]) -> float:

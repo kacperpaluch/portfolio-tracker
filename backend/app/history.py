@@ -6,7 +6,7 @@ import sqlite3
 from datetime import date, timedelta
 
 from . import fx, prices
-from .returns import twr, xirr
+from .returns import twr, twr_detail, xirr
 
 
 def backfill_all(conn: sqlite3.Connection) -> dict:
@@ -274,6 +274,71 @@ def portfolio_twr(conn: sqlite3.Connection) -> float | None:
         cf_by_day[d] = cf_by_day.get(d, 0.0) + f["amount_pln"]
 
     return twr(series, cf_by_day)
+
+
+def _window_returns(
+    series: list[tuple[date, float]],
+    cf_by_day: dict[date, float],
+    start_d: date,
+) -> dict | None:
+    """Zwroty (TWR skumulowany/roczny + XIRR) dla okna [start_d, koniec serii]."""
+    sub = [(d, v) for d, v in series if d >= start_d]
+    if len(sub) < 2:
+        return None
+    start, end = sub[0][0], sub[-1][0]
+
+    # TWR: neutralizuj wkłady dopiero PO dniu startu (wartość startowa już je zawiera).
+    cf_intra = {d: a for d, a in cf_by_day.items() if d > start}
+    detail = twr_detail(sub, cf_intra)
+    twr_cum, twr_ann = (None, None) if detail is None else detail
+
+    # XIRR okna: wartość startowa = wkład kapitału (−), wartość końcowa = wypływ (+).
+    flows = [(start, -sub[0][1])]
+    for d, amt in sorted(cf_by_day.items()):
+        if start < d <= end:
+            flows.append((d, -amt))
+    flows.append((end, sub[-1][1]))
+    xr = xirr(flows)
+
+    return {
+        "from": start.isoformat(),
+        "to": end.isoformat(),
+        "twr": round(twr_cum, 4) if twr_cum is not None else None,
+        "twr_annualized": round(twr_ann, 4) if twr_ann is not None else None,
+        "xirr": round(xr, 4) if xr is not None else None,
+    }
+
+
+def portfolio_returns(conn: sqlite3.Connection) -> dict:
+    """Zwroty portfela w standardowych okresach: 1M, 3M, YTD, 1R, od początku.
+
+    Dla każdego okresu zwraca TWR skumulowany (wynik portfela w tym okresie),
+    TWR zannualizowany oraz XIRR (money-weighted, roczny). Wkłady kapitału
+    (wpłaty lub — bez gotówki — kupna/sprzedaże) są spójne z serią wartości,
+    więc neutralizacja TWR i baza XIRR liczą tylko zwrot portfela, nie dopłaty.
+    """
+    series_rows = portfolio_history(conn)
+    if len(series_rows) < 2:
+        return {}
+    series = [(date.fromisoformat(r["date"]), r["value_pln"]) for r in series_rows]
+
+    _, has_external = _cash_timeline(conn)
+    cf_by_day: dict[date, float] = {}
+    for cdate, amount in _contributions(conn, has_external):
+        cf_by_day[cdate] = cf_by_day.get(cdate, 0.0) + amount
+
+    inception, today = series[0][0], series[-1][0]
+    windows = {
+        "1m": today - timedelta(days=30),
+        "3m": today - timedelta(days=91),
+        "ytd": date(today.year, 1, 1),
+        "1y": today - timedelta(days=365),
+        "all": inception,
+    }
+    out: dict[str, dict | None] = {}
+    for key, start_d in windows.items():
+        out[key] = _window_returns(series, cf_by_day, max(start_d, inception))
+    return out
 
 
 def portfolio_xirr(

@@ -52,6 +52,9 @@ stopę zwrotu oraz porównanie z benchmarkiem — **wszystko w PLN**.
   stopa roczna, np. 5%) liczonego metodą money-weighted.
 - **XIRR i TWR** — roczny zwrot money-weighted (z timingiem wpłat) **oraz** time-weighted
   (wynik samego portfela, niezależny od timingu). Różnica = wpływ timingu Twoich dopłat.
+- **Zwroty w okresach** — pasek 1M / 3M / YTD / 1R / od początku: TWR skumulowany (faktyczny
+  wynik portfela w danym okresie, timing-neutralny) + XIRR roczny dla każdego okresu. „Ile w tym
+  roku" jednym rzutem oka.
 - **Alokacja docelowa** — przypisz ETF-om kategorie (akcje/obligacje/…), ustaw wagi modelu
   (np. 60/40) i porównaj docelowy vs rzeczywisty udział grup z kwotą do rebalansu (gotówka
   liczona jako osobna grupa).
@@ -189,7 +192,7 @@ portfolio-tracker/
 
 ## Model danych
 
-SQLite, 5 tabel (schemat w `backend/app/db.py`):
+SQLite, 6 tabel (schemat w `backend/app/db.py`):
 
 | Tabela | Klucz | Zawartość |
 |---|---|---|
@@ -223,7 +226,7 @@ Pozycje nie są materializowane — liczone w locie z `transactions` (chronologi
 | Metoda | Ścieżka | Opis |
 |---|---|---|
 | `POST` | `/api/import` | import CSV (multipart `file`) |
-| `GET` | `/api/portfolio?refresh=false` | pozycje + sumy (wartość, P/L zreal./niezreal., gotówka, XIRR) |
+| `GET` | `/api/portfolio?refresh=false` | pozycje + sumy (wartość, P/L zreal./niezreal., gotówka, XIRR, TWR, zwroty w okresach) |
 | `GET` | `/api/history?benchmark_rate=0.05` | dzienna seria `value_pln` + `benchmark_pln` |
 | `GET` / `POST` | `/api/transactions` | historia transakcji / ręczne dodanie |
 | `DELETE` | `/api/transactions/{id}` | usunięcie transakcji (i jej przepływu gotówki) |
@@ -238,7 +241,16 @@ Pozycje nie są materializowane — liczone w locie z `transactions` (chronologi
 | `GET` | `/api/export/db` | pobranie całej bazy SQLite (spójna kopia) |
 | `GET` / `POST` | `/api/backups` / `/api/backup-now` | lista kopii / backup na żądanie |
 
-Interaktywna dokumentacja (Swagger): `http://localhost:8000/docs`.
+### Dokumentacja API (generowana z kodu)
+
+FastAPI udostępnia żywą dokumentację wszystkich endpointów — zawsze zgodną z kodem,
+bez ręcznej aktualizacji:
+
+| Strona | URL | Do czego |
+|---|---|---|
+| **Swagger UI** | `http://localhost:8000/docs` | interaktywna (klikalne „Try it out"), generowana z kodu |
+| **ReDoc** | `http://localhost:8000/redoc` | ładniejsza do czytania, też z kodu |
+| **OpenAPI JSON** | `http://localhost:8000/openapi.json` | maszynowy schemat — idealny do importu w n8n (node „HTTP Request" / Import OpenAPI) |
 
 ## Format pliku CSV
 

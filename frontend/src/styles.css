@@ -79,6 +79,13 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .panel-head h2 { margin: 0; }
 .bench-ctrl { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
 .bench-ctrl input.cell.narrow { width: 64px; }
+.panel-head .sub { color: var(--muted); font-size: 12px; }
+
+.returns-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
+.ret { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+.ret-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+.ret-val { font-size: 20px; font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.ret-sub { color: var(--muted); font-size: 11px; margin-top: 4px; }
 
 table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 th, td { text-align: right; padding: 9px 10px; border-bottom: 1px solid var(--border); }

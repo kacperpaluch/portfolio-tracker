@@ -5,7 +5,7 @@ from datetime import date
 
 import pytest
 
-from app.returns import twr, xirr
+from app.returns import twr, twr_detail, xirr
 
 
 def test_xirr_simple_doubling_one_year():
@@ -50,3 +50,13 @@ def test_twr_neutralizes_deposit_timing():
     cf = {date(2025, 7, 1): 500.0}
     result = twr(series, cf)
     assert result == pytest.approx(0.1733, abs=1e-3)
+
+
+def test_twr_detail_cumulative_vs_annualized():
+    # +10% w pół roku -> skumulowany 10%, roczny ~21% (annualizacja).
+    series = [(date(2025, 1, 1), 1000.0), (date(2025, 7, 2), 1100.0)]
+    cum, annual = twr_detail(series, {})
+    assert cum == pytest.approx(0.10, abs=1e-6)
+    assert annual == pytest.approx((1.10) ** (365 / 182) - 1, abs=1e-6)
+    # Krótkie okno: skumulowany jest „uczciwszy" niż roczny (mniejszy).
+    assert cum < annual

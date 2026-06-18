@@ -2,7 +2,8 @@
 
 Dokument referencyjny dla osoby (lub modelu) rozbudowującej projekt. Opisuje stack,
 zależności, architekturę, model danych, logikę domenową, konwencje i pułapki oraz
-„gdzie co dopisać". Aktualny na commit `afbde8a`.
+„gdzie co dopisać". Opisuje stan z gałęzi `main` — przy rozbieżności źródłem prawdy
+jest kod (`backend/app/`), nie ten dokument.
 
 ---
 
@@ -138,7 +139,7 @@ odczyt
 | POST | `/api/import` | import CSV (multipart `file`) |
 | GET/POST | `/api/transactions` | lista / ręczne dodanie transakcji |
 | DELETE | `/api/transactions/{id}` | usunięcie transakcji (+ przepływ gotówki) |
-| GET | `/api/portfolio?refresh=` | pozycje + sumy (P/L, cash, XIRR, TWR) |
+| GET | `/api/portfolio?refresh=` | pozycje + sumy (P/L, cash, XIRR, TWR, `returns` 1M/3M/YTD/1R/all) |
 | GET | `/api/history?benchmark_rate=` | seria wartości + benchmark |
 | GET | `/api/instruments/{isin}/history` | widok waloru (cena natywna/PLN, atrybucja) |
 | GET/PUT | `/api/instruments[/{isin}]` | mapowania ISIN→ticker (+ category) |
@@ -151,7 +152,8 @@ odczyt
 | GET/POST | `/api/backups` / `/api/backup-now` | lista kopii / backup na żądanie |
 | GET | `/api/health` | health check |
 
-Swagger: `/docs`.
+Dokumentacja generowana z kodu (zawsze zgodna, bez ręcznej aktualizacji):
+Swagger UI `/docs` · ReDoc `/redoc` · OpenAPI JSON `/openapi.json` (do importu w n8n).
 
 ## 8. Logika domenowa (kluczowe decyzje)
 
@@ -163,6 +165,7 @@ Swagger: `/docs`.
 - **Gotówka „bramkowana"** — bez żadnej wpłaty saldo = 0 (nie pokazujemy ujemnego z samych zakupów); aktywuje się po pierwszej wpłacie (`cash.has_external`).
 - **XIRR** — money-weighted; przepływy = wpłaty/wypłaty (lub fallback transakcje) + wartość końcowa.
 - **TWR** — time-weighted; łańcuch dziennych zwrotów z neutralizacją przepływów (konwencja „początek dnia").
+- **Zwroty w okresach** (`history.portfolio_returns`) — okna 1M/3M/YTD/1R/od początku liczone z jednej dziennej serii. Per okno: TWR skumulowany (nie-zannualizowany, headline dla krótkich okien), TWR roczny, XIRR roczny. Wkłady kapitału (z `_contributions`) spójne z serią → neutralizacja TWR i baza XIRR nie liczą dopłat jako zwrotu. Zwracane w `totals.returns` z `/api/portfolio`.
 - **Benchmark** — money-weighted: każda wpłata oprocentowana stałą stopą od swojej daty (nie płaska linia!).
 - **Atrybucja FX** (widok waloru) — `wartość_bez_zmian_kursu = ilość × cena_natywna × kurs_wejścia`; `efekt_waluty = wartość − wartość_bez_zmian_kursu`; `efekt_instrumentu = total − efekt_waluty`.
 
