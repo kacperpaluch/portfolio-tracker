@@ -38,6 +38,7 @@ export const api = {
   deleteTransaction: (id) => fetch(`/api/transactions/${id}`, { method: "DELETE" }).then(json),
   instrumentHistory: (isin) => fetch(`/api/instruments/${isin}/history`).then(json),
   dailyChanges: () => fetch("/api/daily-changes").then(json),
+  drawdown: () => fetch("/api/drawdown").then(json),
   cash: () => fetch("/api/cash").then(json),
   addCash: (body) =>
     fetch("/api/cash", {

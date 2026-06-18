@@ -94,6 +94,8 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; }
 .chart-toggle .tg:hover { color: var(--text); }
 .chart-toggle .tg.on { background: var(--accent-dim); border-color: var(--accent); color: #cae2ff; }
 
+.dd-summary { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 10px; font-size: 13px; }
+
 .returns-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
 .ret { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
 .ret-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }

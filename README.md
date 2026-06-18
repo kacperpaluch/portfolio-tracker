@@ -64,6 +64,10 @@ stopę zwrotu oraz porównanie z benchmarkiem — **wszystko w PLN**.
 - **Zwroty w okresach** — pasek 1M / 3M / YTD / 1R / od początku: TWR skumulowany (faktyczny
   wynik portfela w danym okresie, timing-neutralny) + XIRR roczny dla każdego okresu. „Ile w tym
   roku" jednym rzutem oka.
+- **Obsunięcie (drawdown)** — wykres „pod wodą" pokazujący spadek od ostatniego szczytu, liczony
+  na **indeksie wzrostu TWR** (flow-neutral) — wpłaty IKE nie maskują spadków, a wypłaty nie udają
+  obsunięć. Podsumowanie: max drawdown (z datami szczytu/dołka i datą odbicia) oraz bieżące
+  obsunięcie. Czytelny obraz ryzyka portfela, spójny z TWR i zwrotami okresowymi.
 - **Alokacja docelowa** — przypisz ETF-om kategorie (akcje/obligacje/…), ustaw wagi modelu
   (np. 60/40) i porównaj docelowy vs rzeczywisty udział grup z kwotą do rebalansu (gotówka
   liczona jako osobna grupa).
@@ -249,6 +253,7 @@ Pozycje nie są materializowane — liczone w locie z `transactions` (chronologi
 | `GET` | `/api/summary` | zwięzły digest (wartość, P/L, zmiana D/D, zwroty, alokacja vs cel) — pod powiadomienia/n8n |
 | `GET` | `/api/history?benchmark_rate=0.05` | dzienna seria `value_pln` + `benchmark_pln` |
 | `GET` | `/api/daily-changes` | dzienny zysk/strata (zmiana wyceny ETF D/D, koszt transakcji odjęty) + rozbicie `instrument_pln` / `fx_pln` |
+| `GET` | `/api/drawdown` | obsunięcie portfela (drawdown) na indeksie TWR: krzywa „pod wodą" + max/bieżące DD z datami szczytu/dołka/odbicia |
 | `GET` / `POST` | `/api/transactions` | historia transakcji / ręczne dodanie |
 | `DELETE` | `/api/transactions/{id}` | usunięcie transakcji (i jej przepływu gotówki) |
 | `GET` | `/api/instruments/{isin}/history` | dzienna historia waloru (cena natywna, kurs, PLN, ilość) |

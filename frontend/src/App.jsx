@@ -3,6 +3,7 @@ import { api } from "./api.js";
 import Cards from "./components/Cards.jsx";
 import ReturnsStrip from "./components/ReturnsStrip.jsx";
 import HistoryChart from "./components/HistoryChart.jsx";
+import DrawdownChart from "./components/DrawdownChart.jsx";
 import InstrumentDetail from "./components/InstrumentDetail.jsx";
 import PositionsTable from "./components/PositionsTable.jsx";
 import TransactionForm from "./components/TransactionForm.jsx";
@@ -30,6 +31,7 @@ export default function App() {
   const [cash, setCash] = useState(null);
   const [allocation, setAllocation] = useState(null);
   const [dailyChanges, setDailyChanges] = useState([]);
+  const [drawdown, setDrawdown] = useState(null);
   const [backups, setBackups] = useState(null);
   const [showBackup, setShowBackup] = useState(false);
   const [detail, setDetail] = useState(null);
@@ -45,10 +47,10 @@ export default function App() {
   };
 
   const loadAll = async () => {
-    const [pf, hist, insts, txs, cs, alloc, daily, bk] = await Promise.all([
-      api.portfolio(), api.history(benchmarkRate / 100), api.instruments(), api.transactions(), api.cash(), api.allocation(), api.dailyChanges(), api.backups(),
+    const [pf, hist, insts, txs, cs, alloc, daily, dd, bk] = await Promise.all([
+      api.portfolio(), api.history(benchmarkRate / 100), api.instruments(), api.transactions(), api.cash(), api.allocation(), api.dailyChanges(), api.drawdown(), api.backups(),
     ]);
-    setPortfolio(pf); setHistory(hist); setInstruments(insts); setTransactions(txs); setCash(cs); setAllocation(alloc); setDailyChanges(daily); setBackups(bk);
+    setPortfolio(pf); setHistory(hist); setInstruments(insts); setTransactions(txs); setCash(cs); setAllocation(alloc); setDailyChanges(daily); setDrawdown(dd); setBackups(bk);
   };
 
   useEffect(() => {
@@ -154,6 +156,13 @@ export default function App() {
               </label>
             </div>
             <HistoryChart data={history} />
+          </div>
+          <div className="panel">
+            <div className="panel-head">
+              <h2>Obsunięcie (drawdown)</h2>
+              <span className="sub">spadek od szczytu — liczony na indeksie TWR (wpłaty nie zaburzają)</span>
+            </div>
+            <DrawdownChart data={drawdown} />
           </div>
           <div className="panel">
             <h2>Pozycje</h2>

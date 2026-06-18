@@ -35,6 +35,30 @@ def twr_detail(
     return total, (1.0 + total) ** (365.0 / days) - 1.0
 
 
+def twr_index(
+    series: list[tuple[date, float]], cashflows: dict[date, float]
+) -> list[tuple[date, float]]:
+    """Skumulowany indeks wzrostu TWR (growth-of-1) per dzień.
+
+    Indeks startuje od 1.0 w pierwszym dniu serii i mnoży się dziennym zwrotem
+    z neutralizacją przepływów (ta sama konwencja „początek dnia" co `twr_detail`).
+    Podstawa do liczenia obsunięć (drawdown) niezależnych od timingu wpłat — wpłata
+    danego dnia wchodzi do bazy kapitału, więc nie udaje wzrostu indeksu.
+    """
+    if not series:
+        return []
+    out = [(series[0][0], 1.0)]
+    growth = 1.0
+    prev_val = series[0][1]
+    for day, v_end in series[1:]:
+        base = prev_val + cashflows.get(day, 0.0)
+        if base > 1e-9:
+            growth *= v_end / base
+        prev_val = v_end
+        out.append((day, growth))
+    return out
+
+
 def twr(series: list[tuple[date, float]], cashflows: dict[date, float]) -> float | None:
     """Roczny TWR (time-weighted) — zwrot portfela niezależny od timingu wpłat.
 

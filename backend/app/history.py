@@ -6,7 +6,7 @@ import sqlite3
 from datetime import date, timedelta
 
 from . import fx, prices
-from .returns import twr, twr_detail, xirr
+from .returns import twr, twr_detail, twr_index, xirr
 
 
 def backfill_all(conn: sqlite3.Connection) -> dict:
@@ -509,6 +509,73 @@ def portfolio_returns(conn: sqlite3.Connection) -> dict:
     for key, start_d in windows.items():
         out[key] = _window_returns(series, cf_by_day, max(start_d, inception))
     return out
+
+
+def portfolio_drawdown(conn: sqlite3.Connection) -> dict:
+    """Obsunięcie portfela (drawdown) liczone na indeksie wzrostu TWR — flow-neutral.
+
+    Drawdown danego dnia = `indeks / dotychczasowy_szczyt − 1` (≤ 0). Indeks to
+    skumulowany TWR (a NIE surowa wartość PLN), więc wpłaty IKE nie maskują spadków,
+    a wypłaty nie udają obsunięć — spójnie z resztą metryk (TWR, zwroty okresowe).
+
+    Zwraca:
+    - `series` — dzienna krzywa „pod wodą" (`drawdown_pct` ≤ 0) do wykresu,
+    - `max_drawdown` (%) z datami szczytu/dołka (`..._from`/`..._to`) i odbicia (`recovery_date`),
+    - `current_drawdown` (%) oraz `in_drawdown` (czy jesteśmy obecnie pod szczytem).
+    """
+    series_rows = portfolio_history(conn)
+    empty = {
+        "series": [], "max_drawdown": None, "max_drawdown_from": None,
+        "max_drawdown_to": None, "recovery_date": None, "current_drawdown": None,
+        "in_drawdown": False,
+    }
+    if len(series_rows) < 2:
+        return empty
+    series = [(date.fromisoformat(r["date"]), r["value_pln"]) for r in series_rows]
+
+    _, has_external = _cash_timeline(conn)
+    cf_by_day: dict[date, float] = {}
+    for cdate, amount in _contributions(conn, has_external):
+        cf_by_day[cdate] = cf_by_day.get(cdate, 0.0) + amount
+
+    index = twr_index(series, cf_by_day)  # [(data, growth)], growth[0] = 1.0
+    if not index:
+        return empty
+
+    out = []
+    peak = index[0][1]
+    peak_date = index[0][0]
+    max_dd = 0.0
+    max_dd_peak = peak_date
+    max_dd_peak_level = peak
+    max_dd_trough = index[0][0]
+    for d, g in index:
+        if g > peak:
+            peak, peak_date = g, d
+        dd = (g / peak - 1.0) if peak > 1e-12 else 0.0
+        if dd < max_dd:
+            max_dd, max_dd_trough = dd, d
+            max_dd_peak, max_dd_peak_level = peak_date, peak
+        out.append({"date": d.isoformat(), "drawdown_pct": round(dd * 100, 2)})
+
+    # Odbicie: pierwszy dzień po dołku, gdy indeks wraca do poziomu szczytu sprzed obsunięcia.
+    recovery_date = None
+    if max_dd < 0:
+        for d, g in index:
+            if d > max_dd_trough and g >= max_dd_peak_level - 1e-12:
+                recovery_date = d.isoformat()
+                break
+
+    current_dd = out[-1]["drawdown_pct"]
+    return {
+        "series": out,
+        "max_drawdown": round(max_dd * 100, 2),
+        "max_drawdown_from": max_dd_peak.isoformat() if max_dd < 0 else None,
+        "max_drawdown_to": max_dd_trough.isoformat() if max_dd < 0 else None,
+        "recovery_date": recovery_date,
+        "current_drawdown": current_dd,
+        "in_drawdown": current_dd < 0,
+    }
 
 
 def portfolio_xirr(

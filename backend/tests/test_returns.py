@@ -5,7 +5,7 @@ from datetime import date
 
 import pytest
 
-from app.returns import twr, twr_detail, xirr
+from app.returns import twr, twr_detail, twr_index, xirr
 
 
 def test_xirr_simple_doubling_one_year():
@@ -50,6 +50,24 @@ def test_twr_neutralizes_deposit_timing():
     cf = {date(2025, 7, 1): 500.0}
     result = twr(series, cf)
     assert result == pytest.approx(0.1733, abs=1e-3)
+
+
+def test_twr_index_growth_of_one():
+    # 1000 -> 1100 -> 990: indeks 1.0 -> 1.1 -> 0.99 (start zawsze 1.0).
+    series = [(date(2025, 1, 1), 1000.0), (date(2025, 2, 1), 1100.0), (date(2025, 3, 1), 990.0)]
+    idx = twr_index(series, {})
+    assert [round(g, 4) for _, g in idx] == [1.0, 1.1, 0.99]
+
+
+def test_twr_index_neutralizes_deposit():
+    # Wpłata 500 nie podbija indeksu — ten sam scenariusz co test TWR (~+17,33%).
+    series = [
+        (date(2025, 1, 1), 1000.0),
+        (date(2025, 7, 1), 1600.0),  # 1066.67 wzrost + 500 wpłaty
+        (date(2026, 1, 1), 1760.0),
+    ]
+    idx = twr_index(series, {date(2025, 7, 1): 500.0})
+    assert idx[-1][1] == pytest.approx(1.1733, abs=1e-3)
 
 
 def test_twr_detail_cumulative_vs_annualized():

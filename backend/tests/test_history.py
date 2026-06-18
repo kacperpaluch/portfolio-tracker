@@ -9,7 +9,13 @@ import pytest
 from app import fx as fx_mod
 from app import prices as prices_mod
 from app.db import SCHEMA
-from app.history import portfolio_daily_changes, portfolio_history, portfolio_returns, refresh_latest
+from app.history import (
+    portfolio_daily_changes,
+    portfolio_drawdown,
+    portfolio_history,
+    portfolio_returns,
+    refresh_latest,
+)
 
 
 def _db() -> sqlite3.Connection:
@@ -170,6 +176,60 @@ def test_daily_changes_split_invariant_holds_every_day():
     _setup_eur_fx(conn)
     for r in portfolio_daily_changes(conn):
         assert r["instrument_pln"] + r["fx_pln"] == pytest.approx(r["change_pln"], abs=0.01)
+
+
+# --- drawdown (obsunięcie portfela na indeksie TWR) ---------------------------
+
+def _setup_dip(conn):
+    """PLN ETF: kup 10 @ 100. Cena 100 → 120 (szczyt) → 90 (dołek) → 130 (odbicie)."""
+    conn.execute(
+        "INSERT INTO instruments (isin, name, ticker, currency, source, active, needs_config) "
+        "VALUES ('PL01', 'Test ETF', 'X.WA', 'PLN', 'yfinance', 1, 0)"
+    )
+    conn.execute(
+        "INSERT INTO transactions (ts, isin, type, quantity, price_pln, value_pln, commission_pln, import_hash) "
+        "VALUES ('2025-01-01T10:00:00', 'PL01', 'BUY', 10, 100, 1000, 0, 'h1')"
+    )
+    for day, price in [("2025-01-01", 100), ("2025-03-01", 120), ("2025-06-01", 90), ("2025-09-01", 130)]:
+        conn.execute("INSERT INTO prices (isin, date, price, source) VALUES ('PL01', ?, ?, 'yfinance')", (day, price))
+    conn.commit()
+
+
+def test_drawdown_max_depth_and_dates():
+    conn = _db()
+    _setup_dip(conn)
+    dd = portfolio_drawdown(conn)
+    # Szczyt 120 (1200), dołek 90 (900): 900/1200 − 1 = −25%.
+    assert dd["max_drawdown"] == pytest.approx(-25.0, abs=1e-2)
+    assert dd["max_drawdown_from"] == "2025-03-01"
+    assert dd["max_drawdown_to"] == "2025-06-01"
+    # Cena 130 (1300) przebija szczyt 1200 → odbicie tego dnia.
+    assert dd["recovery_date"] == "2025-09-01"
+    # Po odbiciu jesteśmy na nowym szczycie → brak bieżącego obsunięcia.
+    assert dd["current_drawdown"] == pytest.approx(0.0, abs=1e-6)
+    assert dd["in_drawdown"] is False
+
+
+def test_drawdown_series_non_positive():
+    conn = _db()
+    _setup_dip(conn)
+    dd = portfolio_drawdown(conn)
+    assert dd["series"] and all(p["drawdown_pct"] <= 0 for p in dd["series"])
+
+
+def test_drawdown_no_dip_is_zero():
+    conn = _db()
+    _setup(conn)  # cena tylko rośnie 100 → 120
+    dd = portfolio_drawdown(conn)
+    assert dd["max_drawdown"] == pytest.approx(0.0, abs=1e-6)
+    assert dd["max_drawdown_from"] is None
+    assert dd["recovery_date"] is None
+
+
+def test_drawdown_empty_without_transactions():
+    conn = _db()
+    dd = portfolio_drawdown(conn)
+    assert dd["series"] == [] and dd["max_drawdown"] is None
 
 
 # --- refresh_latest: pobieranie tylko nowych danych + luk (bez sieci) ---------

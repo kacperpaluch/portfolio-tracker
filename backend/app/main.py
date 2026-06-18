@@ -171,6 +171,13 @@ def get_daily_changes() -> list[dict]:
         return history_mod.portfolio_daily_changes(conn)
 
 
+@app.get("/api/drawdown")
+def get_drawdown() -> dict:
+    """Obsunięcie portfela (drawdown) na indeksie TWR: krzywa „pod wodą" + max/bieżące DD."""
+    with db_session() as conn:
+        return history_mod.portfolio_drawdown(conn)
+
+
 @app.get("/api/export/daily-changes.csv")
 def export_daily_changes_csv() -> Response:
     with db_session() as conn:
