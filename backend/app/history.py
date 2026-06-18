@@ -34,6 +34,65 @@ def backfill_all(conn: sqlite3.Connection) -> dict:
     return {"prices": price_points, "fx": fx_points, "start": start, "end": end}
 
 
+def refresh_latest(conn: sqlite3.Connection, fill_gaps: bool = True) -> dict:
+    """Odświeża bieżące ceny i kursy FX, a przy okazji dociąga luki w historii.
+
+    Dla każdego aktywnego, skonfigurowanego instrumentu pobiera najświeższy punkt
+    (`fetch_latest`), a gdy w cache jest luka między ostatnim znanym dniem a dziś
+    (np. po awarii sieci o 21:00 albo dla świeżo dodanego instrumentu), uzupełnia
+    brakujący zakres (`fetch_history`). To samo dla kursów NBP (`backfill_range`).
+    Nakładające się zakresy są idempotentne (INSERT OR REPLACE).
+
+    Bez `fill_gaps` zachowuje się jak dawne odświeżanie — sam bieżący punkt.
+    """
+    row = conn.execute("SELECT MIN(ts) AS first_ts FROM transactions").fetchone()
+    first_day = row["first_ts"][:10] if row and row["first_ts"] else None
+    end = date.today().isoformat()
+
+    instruments = [
+        dict(r) for r in conn.execute(
+            "SELECT * FROM instruments WHERE active = 1 AND needs_config = 0"
+        )
+    ]
+
+    prices_updated = 0
+    gap_prices = 0
+    for inst in instruments:
+        if fill_gaps and first_day:
+            cached = prices.latest_cached_price(conn, inst["isin"])
+            # Brak cache → dociągnij od pierwszej transakcji; inaczej od ostatniego znanego dnia.
+            gap_start = cached[0] if cached else first_day
+            if gap_start < end:
+                gap_prices += prices.fetch_history(conn, inst, gap_start, end)
+        if prices.fetch_latest(conn, inst):
+            prices_updated += 1
+
+    currencies = {i["currency"] for i in instruments if i["currency"] and i["currency"] != "PLN"}
+    fx_updated = 0
+    gap_fx = 0
+    for cur in currencies:
+        if fill_gaps and first_day:
+            last_fx = conn.execute(
+                "SELECT MAX(date) FROM fx_rates WHERE currency = ?", (cur,)
+            ).fetchone()[0]
+            gap_start = last_fx or first_day
+            if gap_start < end:
+                gap_fx += fx.backfill_range(conn, cur, gap_start, end)
+        try:
+            fx.get_rate(conn, cur)
+            fx_updated += 1
+        except Exception:
+            pass
+
+    return {
+        "prices": prices_updated,
+        "fx": fx_updated,
+        "gap_prices": gap_prices,
+        "gap_fx": gap_fx,
+        "instruments": len(instruments),
+    }
+
+
 def _series_map(rows) -> dict[str, list]:
     """Buduje mapę klucz -> (lista_dat, lista_wartości) posortowaną rosnąco po dacie."""
     tmp: dict[str, list] = {}
@@ -284,6 +343,11 @@ def portfolio_daily_changes(conn: sqlite3.Connection) -> list[dict]:
     gdzie przepływ = koszt kupna (+) / przychód ze sprzedaży (−) tego dnia — dzięki temu sam
     zakup nie liczy się jako zysk. `flow_pln` pokazuje ten przepływ (czytelność skoków).
     Seria rosnąco po dacie; dni bez notowań mają zmianę 0 (forward-fill ceny).
+
+    `change_pln` rozbijane na dwa źródła (`instrument_pln + fx_pln == change_pln`):
+    - `fx_pln`  = efekt zmiany kursu NBP: Σ ilość × cena_dziś × (kurs_dziś − kurs_wczoraj),
+    - `instrument_pln` = reszta, czyli ruch samej ceny instrumentu (dla PLN = całość).
+    Dzięki temu widać, czy dzień zrobił ETF, czy złoty (np. skok fixingu w poniedziałek).
     """
     txs = conn.execute(
         "SELECT ts, isin, type, quantity, value_pln FROM transactions ORDER BY ts ASC"
@@ -309,6 +373,7 @@ def portfolio_daily_changes(conn: sqlite3.Connection) -> list[dict]:
     holdings: dict[str, float] = {}
     out = []
     prev_val: float | None = None
+    prev_day: str | None = None
     d = start
     while d <= end:
         day = d.isoformat()
@@ -317,6 +382,7 @@ def portfolio_daily_changes(conn: sqlite3.Connection) -> list[dict]:
                 holdings[isin] = holdings.get(isin, 0.0) + delta
 
         total = 0.0
+        fx_comp = 0.0  # efekt kursu NBP D/D (Σ ilość × cena_dziś × Δkurs)
         for isin, qty in holdings.items():
             if qty <= 1e-9:
                 continue
@@ -328,19 +394,30 @@ def portfolio_daily_changes(conn: sqlite3.Connection) -> list[dict]:
             if rate is None:
                 continue
             total += qty * price * rate
+            if prev_day is not None and ccy != "PLN":
+                rate_prev = _forward_fill(fx_map.get(ccy), prev_day)
+                if rate_prev is not None:
+                    fx_comp += qty * price * (rate - rate_prev)
 
         if prev_val is not None:
             flow = trade_flow.get(day, 0.0)
             change = total - prev_val - flow
             base = prev_val + flow
+            # Instrument = reszta po wyjęciu kursu; liczone z zaokrąglonych wartości,
+            # by kolumny zawsze sumowały się do change_pln (bez błędu o grosz).
+            change_r = round(change, 2)
+            fx_r = round(fx_comp, 2)
             out.append({
                 "date": day,
                 "value_pln": round(total, 2),
                 "flow_pln": round(flow, 2),
-                "change_pln": round(change, 2),
+                "change_pln": change_r,
+                "instrument_pln": round(change_r - fx_r, 2),
+                "fx_pln": fx_r,
                 "change_pct": round(change / base * 100, 2) if abs(base) > 1e-9 else None,
             })
         prev_val = total
+        prev_day = day
         d += timedelta(days=1)
     return out
 

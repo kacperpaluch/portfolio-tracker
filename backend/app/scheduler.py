@@ -11,9 +11,7 @@ import os
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from . import backup as backup_mod
-from . import fx as fx_mod
-from . import instruments as instruments_mod
-from . import prices as prices_mod
+from . import history as history_mod
 from .db import db_session
 
 log = logging.getLogger("scheduler")
@@ -26,26 +24,12 @@ TIMEZONE = os.environ.get("TZ", "Europe/Warsaw")
 
 
 def refresh_job() -> dict:
-    """Pobiera bieżące ceny i kursy FX dla aktywnych, skonfigurowanych instrumentów."""
+    """Pobiera bieżące ceny i kursy FX + dociąga luki w historii (np. po awarii sieci)."""
     with db_session() as conn:
-        instruments = [
-            i for i in instruments_mod.list_instruments(conn)
-            if i["active"] and not i["needs_config"]
-        ]
-        prices_updated = 0
-        for inst in instruments:
-            if prices_mod.fetch_latest(conn, inst):
-                prices_updated += 1
-        currencies = {i["currency"] for i in instruments if i["currency"] and i["currency"] != "PLN"}
-        fx_updated = 0
-        for cur in currencies:
-            try:
-                fx_mod.get_rate(conn, cur)
-                fx_updated += 1
-            except Exception:
-                pass
-    log.info("Odświeżono: ceny=%s, FX=%s", prices_updated, fx_updated)
-    return {"prices": prices_updated, "fx": fx_updated}
+        result = history_mod.refresh_latest(conn)
+    log.info("Odświeżono: ceny=%s, FX=%s, luki(ceny/FX)=%s/%s",
+             result["prices"], result["fx"], result["gap_prices"], result["gap_fx"])
+    return result
 
 
 def backup_job() -> dict:

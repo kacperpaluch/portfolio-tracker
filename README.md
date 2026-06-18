@@ -59,12 +59,16 @@ stopę zwrotu oraz porównanie z benchmarkiem — **wszystko w PLN**.
   (np. 60/40) i porównaj docelowy vs rzeczywisty udział grup z kwotą do rebalansu (gotówka
   liczona jako osobna grupa).
 - **Zmiany dzienne** — tabela zysku/straty dzień-po-dniu (wynik rynkowy ETF, z odjętym kosztem
-  kupna/sprzedaży, więc zakup nie liczy się jako zysk) z eksportem do CSV.
+  kupna/sprzedaży, więc zakup nie liczy się jako zysk) z **rozbiciem na efekt instrumentu vs
+  kurs NBP** (kolumny `Instrument` / `Kurs NBP` + znacznik, co napędzało dany dzień — ruch ceny
+  czy złoty) oraz eksportem do CSV. Suma kolumn = zmiana całkowita.
 - **Historia transakcji** — pełna lista kupna/sprzedaży.
 - **Mapowanie ISIN → ticker** ręcznie w UI (z wstępnym seedem dla znanych instrumentów).
 - **Eksport i backup** — pobranie transakcji (CSV) i całej bazy (.db) z UI; **nocny backup**
   bazy z crona (~03:00) do `data/backup/` z retencją + „Backup teraz" na żądanie.
-- **Codzienne odświeżanie** cen i kursów (cron APScheduler, domyślnie ~21:00 Europe/Warsaw).
+- **Codzienne odświeżanie** cen i kursów (cron APScheduler, domyślnie ~21:00 Europe/Warsaw) —
+  pobiera bieżące notowania i **dociąga ewentualne luki w historii** (np. po awarii sieci),
+  zawsze od ostatniego dnia w cache, nigdy całości od początku.
 
 ## Kluczowe koncepcje
 
@@ -232,7 +236,7 @@ Pozycje nie są materializowane — liczone w locie z `transactions` (chronologi
 | `GET` | `/api/portfolio?refresh=false` | pozycje + sumy (wartość, P/L zreal./niezreal., gotówka, XIRR, TWR, zwroty w okresach) |
 | `GET` | `/api/summary` | zwięzły digest (wartość, P/L, zmiana D/D, zwroty, alokacja vs cel) — pod powiadomienia/n8n |
 | `GET` | `/api/history?benchmark_rate=0.05` | dzienna seria `value_pln` + `benchmark_pln` |
-| `GET` | `/api/daily-changes` | dzienny zysk/strata (zmiana wyceny ETF D/D, koszt transakcji odjęty) |
+| `GET` | `/api/daily-changes` | dzienny zysk/strata (zmiana wyceny ETF D/D, koszt transakcji odjęty) + rozbicie `instrument_pln` / `fx_pln` |
 | `GET` / `POST` | `/api/transactions` | historia transakcji / ręczne dodanie |
 | `DELETE` | `/api/transactions/{id}` | usunięcie transakcji (i jej przepływu gotówki) |
 | `GET` | `/api/instruments/{isin}/history` | dzienna historia waloru (cena natywna, kurs, PLN, ilość) |
@@ -240,7 +244,7 @@ Pozycje nie są materializowane — liczone w locie z `transactions` (chronologi
 | `GET` / `PUT` | `/api/instruments[/{isin}]` | podgląd / edycja mapowań ISIN→ticker |
 | `GET` | `/api/cash` | saldo gotówki + lista wpłat/wypłat |
 | `POST` / `DELETE` | `/api/cash[/{id}]` | dodaj / usuń wpłatę-wypłatę |
-| `POST` | `/api/refresh` | odświeżenie bieżących cen i kursów |
+| `POST` | `/api/refresh` | odświeżenie bieżących cen i kursów + dociągnięcie luk w historii (od ostatniego dnia w cache) |
 | `POST` | `/api/backfill` | pełna historia cen i kursów od pierwszej transakcji |
 | `GET` | `/api/export/transactions.csv` | pobranie transakcji jako CSV |
 | `GET` | `/api/export/daily-changes.csv` | pobranie dziennych zmian wartości jako CSV |

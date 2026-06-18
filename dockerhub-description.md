@@ -17,9 +17,10 @@ wyceny i pokazuje wartość, zysk/stratę oraz roczną stopę zwrotu — **wszys
 - **XIRR i TWR** — roczny zwrot money-weighted (z timingiem wpłat) oraz time-weighted (wynik portfela).
 - **Alokacja docelowa** — kategorie ETF-ów, wagi modelu (np. 60/40) i porównanie z rebalansem.
 - **Widok waloru** — historia dzień po dniu + atrybucja zysku na instrument vs walutę (kurs PLN).
+- **Zmiany dzienne** — dzienny P/L z rozbiciem na efekt instrumentu vs kurs NBP (co napędzało dzień) + eksport CSV.
 - **Historia transakcji** i ręczne mapowanie ISIN → ticker.
 - **Eksport i backup** — pobranie transakcji (CSV) i całej bazy z UI + nocny backup bazy (cron).
-- **Codzienne odświeżanie** cen i kursów (cron ~21:00 Europe/Warsaw).
+- **Codzienne odświeżanie** cen i kursów (cron ~21:00 Europe/Warsaw) + dociąganie luk w historii po awarii.
 
 ## Źródła danych
 

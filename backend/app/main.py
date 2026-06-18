@@ -17,9 +17,7 @@ from . import cash as cash_mod
 from . import history as history_mod
 from . import instruments as instruments_mod
 from . import portfolio as portfolio_mod
-from . import prices as prices_mod
 from . import summary as summary_mod
-from . import fx as fx_mod
 from . import importer
 from .db import db_session, init_db
 from .importer import import_transactions
@@ -299,26 +297,12 @@ def delete_cash(flow_id: int) -> dict:
 
 @app.post("/api/refresh")
 def refresh_data() -> dict:
-    """Odświeża bieżące ceny i kursy FX dla aktywnych, skonfigurowanych instrumentów."""
+    """Odświeża bieżące ceny i kursy FX + dociąga luki w historii (np. po awarii sieci)."""
     with db_session() as conn:
-        instruments = [
-            i for i in instruments_mod.list_instruments(conn)
-            if i["active"] and not i["needs_config"]
-        ]
-        updated_prices = 0
-        for inst in instruments:
-            if prices_mod.fetch_latest(conn, inst):
-                updated_prices += 1
-        currencies = {i["currency"] for i in instruments if i["currency"] and i["currency"] != "PLN"}
-        updated_fx = 0
-        for cur in currencies:
-            try:
-                fx_mod.get_rate(conn, cur)
-                updated_fx += 1
-            except Exception:
-                pass
-    return {"updated_prices": updated_prices, "updated_fx": updated_fx,
-            "instruments": len(instruments)}
+        result = history_mod.refresh_latest(conn)
+    return {"updated_prices": result["prices"], "updated_fx": result["fx"],
+            "gap_prices": result["gap_prices"], "gap_fx": result["gap_fx"],
+            "instruments": result["instruments"]}
 
 
 # Serwowanie zbudowanego frontendu (jeśli istnieje katalog frontend/dist).

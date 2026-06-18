@@ -75,12 +75,12 @@ backend/app/
   fx.py          # NBP: get_rate (lookback), backfill_range, cache w fx_rates
   cash.py        # księga gotówki: balance/has_external, add/delete flow, record/remove_trade_cash
   portfolio.py   # compute_positions (średni koszt + zrealizowany), value_positions (sumy)
-  history.py     # backfill_all, portfolio_history (+benchmark), portfolio_xirr/twr, instrument_history
+  history.py     # refresh_latest (bieżące+luki), backfill_all, portfolio_history (+benchmark), portfolio_xirr/twr, instrument_history
   returns.py     # czyste funkcje: xirr() (Newton+bisekcja), twr() (łańcuch podokresów)
   allocation.py  # compute (grupy vs cel + rebalans), get/set_targets
   summary.py     # build() — digest pod powiadomienia (kompozycja portfolio+history+allocation)
   backup.py      # backup_database (online copy + retencja), transactions_csv, list_backups
-  scheduler.py   # start_scheduler() — APScheduler: refresh_job (~21:00) + backup_job (~03:00)
+  scheduler.py   # start_scheduler() — APScheduler: refresh_job (~21:00, woła history.refresh_latest) + backup_job (~03:00)
 frontend/src/
   App.jsx        # cała aplikacja: zakładki, karty, wykresy, tabele, formularze, modal waloru
   api.js         # cienki klient REST (fetch)
@@ -144,12 +144,12 @@ odczyt
 | GET | `/api/portfolio?refresh=` | pozycje + sumy (P/L, cash, XIRR, TWR, `returns` 1M/3M/YTD/1R/all) |
 | GET | `/api/summary` | digest pod powiadomienia/n8n: konto, P/L, zmiana D/D, zwroty, alokacja vs cel (`summary.build`) |
 | GET | `/api/history?benchmark_rate=` | seria wartości + benchmark |
-| GET | `/api/daily-changes` | dzienny P/L (zmiana wyceny ETF D/D, koszt transakcji odjęty) — `history.portfolio_daily_changes` |
+| GET | `/api/daily-changes` | dzienny P/L (zmiana wyceny ETF D/D, koszt transakcji odjęty) + rozbicie `instrument_pln`/`fx_pln` — `history.portfolio_daily_changes` |
 | GET | `/api/instruments/{isin}/history` | widok waloru (cena natywna/PLN, atrybucja) |
 | GET/PUT | `/api/instruments[/{isin}]` | mapowania ISIN→ticker (+ category) |
 | GET | `/api/cash` / POST / DELETE `/{id}` | księga gotówki |
 | GET/PUT | `/api/allocation` | alokacja docelowa vs rzeczywista |
-| POST | `/api/refresh` | bieżące ceny + FX |
+| POST | `/api/refresh` | bieżące ceny + FX + dociągnięcie luk od ostatniego dnia w cache (`history.refresh_latest`) |
 | POST | `/api/backfill` | pełna historia cen + FX od pierwszej transakcji |
 | GET | `/api/export/transactions.csv` | eksport transakcji (CSV) |
 | GET | `/api/export/daily-changes.csv` | eksport dziennych zmian wartości (CSV) — `backup.daily_changes_csv` |
@@ -173,6 +173,8 @@ Swagger UI `/docs` · ReDoc `/redoc` · OpenAPI JSON `/openapi.json` (do importu
 - **Zwroty w okresach** (`history.portfolio_returns`) — okna 1M/3M/YTD/1R/od początku liczone z jednej dziennej serii. Per okno: TWR skumulowany (nie-zannualizowany, headline dla krótkich okien), TWR roczny, XIRR roczny. Wkłady kapitału (z `_contributions`) spójne z serią → neutralizacja TWR i baza XIRR nie liczą dopłat jako zwrotu. Zwracane w `totals.returns` z `/api/portfolio`.
 - **Benchmark** — money-weighted: każda wpłata oprocentowana stałą stopą od swojej daty (nie płaska linia!).
 - **Atrybucja FX** (widok waloru) — `wartość_bez_zmian_kursu = ilość × cena_natywna × kurs_wejścia`; `efekt_waluty = wartość − wartość_bez_zmian_kursu`; `efekt_instrumentu = total − efekt_waluty`.
+- **Rozbicie zmiany dziennej** (`history.portfolio_daily_changes`) — `fx_pln = Σ ilość × cena_dziś × (kurs_dziś − kurs_wczoraj)` (efekt fixingu NBP D/D), `instrument_pln = change_pln − fx_pln` (ruch ceny; dla PLN = całość). Niezmiennik: `instrument_pln + fx_pln == change_pln` (liczone z zaokrąglonych wartości, by kolumny sumowały się co do grosza). Sens: rozdziela, czy dzień zrobił ETF czy złoty — np. skok kursu NBP w poniedziałek vs ruch instrumentu.
+- **Refresh dociąga luki** (`history.refresh_latest`) — odświeżenie pobiera bieżący punkt (`fetch_latest`/`get_rate`) ORAZ uzupełnia brakujący zakres od ostatniego dnia w cache do dziś (`fetch_history`/`backfill_range`). Okno zawsze od ostatniego cache (instrument bez cache → od pierwszej transakcji), NIGDY całość co odświeżenie — świadomie, ze względu na limity API. Współdzielone przez `/api/refresh` i cron.
 
 ## 9. Build / uruchomienie / testy
 
