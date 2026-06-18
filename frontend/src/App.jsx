@@ -238,6 +238,7 @@ export default function App() {
         <InstrumentDetail
           data={detail}
           busy={busy}
+          firstTxDate={transactions.filter((t) => t.isin === detail.isin).map((t) => t.ts).sort()[0]}
           onImportPrices={onImportPrices}
           onClose={() => setDetail(null)}
         />
