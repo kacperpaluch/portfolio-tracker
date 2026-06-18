@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
@@ -17,6 +17,7 @@ from . import cash as cash_mod
 from . import history as history_mod
 from . import instruments as instruments_mod
 from . import portfolio as portfolio_mod
+from . import prices as prices_mod
 from . import summary as summary_mod
 from . import importer
 from .db import db_session, init_db
@@ -59,6 +60,24 @@ async def import_csv(file: UploadFile = File(...)) -> dict:
     content = await file.read()
     with db_session() as conn:
         return import_transactions(conn, content)
+
+
+@app.post("/api/prices/import")
+async def import_prices_csv(isin: str = Form(...), file: UploadFile = File(...)) -> dict:
+    """Wgrywa dzienne ceny waloru z CSV (format stooq: Data,…,Zamkniecie) do cache.
+
+    Ratunek, gdy provider (Yahoo) nie oddaje poprawnej historii dla danego ISIN —
+    np. mało płynny ETN na GPW. Po imporcie odśwież wykresy „Backfill" nie jest potrzebny.
+    """
+    content = await file.read()
+    with db_session() as conn:
+        exists = conn.execute("SELECT 1 FROM instruments WHERE isin = ?", (isin,)).fetchone()
+        if exists is None:
+            raise HTTPException(status_code=404, detail="Instrument not found")
+        try:
+            return prices_mod.import_prices(conn, isin, content)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.get("/api/instruments")

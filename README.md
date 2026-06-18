@@ -45,6 +45,10 @@ stopę zwrotu oraz porównanie z benchmarkiem — **wszystko w PLN**.
   EUR/PLN) oraz tabelę dzień po dniu (cena giełdowa, kurs NBP, cena PLN, szt., wartość).
 - **Wycena w PLN** — instrumenty notowane w EUR/USD/GBP przeliczane bieżącym kursem NBP;
   **waluta wykrywana automatycznie** z notowania (z obsługą londyńskich pensów GBx → GBP).
+- **Import cen z CSV (ratunek dla danych Yahoo)** — gdy Yahoo nie oddaje poprawnej historii
+  dla mało płynnego waloru (np. ETN na GPW), wgraj dzienne ceny z pliku CSV (format stooq:
+  `Data,…,Zamkniecie`) wprost na widoku waloru. Nadpisuje błędne punkty w cache i naprawia
+  wykres wartości w czasie, zmiany dzienne oraz atrybucję.
 - **Zysk całkowity** = niezrealizowany (otwarte pozycje) **+** zrealizowany (ze sprzedaży).
 - **Konto gotówkowe** — ręczne wpłaty/wypłaty; saldo nettowane przepływami z transakcji
   (kupno −, sprzedaż +). Wartość konta = wycena ETF + gotówka.
@@ -233,6 +237,7 @@ Pozycje nie są materializowane — liczone w locie z `transactions` (chronologi
 | Metoda | Ścieżka | Opis |
 |---|---|---|
 | `POST` | `/api/import` | import CSV (multipart `file`) |
+| `POST` | `/api/prices/import` | import dziennych cen waloru z CSV (multipart `isin` + `file`, format stooq) — ratunek, gdy Yahoo nie ma historii |
 | `GET` | `/api/portfolio?refresh=false` | pozycje + sumy (wartość, P/L zreal./niezreal., gotówka, XIRR, TWR, zwroty w okresach) |
 | `GET` | `/api/summary` | zwięzły digest (wartość, P/L, zmiana D/D, zwroty, alokacja vs cel) — pod powiadomienia/n8n |
 | `GET` | `/api/history?benchmark_rate=0.05` | dzienna seria `value_pln` + `benchmark_pln` |

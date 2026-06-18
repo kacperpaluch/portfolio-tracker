@@ -180,6 +180,7 @@ select.cell {
 }
 .modal-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 18px; gap: 12px; }
 .modal-head h2 { margin: 0; font-size: 18px; }
+.modal-actions { display: flex; gap: 8px; flex-shrink: 0; }
 .modal-scroll { max-height: 320px; overflow-y: auto; margin-top: 16px; }
 .modal-scroll thead th { position: sticky; top: 0; background: var(--panel); }
 

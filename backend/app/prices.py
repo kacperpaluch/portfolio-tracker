@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 import sqlite3
+from datetime import datetime
 
 import httpx
 
@@ -158,3 +159,86 @@ def resolve_currency(ticker: str, source: str) -> str | None:
     if source == "stooq":
         return "PLN"
     return _normalize_ccy(_yf_currency(ticker), 0.0)[0]
+
+
+# ---------------------------------------------------------------- import cen z CSV
+
+_DATE_HEADERS = {"data", "date"}
+_CLOSE_HEADERS = {"zamkniecie", "zamknięcie", "close", "kurs"}
+
+
+def _parse_price_number(raw: str) -> float | None:
+    raw = raw.strip().replace("\xa0", "").replace(" ", "")
+    if not raw:
+        return None
+    # Część eksportów używa przecinka dziesiętnego (stooq.pl zwykle kropki).
+    if "," in raw and "." not in raw:
+        raw = raw.replace(",", ".")
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
+def _parse_price_date(raw: str) -> str | None:
+    raw = raw.strip()
+    for fmt in ("%Y-%m-%d", "%Y%m%d", "%d.%m.%Y"):
+        try:
+            return datetime.strptime(raw, fmt).date().isoformat()
+        except ValueError:
+            continue
+    return None
+
+
+def parse_price_csv(content: bytes) -> list[tuple[str, float]]:
+    """Parsuje CSV stooq/„OHLC" (Data,…,Zamkniecie,…) do listy (date_iso, close).
+
+    Funkcja czysta (bez DB). Rozpoznaje kolumny po nagłówku (PL/EN), wykrywa separator
+    (',' / ';' / tab) i akceptuje datę ISO, YYYYMMDD lub DD.MM.YYYY oraz przecinek
+    dziesiętny. Wiersze bez poprawnej daty/ceny są pomijane. Rzuca ValueError, gdy
+    nagłówek nie zawiera kolumn daty i zamknięcia.
+    """
+    text = content.decode("utf-8-sig", errors="replace")
+    lines = [ln for ln in text.splitlines() if ln.strip()]
+    if not lines:
+        return []
+    delim = max((",", ";", "\t"), key=lambda d: lines[0].count(d))
+    header = [h.strip().lower() for h in lines[0].split(delim)]
+    di = next((i for i, h in enumerate(header) if h in _DATE_HEADERS), None)
+    ci = next((i for i, h in enumerate(header) if h in _CLOSE_HEADERS), None)
+    if di is None or ci is None:
+        raise ValueError(
+            "Nie rozpoznano kolumn — wymagane nagłówki 'Data' i 'Zamkniecie' (lub Date/Close)."
+        )
+    out: list[tuple[str, float]] = []
+    for line in lines[1:]:
+        cols = line.split(delim)
+        if len(cols) <= max(di, ci):
+            continue
+        day = _parse_price_date(cols[di])
+        price = _parse_price_number(cols[ci])
+        if day is None or price is None:
+            continue
+        out.append((day, price))
+    return out
+
+
+def import_prices(conn: sqlite3.Connection, isin: str, content: bytes, source: str = "csv") -> dict:
+    """Wgrywa dzienne ceny (w walucie natywnej instrumentu) z CSV do cache `prices`.
+
+    Ratunek, gdy provider (np. Yahoo) nie oddaje poprawnej historii dla danego ISIN.
+    Nadpisuje pokrywające się punkty (INSERT OR REPLACE). Waluty NIE zmienia — CSV jej
+    nie niesie, więc bierzemy wartość wprost do kolumny `price` (przeliczenie kursem NBP
+    dzieje się dalej w wycenie, dla PLN kurs = 1.0).
+    """
+    rows = parse_price_csv(content)
+    for day, price in rows:
+        _cache_put(conn, isin, day, price, source)
+    conn.commit()
+    dates = [d for d, _ in rows]
+    return {
+        "imported": len(rows),
+        "isin": isin,
+        "first_date": min(dates) if dates else None,
+        "last_date": max(dates) if dates else None,
+    }

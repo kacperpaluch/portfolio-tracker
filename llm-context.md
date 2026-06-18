@@ -71,7 +71,7 @@ backend/app/
   db.py          # połączenie SQLite, SCHEMA (CREATE IF NOT EXISTS), _migrate(), db_session()
   importer.py    # parse_csv (CP1250), import_transactions, add_transaction, delete_transaction
   instruments.py # ensure_instrument (+ SEED ISIN->ticker), list/update_instrument
-  prices.py      # yfinance/stooq: fetch_latest/fetch_history, auto-detekcja waluty (GBx->GBP), cache
+  prices.py      # yfinance/stooq: fetch_latest/fetch_history, auto-detekcja waluty (GBx->GBP), cache; parse_price_csv/import_prices (import cen z CSV stooq)
   fx.py          # NBP: get_rate (lookback), backfill_range, cache w fx_rates
   cash.py        # księga gotówki: balance/has_external, add/delete flow, record/remove_trade_cash
   portfolio.py   # compute_positions (średni koszt + zrealizowany), value_positions (sumy)
@@ -138,7 +138,8 @@ odczyt
 
 | Metoda | Ścieżka | Opis |
 |---|---|---|
-| POST | `/api/import` | import CSV (multipart `file`) |
+| POST | `/api/import` | import CSV transakcji (multipart `file`) |
+| POST | `/api/prices/import` | import dziennych cen waloru z CSV (multipart `isin`+`file`, format stooq) → cache `prices` (`prices.import_prices`) |
 | GET/POST | `/api/transactions` | lista / ręczne dodanie transakcji |
 | DELETE | `/api/transactions/{id}` | usunięcie transakcji (+ przepływ gotówki) |
 | GET | `/api/portfolio?refresh=` | pozycje + sumy (P/L, cash, XIRR, TWR, `returns` 1M/3M/YTD/1R/all) |
@@ -174,6 +175,7 @@ Swagger UI `/docs` · ReDoc `/redoc` · OpenAPI JSON `/openapi.json` (do importu
 - **Benchmark** — money-weighted: każda wpłata oprocentowana stałą stopą od swojej daty (nie płaska linia!).
 - **Atrybucja FX** (widok waloru) — `wartość_bez_zmian_kursu = ilość × cena_natywna × kurs_wejścia`; `efekt_waluty = wartość − wartość_bez_zmian_kursu`; `efekt_instrumentu = total − efekt_waluty`.
 - **Rozbicie zmiany dziennej** (`history.portfolio_daily_changes`) — `fx_pln = Σ ilość × cena_dziś × (kurs_dziś − kurs_wczoraj)` (efekt fixingu NBP D/D), `instrument_pln = change_pln − fx_pln` (ruch ceny; dla PLN = całość). Niezmiennik: `instrument_pln + fx_pln == change_pln` (liczone z zaokrąglonych wartości, by kolumny sumowały się co do grosza). Sens: rozdziela, czy dzień zrobił ETF czy złoty — np. skok kursu NBP w poniedziałek vs ruch instrumentu.
+- **Import cen z CSV** (`prices.parse_price_csv` + `prices.import_prices`) — ratunek, gdy Yahoo nie oddaje poprawnej historii dla waloru. Parser czysty: rozpoznaje kolumny po nagłówku (PL/EN: `Data`/`Date`, `Zamkniecie`/`Close`), wykrywa separator (`,`/`;`/tab), akceptuje datę ISO/`YYYYMMDD`/`DD.MM.YYYY` i przecinek dziesiętny. Zapis `INSERT OR REPLACE` z `source='csv'` (waluty NIE zmienia — bierze wartość wprost do `price`). **Pułapka:** pełny `backfill`/`refresh` (yfinance) może nadpisać te punkty z powrotem — po backfillu importuj CSV ponownie. Endpoint `POST /api/prices/import`, w UI przycisk „Importuj ceny (CSV)" w oknie waloru.
 - **Refresh dociąga luki** (`history.refresh_latest`) — odświeżenie pobiera bieżący punkt (`fetch_latest`/`get_rate`) ORAZ uzupełnia brakujący zakres od ostatniego dnia w cache do dziś (`fetch_history`/`backfill_range`). Okno zawsze od ostatniego cache (instrument bez cache → od pierwszej transakcji), NIGDY całość co odświeżenie — świadomie, ze względu na limity API. Współdzielone przez `/api/refresh` i cron.
 
 ## 9. Build / uruchomienie / testy

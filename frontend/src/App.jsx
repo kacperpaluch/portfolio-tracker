@@ -128,10 +128,16 @@ function HistoryChart({ data }) {
   );
 }
 
-function InstrumentDetail({ data, onClose }) {
+function InstrumentDetail({ data, onClose, onImportPrices, busy }) {
+  const priceFileRef = useRef(null);
   if (!data) return null;
   const rows = data.rows || [];
   const isPln = data.currency === "PLN";
+  const onPickPrices = (e) => {
+    const file = e.target.files?.[0];
+    if (file) onImportPrices?.(data.isin, file);
+    e.target.value = "";
+  };
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -143,7 +149,14 @@ function InstrumentDetail({ data, onClose }) {
               {data.category ? ` · ${data.category}` : ""} · {data.isin}
             </div>
           </div>
-          <button onClick={onClose}>Zamknij ✕</button>
+          <div className="modal-actions">
+            <input ref={priceFileRef} type="file" accept=".csv" className="hidden-file" onChange={onPickPrices} />
+            <button onClick={() => priceFileRef.current?.click()} disabled={busy}
+              title="Wgraj dzienne ceny z CSV (format stooq) — gdy Yahoo nie ma poprawnej historii">
+              Importuj ceny (CSV)
+            </button>
+            <button onClick={onClose}>Zamknij ✕</button>
+          </div>
         </div>
 
         {rows.length === 0 ? (
@@ -715,6 +728,14 @@ export default function App() {
     api.instrumentHistory(isin).then(setDetail).catch((e) => flash(`Błąd: ${e.message}`, false));
   };
 
+  const onImportPrices = (isin, file) => {
+    run(async () => {
+      const r = await api.importPrices(isin, file);
+      flash(`Wczytano ${r.imported} cen (${r.first_date} – ${r.last_date}).`);
+      setDetail(await api.instrumentHistory(isin));  // odśwież otwarty modal
+    });
+  };
+
   const onImport = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -854,7 +875,14 @@ export default function App() {
         />
       )}
 
-      {detail && <InstrumentDetail data={detail} onClose={() => setDetail(null)} />}
+      {detail && (
+        <InstrumentDetail
+          data={detail}
+          busy={busy}
+          onImportPrices={onImportPrices}
+          onClose={() => setDetail(null)}
+        />
+      )}
     </div>
   );
 }

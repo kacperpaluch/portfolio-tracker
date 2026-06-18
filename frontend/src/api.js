@@ -19,6 +19,12 @@ export const api = {
     fd.append("file", file);
     return fetch("/api/import", { method: "POST", body: fd }).then(json);
   },
+  importPrices: (isin, file) => {
+    const fd = new FormData();
+    fd.append("isin", isin);
+    fd.append("file", file);
+    return fetch("/api/prices/import", { method: "POST", body: fd }).then(json);
+  },
   refresh: () => fetch("/api/refresh", { method: "POST" }).then(json),
   backfill: () => fetch("/api/backfill", { method: "POST" }).then(json),
   transactions: () => fetch("/api/transactions").then(json),
