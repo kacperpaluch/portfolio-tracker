@@ -18,7 +18,7 @@ const DETAIL_LABELS = {
   cost_pln: "Koszt (wpłacone)",
 };
 
-export default function InstrumentDetail({ data, onClose, onImportPrices, busy, firstTxDate }) {
+export default function InstrumentDetail({ data, onClose, onImportPrices, busy }) {
   const priceFileRef = useRef(null);
   if (!data) return null;
   const rows = data.rows || [];
@@ -27,17 +27,6 @@ export default function InstrumentDetail({ data, onClose, onImportPrices, busy, 
     const file = e.target.files?.[0];
     if (file) onImportPrices?.(data.isin, file);
     e.target.value = "";
-  };
-  // Link do pobrania CSV wprost ze stooq — w PRZEGLĄDARCE (jedyny klient, który przechodzi
-  // antybota stooq). Symbol = ticker bez sufiksu giełdy (.WA/.DE/.L), zakres od pierwszej
-  // transakcji do dziś. Potem plik importujesz przyciskiem obok.
-  const stooqUrl = () => {
-    const sym = (data.ticker || "").split(".")[0].toLowerCase();
-    if (!sym) return null;
-    const today = new Date().toISOString().slice(0, 10);
-    const since = (firstTxDate || `${new Date().getFullYear() - 5}-01-01`).slice(0, 10);
-    const fmt = (d) => d.replaceAll("-", "");
-    return `https://stooq.com/q/d/l/?s=${sym}&d1=${fmt(since)}&d2=${fmt(today)}&i=d`;
   };
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -51,12 +40,6 @@ export default function InstrumentDetail({ data, onClose, onImportPrices, busy, 
             </div>
           </div>
           <div className="modal-actions">
-            {stooqUrl() && (
-              <a className="btn" href={stooqUrl()} target="_blank" rel="noopener noreferrer"
-                title="Otwiera stooq w nowej karcie — przeglądarka pobierze CSV (przejdzie antybota). Potem zaimportuj plik obok.">
-                Pobierz CSV ze stooq ↗
-              </a>
-            )}
             <input ref={priceFileRef} type="file" accept=".csv" className="hidden-file" onChange={onPickPrices} />
             <button onClick={() => priceFileRef.current?.click()} disabled={busy}
               title="Wgraj dzienne ceny z CSV (format stooq) — gdy Yahoo nie ma poprawnej historii">

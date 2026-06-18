@@ -50,8 +50,6 @@ stopę zwrotu oraz porównanie z benchmarkiem — **wszystko w PLN**.
   `Data,…,Zamkniecie`) wprost na widoku waloru. Nadpisuje błędne punkty w cache i naprawia
   wykres wartości w czasie, zmiany dzienne oraz atrybucję. Waluta jest wymagana do wyceny
   (CSV jej nie niesie) — jeśli instrument jej nie ma, aplikacja o nią zapyta przy imporcie.
-  Widok waloru ma też link **„Pobierz CSV ze stooq ↗"** (składa gotowy URL z tickera i dat):
-  przeglądarka pobierze plik — jako jedyny klient przechodzi antybota stooq — a Ty go importujesz.
 - **Zysk całkowity** = niezrealizowany (otwarte pozycje) **+** zrealizowany (ze sprzedaży).
 - **Konto gotówkowe** — ręczne wpłaty/wypłaty; saldo nettowane przepływami z transakcji
   (kupno −, sprzedaż +). Wartość konta = wycena ETF + gotówka.
