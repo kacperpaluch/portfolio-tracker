@@ -55,7 +55,8 @@ zastąpić bezpośrednim klientem HTTP do API cen (wtedy pandas/numpy znikają).
 | `recharts` | wykresy (Area/Line/Composed) |
 | `vite`, `@vitejs/plugin-react` | bundler/dev server |
 
-Brak routera, brak biblioteki stanu — cały stan w `App.jsx` (`useState`). Świadomie proste.
+Brak routera, brak biblioteki stanu — cały stan trzyma `App.jsx` (`useState`) i schodzi propsami
+do komponentów w `components/`. Świadomie proste. Helpery formatujące współdzielone przez `format.js`.
 
 ### Usługi zewnętrzne (bez kluczy API)
 
@@ -82,7 +83,11 @@ backend/app/
   backup.py      # backup_database (online copy + retencja), transactions_csv, list_backups
   scheduler.py   # start_scheduler() — APScheduler: refresh_job (~21:00, woła history.refresh_latest) + backup_job (~03:00)
 frontend/src/
-  App.jsx        # cała aplikacja: zakładki, karty, wykresy, tabele, formularze, modal waloru
+  App.jsx        # orkiestracja: stan (useState), loadAll (Promise.all), run(), handlery, layout zakładek
+  components/    # jeden komponent = jeden plik: Cards, ReturnsStrip, HistoryChart, InstrumentDetail,
+                 #   PositionsTable, TransactionForm, TransactionsTable, CashPanel, InstrumentsPanel,
+                 #   AllocationPanel, DataPanel, BackupModal, DailyChangesTable
+  format.js      # wspólne helpery: fmtPln, fmtPct, cls, fmtDate
   api.js         # cienki klient REST (fetch)
   styles.css     # ciemny motyw, bez frameworka CSS
 ```
@@ -229,7 +234,7 @@ aktywny tylko gdy katalog istnieje). Dockerfile robi to w etapie multi-stage.
 | Realny benchmark (indeks zamiast %) | `history.py:portfolio_history` — zamiast `(1+stopa)^lata` użyj serii cen ETF-a z `prices` |
 | FIFO / realizowany P/L per lot | `portfolio.compute_positions` — kolejka lotów zamiast średniego kosztu |
 | Dywidendy / podatki | nowe `kind` w `cash_flows` + obsługa w imporcie i `cash.balance`; uwzględnij w XIRR |
-| Nowe metryki/raporty | endpoint w `main.py` + funkcja w odpowiednim module + karta/zakładka w `App.jsx` |
+| Nowe metryki/raporty | endpoint w `main.py` + funkcja w module backendu + nowy komponent w `frontend/src/components/` podpięty jedną linią w `App.jsx` |
 | Zadanie cykliczne | `scheduler.py` — kolejny `add_job` |
 | Eksport danych | endpoint w `main.py` (np. CSV/JSON z `transactions`/`portfolio`) |
 

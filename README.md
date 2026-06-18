@@ -191,7 +191,9 @@ portfolio-tracker/
 │   └── tests/             # pytest (+ sample_hisPW.csv — fikcyjne dane testowe)
 ├── frontend/              # Vite + React + Recharts (build serwowany przez FastAPI z /frontend/dist)
 │   └── src/
-│       ├── App.jsx        # cała aplikacja: zakładki, karty, wykres, tabele, formularze
+│       ├── App.jsx        # orkiestracja: stan, ładowanie danych (loadAll), handlery, layout zakładek
+│       ├── components/    # jeden komponent = jeden plik (Cards, HistoryChart, PositionsTable, …)
+│       ├── format.js      # wspólne helpery formatujące (fmtPln, fmtPct, cls, fmtDate)
 │       ├── api.js         # cienki klient REST
 │       └── styles.css
 ├── Dockerfile            # multi-stage: build frontendu (node) → obraz Pythona z backendem
