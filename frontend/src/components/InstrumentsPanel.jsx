@@ -21,7 +21,6 @@ export default function InstrumentsPanel({ instruments, onSave }) {
               <select className="cell narrow" value={valueOf(inst, "source") || "yfinance"}
                 onChange={(e) => edit(inst.isin, "source", e.target.value)}>
                 <option value="yfinance">yfinance</option>
-                <option value="stooq">stooq</option>
               </select>
             </td>
             <td>

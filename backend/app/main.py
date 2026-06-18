@@ -63,11 +63,16 @@ async def import_csv(file: UploadFile = File(...)) -> dict:
 
 
 @app.post("/api/prices/import")
-async def import_prices_csv(isin: str = Form(...), file: UploadFile = File(...)) -> dict:
+async def import_prices_csv(
+    isin: str = Form(...),
+    file: UploadFile = File(...),
+    currency: str | None = Form(None),
+) -> dict:
     """Wgrywa dzienne ceny waloru z CSV (format stooq: Data,…,Zamkniecie) do cache.
 
     Ratunek, gdy provider (Yahoo) nie oddaje poprawnej historii dla danego ISIN —
-    np. mało płynny ETN na GPW. Po imporcie odśwież wykresy „Backfill" nie jest potrzebny.
+    np. mało płynny ETN na GPW. `currency` jest wymagana do wyceny (CSV jej nie niesie):
+    przekaż ją, albo ustaw wcześniej na instrumencie. Po imporcie „Backfill" nie jest potrzebny.
     """
     content = await file.read()
     with db_session() as conn:
@@ -75,7 +80,7 @@ async def import_prices_csv(isin: str = Form(...), file: UploadFile = File(...))
         if exists is None:
             raise HTTPException(status_code=404, detail="Instrument not found")
         try:
-            return prices_mod.import_prices(conn, isin, content)
+            return prices_mod.import_prices(conn, isin, content, currency=currency)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 

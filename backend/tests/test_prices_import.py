@@ -42,6 +42,35 @@ def test_parse_rejects_unknown_header():
         prices_mod.parse_price_csv(b"foo,bar\n1,2\n")
 
 
+def test_import_prices_requires_currency_when_missing():
+    # Scenariusz ratunkowy: provider nigdy nie pobrał ceny → currency = NULL. Bez podanej
+    # waluty import musi ODMÓWIĆ — nie zgadujemy PLN (stooq notuje też w USD/EUR/GBP).
+    conn = _db()
+    conn.execute("UPDATE instruments SET currency = NULL WHERE isin = 'SE0024738389'")
+    with pytest.raises(ValueError):
+        prices_mod.import_prices(conn, "SE0024738389", STOOQ_CSV)
+
+
+def test_import_prices_sets_currency_when_provided():
+    # Waluta NULL + podana jawnie (np. USD dla papieru notowanego w USD) → ustawiana.
+    conn = _db()
+    conn.execute("UPDATE instruments SET currency = NULL WHERE isin = 'SE0024738389'")
+    result = prices_mod.import_prices(conn, "SE0024738389", STOOQ_CSV, currency="usd")
+    assert result["currency"] == "USD"
+    ccy = conn.execute("SELECT currency FROM instruments WHERE isin = 'SE0024738389'").fetchone()[0]
+    assert ccy == "USD"
+
+
+def test_import_prices_keeps_existing_currency():
+    # Gdy waluta już jest i nie podajemy nowej — import jej NIE rusza.
+    conn = _db()
+    conn.execute("UPDATE instruments SET currency = 'EUR' WHERE isin = 'SE0024738389'")
+    result = prices_mod.import_prices(conn, "SE0024738389", STOOQ_CSV)
+    assert result["currency"] == "EUR"
+    ccy = conn.execute("SELECT currency FROM instruments WHERE isin = 'SE0024738389'").fetchone()[0]
+    assert ccy == "EUR"
+
+
 def test_import_prices_writes_cache_and_overwrites():
     conn = _db()
     # Stara, błędna cena z Yahoo dla 2026-06-18 — import musi ją nadpisać.

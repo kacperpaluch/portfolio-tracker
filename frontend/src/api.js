@@ -19,10 +19,11 @@ export const api = {
     fd.append("file", file);
     return fetch("/api/import", { method: "POST", body: fd }).then(json);
   },
-  importPrices: (isin, file) => {
+  importPrices: (isin, file, currency) => {
     const fd = new FormData();
     fd.append("isin", isin);
     fd.append("file", file);
+    if (currency) fd.append("currency", currency);
     return fetch("/api/prices/import", { method: "POST", body: fd }).then(json);
   },
   refresh: () => fetch("/api/refresh", { method: "POST" }).then(json),

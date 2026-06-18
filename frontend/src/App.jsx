@@ -78,9 +78,19 @@ export default function App() {
   };
 
   const onImportPrices = (isin, file) => {
+    // Waluta jest potrzebna do wyceny, a CSV jej nie niesie. Jeśli instrument ją ma —
+    // używamy jej; jeśli nie — pytamy (NIE zgadujemy PLN, bo stooq notuje też w USD/EUR/GBP).
+    let currency = detail?.currency;
+    if (!currency) {
+      currency = window.prompt(
+        "Instrument nie ma ustawionej waluty. Podaj walutę cen z tego CSV (np. PLN, USD, EUR, GBP):",
+        "PLN",
+      );
+      if (!currency) return; // anulowano
+    }
     run(async () => {
-      const r = await api.importPrices(isin, file);
-      flash(`Wczytano ${r.imported} cen (${r.first_date} – ${r.last_date}).`);
+      const r = await api.importPrices(isin, file, currency.trim().toUpperCase());
+      flash(`Wczytano ${r.imported} cen (${r.first_date} – ${r.last_date}). Waluta: ${r.currency}.`);
       setDetail(await api.instrumentHistory(isin));  // odśwież otwarty modal
     });
   };

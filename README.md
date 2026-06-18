@@ -48,7 +48,8 @@ stopę zwrotu oraz porównanie z benchmarkiem — **wszystko w PLN**.
 - **Import cen z CSV (ratunek dla danych Yahoo)** — gdy Yahoo nie oddaje poprawnej historii
   dla mało płynnego waloru (np. ETN na GPW), wgraj dzienne ceny z pliku CSV (format stooq:
   `Data,…,Zamkniecie`) wprost na widoku waloru. Nadpisuje błędne punkty w cache i naprawia
-  wykres wartości w czasie, zmiany dzienne oraz atrybucję.
+  wykres wartości w czasie, zmiany dzienne oraz atrybucję. Waluta jest wymagana do wyceny
+  (CSV jej nie niesie) — jeśli instrument jej nie ma, aplikacja o nią zapyta przy imporcie.
 - **Zysk całkowity** = niezrealizowany (otwarte pozycje) **+** zrealizowany (ze sprzedaży).
 - **Konto gotówkowe** — ręczne wpłaty/wypłaty; saldo nettowane przepływami z transakcji
   (kupno −, sprzedaż +). Wartość konta = wycena ETF + gotówka.
@@ -101,10 +102,10 @@ Zrozumienie tych założeń wyjaśnia, dlaczego liczby wychodzą tak, a nie inac
 | Backend | **FastAPI** + Uvicorn | REST API + serwowanie frontendu |
 | Baza | **SQLite** (wbudowany `sqlite3`, bez ORM) | trwałość, zero zależności (ważne na Python 3.14) |
 | Wyceny | **yfinance** (Yahoo Finance) | ceny ETF-ów; pokrywa Xetra `.DE`, LSE `.L`, GPW `.WA` |
-| Wyceny (alt.) | **stooq** | alternatywa dla GPW (działa z domowego IP) |
+| Wyceny (ratunek) | **import CSV** | dla papierów bez pokrycia w yfinance (niszowy GPW) — stooq jako live-source jest martwy (antybot PoW) |
 | Kursy walut | **NBP API** (tabela A) | darmowe, oficjalne, bez klucza |
 | Harmonogram | **APScheduler** | dzienne odświeżanie w tle |
-| HTTP klient | **httpx** | zapytania do NBP/stooq |
+| HTTP klient | **httpx** | zapytania do NBP |
 | Frontend | **React** + **Vite** + **Recharts** | pulpit, wykresy |
 | Konteneryzacja | **Docker** (multi-stage, multi-arch arm64+amd64) | self-hosting |
 
@@ -112,7 +113,7 @@ Zrozumienie tych założeń wyjaśnia, dlaczego liczby wychodzą tak, a nie inac
 
 | Dane | Źródło |
 |---|---|
-| Wyceny instrumentów | [yfinance](https://github.com/ranaroussi/yfinance), opcjonalnie stooq dla GPW |
+| Wyceny instrumentów | [yfinance](https://github.com/ranaroussi/yfinance); ratunek dla papierów spoza pokrycia Yahoo: import CSV (format stooq) |
 | Kursy walut | [NBP API](https://api.nbp.pl) (tabela A, darmowe, bez klucza) |
 
 ## Uruchomienie
@@ -209,7 +210,7 @@ SQLite, 6 tabel (schemat w `backend/app/db.py`):
 
 | Tabela | Klucz | Zawartość |
 |---|---|---|
-| `instruments` | `isin` | nazwa, `ticker`, `currency` (EUR/USD/GBP/PLN), `source` (yfinance/stooq), `category`, `needs_config` |
+| `instruments` | `isin` | nazwa, `ticker`, `currency` (EUR/USD/GBP/PLN), `source` (yfinance/csv), `category`, `needs_config` |
 | `target_allocation` | `category` | docelowy udział grupy (`weight_pct`) |
 | `transactions` | `id` | `ts`, `isin`, `type` (BUY/SELL), `quantity`, `price_pln`, `value_pln`, `import_hash` (unikalny — dedup) |
 | `prices` | (`isin`,`date`) | cena dzienna w walucie natywnej (cache) |
@@ -239,7 +240,7 @@ Pozycje nie są materializowane — liczone w locie z `transactions` (chronologi
 | Metoda | Ścieżka | Opis |
 |---|---|---|
 | `POST` | `/api/import` | import CSV (multipart `file`) |
-| `POST` | `/api/prices/import` | import dziennych cen waloru z CSV (multipart `isin` + `file`, format stooq) — ratunek, gdy Yahoo nie ma historii |
+| `POST` | `/api/prices/import` | import dziennych cen waloru z CSV (multipart `isin` + `file` + opcjonalnie `currency`, format stooq) — ratunek, gdy Yahoo nie ma historii; waluta wymagana do wyceny |
 | `GET` | `/api/portfolio?refresh=false` | pozycje + sumy (wartość, P/L zreal./niezreal., gotówka, XIRR, TWR, zwroty w okresach) |
 | `GET` | `/api/summary` | zwięzły digest (wartość, P/L, zmiana D/D, zwroty, alokacja vs cel) — pod powiadomienia/n8n |
 | `GET` | `/api/history?benchmark_rate=0.05` | dzienna seria `value_pln` + `benchmark_pln` |

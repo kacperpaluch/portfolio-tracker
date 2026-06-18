@@ -25,7 +25,7 @@ wyceny i pokazuje wartość, zysk/stratę oraz roczną stopę zwrotu — **wszys
 
 ## Źródła danych
 
-- Wyceny: Yahoo Finance (yfinance), opcjonalnie stooq dla GPW.
+- Wyceny: Yahoo Finance (yfinance); ratunek dla papierów spoza pokrycia Yahoo — import cen z CSV.
 - Kursy walut: [NBP API](https://api.nbp.pl) (tabela A, darmowe).
 
 ## Uruchomienie

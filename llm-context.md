@@ -23,7 +23,7 @@ XIRR/TWR, benchmark, alokację docelową oraz atrybucję zysku (instrument vs wa
 | Web framework | **FastAPI** + **Uvicorn** | API + serwowanie zbudowanego frontendu |
 | Baza | **SQLite** przez wbudowany `sqlite3` | plik, bez serwera; brak zależności ORM |
 | Wyceny | **yfinance** (Yahoo Finance) | główne źródło; pokrywa Xetra `.DE`, LSE `.L`, GPW `.WA` |
-| Wyceny (alt.) | **stooq** | opcja dla GPW; z IP datacenter bywa blokowany |
+| Wyceny (ratunek) | **import CSV** | dla papierów bez pokrycia w yfinance (niszowy GPW); stooq jako live-source martwy (PoW) |
 | Kursy walut | **NBP API** (api.nbp.pl, tabela A) | darmowe, bez klucza, tylko dni robocze |
 | Harmonogram | **APScheduler** (BackgroundScheduler) | dzienne odświeżanie ~21:00 |
 | Klient HTTP | **httpx** | zapytania do NBP/stooq |
@@ -62,7 +62,7 @@ do komponentów w `components/`. Świadomie proste. Helpery formatujące współ
 
 - **Yahoo Finance** — nieoficjalne, przez `yfinance`. Może się zmienić/zepsuć.
 - **NBP** — oficjalne, stabilne, rate-limit łagodny.
-- **stooq** — opcjonalne; blokuje IP datacenter (działa z IP domowego).
+- **stooq** — martwe jako źródło: JS proof-of-work blokuje klientów bez JS nawet z domowego IP (usunięte z UI; szkielet kodu zostaje). Format eksportu CSV ze stooq jest nadal wejściem dla importu cen.
 
 ## 4. Architektura i moduły
 
@@ -144,7 +144,7 @@ odczyt
 | Metoda | Ścieżka | Opis |
 |---|---|---|
 | POST | `/api/import` | import CSV transakcji (multipart `file`) |
-| POST | `/api/prices/import` | import dziennych cen waloru z CSV (multipart `isin`+`file`, format stooq) → cache `prices` (`prices.import_prices`) |
+| POST | `/api/prices/import` | import dziennych cen waloru z CSV (multipart `isin`+`file`+opcjonalnie `currency`, format stooq) → cache `prices` (`prices.import_prices`); waluta wymagana do wyceny |
 | GET/POST | `/api/transactions` | lista / ręczne dodanie transakcji |
 | DELETE | `/api/transactions/{id}` | usunięcie transakcji (+ przepływ gotówki) |
 | GET | `/api/portfolio?refresh=` | pozycje + sumy (P/L, cash, XIRR, TWR, `returns` 1M/3M/YTD/1R/all) |
@@ -180,7 +180,7 @@ Swagger UI `/docs` · ReDoc `/redoc` · OpenAPI JSON `/openapi.json` (do importu
 - **Benchmark** — money-weighted: każda wpłata oprocentowana stałą stopą od swojej daty (nie płaska linia!).
 - **Atrybucja FX** (widok waloru) — `wartość_bez_zmian_kursu = ilość × cena_natywna × kurs_wejścia`; `efekt_waluty = wartość − wartość_bez_zmian_kursu`; `efekt_instrumentu = total − efekt_waluty`.
 - **Rozbicie zmiany dziennej** (`history.portfolio_daily_changes`) — `fx_pln = Σ ilość × cena_dziś × (kurs_dziś − kurs_wczoraj)` (efekt fixingu NBP D/D), `instrument_pln = change_pln − fx_pln` (ruch ceny; dla PLN = całość). Niezmiennik: `instrument_pln + fx_pln == change_pln` (liczone z zaokrąglonych wartości, by kolumny sumowały się co do grosza). Sens: rozdziela, czy dzień zrobił ETF czy złoty — np. skok kursu NBP w poniedziałek vs ruch instrumentu.
-- **Import cen z CSV** (`prices.parse_price_csv` + `prices.import_prices`) — ratunek, gdy Yahoo nie oddaje poprawnej historii dla waloru. Parser czysty: rozpoznaje kolumny po nagłówku (PL/EN: `Data`/`Date`, `Zamkniecie`/`Close`), wykrywa separator (`,`/`;`/tab), akceptuje datę ISO/`YYYYMMDD`/`DD.MM.YYYY` i przecinek dziesiętny. Zapis `INSERT OR REPLACE` z `source='csv'` (waluty NIE zmienia — bierze wartość wprost do `price`). **Pułapka:** pełny `backfill`/`refresh` (yfinance) może nadpisać te punkty z powrotem — po backfillu importuj CSV ponownie. Endpoint `POST /api/prices/import`, w UI przycisk „Importuj ceny (CSV)" w oknie waloru.
+- **Import cen z CSV** (`prices.parse_price_csv` + `prices.import_prices`) — ratunek, gdy provider nie oddaje poprawnej historii dla waloru (jedyny działający kanał dla niszowych papierów GPW). Parser czysty: rozpoznaje kolumny po nagłówku (PL/EN: `Data`/`Date`, `Zamkniecie`/`Close`), wykrywa separator (`,`/`;`/tab), akceptuje datę ISO/`YYYYMMDD`/`DD.MM.YYYY` i przecinek dziesiętny. Zapis `INSERT OR REPLACE` z `source='csv'`. **Waluta wymagana do wyceny** (CSV jej nie niesie; bez niej kurs FX → wartość 0): `import_prices(currency=...)` ustawia ją na instrumencie, jeśli podana; gdy brak i instrument też jej nie ma → `ValueError` (NIE zgadujemy PLN — stooq notuje też w USD/EUR/GBP). W UI: przy braku waluty frontend pyta (podpowiedź PLN). **Pułapka:** pełny `backfill`/`refresh` (yfinance) może nadpisać te punkty z powrotem — po backfillu importuj CSV ponownie. Endpoint `POST /api/prices/import` (`isin`+`file`+opcjonalnie `currency`), w UI przycisk „Importuj ceny (CSV)" w oknie waloru.
 - **Refresh dociąga luki** (`history.refresh_latest`) — odświeżenie pobiera bieżący punkt (`fetch_latest`/`get_rate`) ORAZ uzupełnia brakujący zakres od ostatniego dnia w cache do dziś (`fetch_history`/`backfill_range`). Okno zawsze od ostatniego cache (instrument bez cache → od pierwszej transakcji), NIGDY całość co odświeżenie — świadomie, ze względu na limity API. Współdzielone przez `/api/refresh` i cron.
 
 ## 9. Build / uruchomienie / testy
@@ -215,7 +215,7 @@ aktywny tylko gdy katalog istnieje). Dockerfile robi to w etapie multi-stage.
 ## 11. Konwencje i pułapki (WAŻNE przy rozbudowie)
 
 - **Bez ORM** — celowo `sqlite3` ze stdlib (Python 3.14 miał problemy z kołami niektórych ORM). Trzymaj się surowego SQL + `row_factory = Row`.
-- **stooq blokuje IP datacenter** — domyślnym źródłem jest yfinance (pokrywa GPW przez `.WA`). Z IP domowego stooq działa.
+- **stooq MARTWY jako źródło** — stooq postawił JS proof-of-work na endpointach CSV; blokuje `httpx`/`curl` (brak wykonania JS) **nawet z domowego IP** (sprawdzone empirycznie 2026-06). Usunięty z dropdownu źródeł w UI; szkielet `_stooq_*` w `prices.py` zostaje jako slot pod przyszły provider, ale de facto nieużywalny. Dla papierów, których yfinance nie obsługuje (niszowy GPW) — jedyna droga to **import CSV** (eksport ze stooq w przeglądarce + `POST /api/prices/import`). Darmowych API dla niszowego GPW brak (sprawdzone: Twelve Data free i Alpha Vantage free nie mają GPW; AV free obsługuje za to Xetrę/LSE — możliwy fallback dla yfinance na mainstreamie, ale nie wpięty).
 - **yfinance jest nieoficjalne** — może się zepsuć; izoluj w `prices.py` za interfejsem provider.
 - **GBx (pensy LSE)** — Yahoo zwraca pensy; ZAWSZE normalizuj `/100` + waluta `GBP`.
 - **Named volume vs bind mount** — po zmianie na named volume w `/ship` dane z `./data` trzeba zmigrować (`docker cp ./data/portfolio.db <kontener>:/app/data/`).

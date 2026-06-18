@@ -223,17 +223,41 @@ def parse_price_csv(content: bytes) -> list[tuple[str, float]]:
     return out
 
 
-def import_prices(conn: sqlite3.Connection, isin: str, content: bytes, source: str = "csv") -> dict:
+def import_prices(
+    conn: sqlite3.Connection,
+    isin: str,
+    content: bytes,
+    source: str = "csv",
+    currency: str | None = None,
+) -> dict:
     """Wgrywa dzienne ceny (w walucie natywnej instrumentu) z CSV do cache `prices`.
 
     Ratunek, gdy provider (np. Yahoo) nie oddaje poprawnej historii dla danego ISIN.
-    Nadpisuje pokrywające się punkty (INSERT OR REPLACE). Waluty NIE zmienia — CSV jej
-    nie niesie, więc bierzemy wartość wprost do kolumny `price` (przeliczenie kursem NBP
-    dzieje się dalej w wycenie, dla PLN kurs = 1.0).
+    Nadpisuje pokrywające się punkty (INSERT OR REPLACE); cena trafia wprost do kolumny
+    `price` (przeliczenie kursem NBP dzieje się dalej w wycenie, dla PLN kurs = 1.0).
+
+    Waluta jest WYMAGANA do wyceny (bez niej kurs FX → wartość 0), a CSV jej nie niesie.
+    Dlatego: jeśli podasz `currency` — ustawiamy ją na instrumencie; w przeciwnym razie
+    używamy waluty już zapisanej na instrumencie. Gdy obu brak — NIE zgadujemy (stooq
+    notuje też w USD/EUR/GBP, więc domyślne PLN bywałoby błędem) i podnosimy ValueError.
     """
     rows = parse_price_csv(content)
+
+    currency = (currency or "").strip().upper() or None
+    row = conn.execute("SELECT currency FROM instruments WHERE isin = ?", (isin,)).fetchone()
+    existing = row[0] if row else None
+    effective = currency or existing
+    if effective is None:
+        raise ValueError(
+            "Instrument nie ma ustawionej waluty — podaj walutę przy imporcie "
+            "(np. PLN, USD, EUR, GBP). Nie zgadujemy jej, bo stooq notuje też w obcych walutach."
+        )
+
     for day, price in rows:
         _cache_put(conn, isin, day, price, source)
+    if currency and currency != existing:
+        conn.execute("UPDATE instruments SET currency = ? WHERE isin = ?", (currency, isin))
+
     conn.commit()
     dates = [d for d, _ in rows]
     return {
@@ -241,4 +265,5 @@ def import_prices(conn: sqlite3.Connection, isin: str, content: bytes, source: s
         "isin": isin,
         "first_date": min(dates) if dates else None,
         "last_date": max(dates) if dates else None,
+        "currency": effective,
     }
