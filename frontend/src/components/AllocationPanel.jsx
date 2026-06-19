@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { fmtPln, cls } from "../format.js";
+import AllocationDonut from "./AllocationDonut.jsx";
 
 export default function AllocationPanel({ allocation, onSave }) {
   const [draft, setDraft] = useState({});
@@ -28,6 +29,7 @@ export default function AllocationPanel({ allocation, onSave }) {
 
   return (
     <div>
+      <AllocationDonut groups={groups} total={allocation?.total_pln} />
       <table>
         <thead>
           <tr>

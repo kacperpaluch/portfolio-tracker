@@ -77,7 +77,7 @@ stopę zwrotu oraz porównanie z benchmarkiem — **wszystko w PLN**.
   obsunięcie. Czytelny obraz ryzyka portfela, spójny z TWR i zwrotami okresowymi.
 - **Alokacja docelowa** — przypisz ETF-om kategorie (akcje/obligacje/…), ustaw wagi modelu
   (np. 60/40) i porównaj docelowy vs rzeczywisty udział grup z kwotą do rebalansu (gotówka
-  liczona jako osobna grupa).
+  liczona jako osobna grupa); wykres **donut** obok tabeli pokazuje rzeczywisty rozkład grup.
 - **Zmiany dzienne** — tabela zysku/straty dzień-po-dniu (wynik rynkowy ETF, z odjętym kosztem
   kupna/sprzedaży, więc zakup nie liczy się jako zysk) z **rozbiciem na efekt instrumentu vs
   kurs NBP** (kolumny `Instrument` / `Kurs NBP` + znacznik, co napędzało dany dzień — ruch ceny
@@ -123,7 +123,7 @@ Zrozumienie tych założeń wyjaśnia, dlaczego liczby wychodzą tak, a nie inac
 | Kursy walut | **NBP API** (tabela A) | darmowe, oficjalne, bez klucza |
 | Harmonogram | **APScheduler** | dzienne odświeżanie w tle |
 | HTTP klient | **httpx** | zapytania do NBP |
-| Frontend | **React** + **Vite** + **Recharts** | pulpit, wykresy |
+| Frontend | **React** + **Vite** + **Recharts** | pulpit, wykresy, responsywny (mobile) |
 | Konteneryzacja | **Docker** (multi-stage, multi-arch arm64+amd64) | self-hosting |
 
 Źródła danych:
@@ -215,7 +215,7 @@ portfolio-tracker/
 ├── frontend/              # Vite + React + Recharts (build serwowany przez FastAPI z /frontend/dist)
 │   └── src/
 │       ├── App.jsx        # orkiestracja: stan, ładowanie danych (loadAll), handlery, layout zakładek
-│       ├── components/    # jeden komponent = jeden plik (Cards, HistoryChart, PositionsTable, …)
+│       ├── components/    # jeden komponent = jeden plik (Cards, HistoryChart, DrawdownChart, AllocationDonut, …)
 │       ├── format.js      # wspólne helpery formatujące (fmtPln, fmtPct, cls, fmtDate)
 │       ├── api.js         # cienki klient REST
 │       └── styles.css

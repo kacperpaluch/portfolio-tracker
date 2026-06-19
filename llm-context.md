@@ -87,12 +87,13 @@ backend/app/
   scheduler.py   # start_scheduler() — APScheduler: refresh_job (~21:00, woła history.refresh_latest) + backup_job (~03:00)
 frontend/src/
   App.jsx        # orkiestracja: stan (useState), loadAll (Promise.all), run(), handlery, layout zakładek
-  components/    # jeden komponent = jeden plik: Cards, ReturnsStrip, HistoryChart, InstrumentDetail,
-                 #   PositionsTable, TransactionForm, TransactionsTable, CashPanel, InstrumentsPanel,
-                 #   AllocationPanel, DataPanel, BackupModal, DailyChangesTable
+  components/    # jeden komponent = jeden plik: Cards, ReturnsStrip, HistoryChart, DrawdownChart,
+                 #   InstrumentDetail, PositionsTable, TransactionForm, TransactionsTable, CashPanel,
+                 #   InstrumentsPanel, AllocationPanel (+ AllocationDonut), DataPanel, BackupModal,
+                 #   DailyChangesTable
   format.js      # wspólne helpery: fmtPln, fmtPct, cls, fmtDate
   api.js         # cienki klient REST (fetch)
-  styles.css     # ciemny motyw, bez frameworka CSS
+  styles.css     # ciemny motyw, bez frameworka CSS, responsywny (@media <640px)
 ```
 
 ### Zależności między modułami (kierunek importów)

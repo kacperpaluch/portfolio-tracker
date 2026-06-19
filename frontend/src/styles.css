@@ -205,3 +205,21 @@ select.cell {
 .attrib-item .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 5px; }
 .attrib-item .value { font-size: 20px; font-weight: 650; }
 .attrib-item .value.small { font-size: 15px; }
+
+.alloc-donut { margin: 0 auto 16px; max-width: 520px; }
+
+/* --- Mobile (<640px) --- */
+@media (max-width: 640px) {
+  .app { padding: 16px 12px 48px; }
+  header.top { flex-direction: column; align-items: stretch; gap: 8px; }
+  .toolbar { gap: 6px; }
+  .toolbar button, .toolbar .btn { padding: 7px 10px; font-size: 12px; }
+  .cards { grid-template-columns: 1fr; }
+  .tabs { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+  .tab { white-space: nowrap; padding: 10px 12px; }
+  table { display: block; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+  .cash-summary { flex-direction: column; gap: 16px; }
+  .modal-backdrop { padding: 12px; }
+  .modal { padding: 16px; }
+  .alloc-donut { max-width: 100%; }
+}
