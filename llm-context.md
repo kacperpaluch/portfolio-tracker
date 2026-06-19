@@ -27,7 +27,7 @@ XIRR/TWR, benchmark, alokację docelową oraz atrybucję zysku (instrument vs wa
 | Kursy walut | **NBP API** (api.nbp.pl, tabela A) | darmowe, bez klucza, tylko dni robocze |
 | Inflacja (benchmark) | **Eurostat HICP** (`prc_hicp_midx`, PL, miesięczny) | darmowe, bez klucza; GUS BDL ma CPI tylko rocznie/kwartalnie |
 | Harmonogram | **APScheduler** (BackgroundScheduler) | dzienne odświeżanie ~21:00 |
-| Klient HTTP | **httpx** | zapytania do NBP/stooq |
+| Klient HTTP | **httpx** | zapytania do NBP/Eurostat |
 | Frontend | **React 18** + **Vite 5** + **Recharts 2** | SPA, build serwowany statycznie |
 | Konteneryzacja | **Docker** multi-stage, multi-arch (arm64+amd64) | obraz `kpa90/portfolio-tracker` |
 
@@ -41,7 +41,7 @@ XIRR/TWR, benchmark, alokację docelową oraz atrybucję zysku (instrument vs wa
 | `uvicorn[standard]` | serwer ASGI |
 | `python-multipart` | obsługa uploadu pliku (`POST /api/import`) |
 | `yfinance` | pobieranie cen instrumentów |
-| `httpx` | HTTP do NBP i stooq |
+| `httpx` | HTTP do NBP i Eurostat |
 | `apscheduler` | cron dziennego odświeżania |
 
 **Ciężkie zależności tranzytywne:** `yfinance` ciągnie `pandas` + `numpy` (duże). To główny
@@ -64,7 +64,7 @@ do komponentów w `components/`. Świadomie proste. Helpery formatujące współ
 - **Yahoo Finance** — nieoficjalne, przez `yfinance`. Może się zmienić/zepsuć.
 - **NBP** — oficjalne, stabilne, rate-limit łagodny.
 - **Eurostat** — oficjalne, stabilne, bez klucza. `prc_hicp_midx?geo=PL&coicop=CP00&unit=I15` = miesięczny indeks HICP (baza 2015=100), 1996→teraz. Świadomie HICP, nie CPI GUS: GUS BDL API ma indeks cen tylko rocznie (`P2955`) i kwartalnie (`P2496`), miesięcznego nie ma wcale (tylko HTML). HICP vs CPI GUS różni się ~0,2 pp/rok — w skali benchmarku nieistotne.
-- **stooq** — martwe jako źródło: JS proof-of-work blokuje klientów bez JS nawet z domowego IP (usunięte z UI; szkielet kodu zostaje). Format eksportu CSV ze stooq jest nadal wejściem dla importu cen.
+- **stooq** — martwe jako źródło: JS proof-of-work blokuje klientów bez JS nawet z domowego IP (usunięte z UI **i z kodu** — ścieżka live-source `_stooq_*` skasowana). Format eksportu CSV ze stooq jest nadal wejściem dla importu cen.
 
 ## 4. Architektura i moduły
 
@@ -74,13 +74,13 @@ backend/app/
   db.py          # połączenie SQLite, SCHEMA (CREATE IF NOT EXISTS), _migrate(), db_session()
   importer.py    # parse_csv (CP1250), import_transactions, add_transaction, delete_transaction
   instruments.py # ensure_instrument (+ SEED ISIN->ticker), list/update_instrument
-  prices.py      # yfinance/stooq: fetch_latest/fetch_history, auto-detekcja waluty (GBx->GBP), cache; parse_price_csv/import_prices (import cen z CSV stooq)
+  prices.py      # yfinance: fetch_latest/fetch_history, auto-detekcja waluty (GBx->GBP), cache; parse_price_csv/import_prices (import cen z CSV, format stooq)
   fx.py          # NBP: get_rate (lookback), backfill_range, cache w fx_rates
   cpi.py         # Eurostat HICP: refresh_cpi (cache cpi_index), load_points, index_at (interpolacja) — pod benchmark inflacyjny
   cash.py        # księga gotówki: balance/has_external, add/delete flow, record/remove_trade_cash
   portfolio.py   # compute_positions (średni koszt + zrealizowany), value_positions (sumy)
   history.py     # refresh_latest (bieżące+luki, TYLKO trzymane), backfill_all, portfolio_history (+2 benchmarki: stała stopa + inflacja, +_pct), portfolio_xirr/twr, portfolio_drawdown, instrument_history
-  returns.py     # czyste funkcje: xirr() (Newton+bisekcja), twr()/twr_index() (łańcuch podokresów, indeks growth-of-1)
+  returns.py     # czyste funkcje: xirr() (Newton+bisekcja), twr_detail()/twr_index() (łańcuch podokresów, indeks growth-of-1)
   allocation.py  # compute (grupy vs cel + rebalans), get/set_targets
   summary.py     # build() — digest pod powiadomienia (kompozycja portfolio+history+allocation)
   backup.py      # backup_database (online copy + retencja), transactions_csv, list_backups
@@ -134,7 +134,7 @@ scheduler.py → cash, instruments, prices, fx, db, backup
 import CSV / ręczna transakcja
    → transactions (+ instruments auto-create) (+ cash_flows buy/sell)
 refresh / backfill
-   → prices (yfinance/stooq, waluta auto) + fx_rates (NBP)
+   → prices (yfinance, waluta auto) + fx_rates (NBP)
 odczyt
    → portfolio.value_positions  → pozycje, P/L, gotówka, wartość konta
    → history.portfolio_history  → seria wartości + benchmark + stopy zwrotu %
@@ -225,7 +225,7 @@ aktywny tylko gdy katalog istnieje). Dockerfile robi to w etapie multi-stage.
 ## 11. Konwencje i pułapki (WAŻNE przy rozbudowie)
 
 - **Bez ORM** — celowo `sqlite3` ze stdlib (Python 3.14 miał problemy z kołami niektórych ORM). Trzymaj się surowego SQL + `row_factory = Row`.
-- **stooq MARTWY jako źródło** — stooq postawił JS proof-of-work na endpointach CSV; blokuje `httpx`/`curl` (brak wykonania JS) **nawet z domowego IP** (sprawdzone empirycznie 2026-06). Usunięty z dropdownu źródeł w UI; szkielet `_stooq_*` w `prices.py` zostaje jako slot pod przyszły provider, ale de facto nieużywalny. Dla papierów, których yfinance nie obsługuje (niszowy GPW) — jedyna droga to **import CSV** (eksport ze stooq w przeglądarce + `POST /api/prices/import`). Darmowych API dla niszowego GPW brak (sprawdzone: Twelve Data free i Alpha Vantage free nie mają GPW; AV free obsługuje za to Xetrę/LSE — możliwy fallback dla yfinance na mainstreamie, ale nie wpięty).
+- **stooq MARTWY jako źródło** — stooq postawił JS proof-of-work na endpointach CSV; blokuje `httpx`/`curl` (brak wykonania JS) **nawet z domowego IP** (sprawdzone empirycznie 2026-06). Usunięty z dropdownu źródeł w UI **oraz z kodu** — ścieżka live-source `_stooq_*` w `prices.py` skasowana (była nieużywalna; ponytail-audit 2026-06). Dla papierów, których yfinance nie obsługuje (niszowy GPW) — jedyna droga to **import CSV** (eksport ze stooq w przeglądarce + `POST /api/prices/import`). Darmowych API dla niszowego GPW brak (sprawdzone: Twelve Data free i Alpha Vantage free nie mają GPW; AV free obsługuje za to Xetrę/LSE — możliwy fallback dla yfinance na mainstreamie, ale nie wpięty).
 - **yfinance jest nieoficjalne** — może się zepsuć; izoluj w `prices.py` za interfejsem provider.
 - **GBx (pensy LSE)** — Yahoo zwraca pensy; ZAWSZE normalizuj `/100` + waluta `GBP`.
 - **Named volume vs bind mount** — po zmianie na named volume w `/ship` dane z `./data` trzeba zmigrować (`docker cp ./data/portfolio.db <kontener>:/app/data/`).

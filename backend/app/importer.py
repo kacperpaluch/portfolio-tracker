@@ -118,17 +118,6 @@ def import_transactions(conn: sqlite3.Connection, content: bytes) -> dict:
     }
 
 
-def _normalize_ts(ts: str) -> str:
-    """Akceptuje datę, datetime-local lub pełny ISO; zwraca ISO 8601."""
-    ts = ts.strip()
-    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d.%m.%Y"):
-        try:
-            return datetime.strptime(ts, fmt).isoformat()
-        except ValueError:
-            continue
-    return ts
-
-
 def add_transaction(
     conn: sqlite3.Connection,
     *,
@@ -141,7 +130,7 @@ def add_transaction(
     commission_pln: float = 0.0,
 ) -> dict:
     """Dodaje pojedynczą transakcję ręcznie. Idempotentne (ten sam hash co import)."""
-    ts = _normalize_ts(ts)
+    ts = cash_mod.normalize_ts(ts)
     isin = isin.strip()
     tx_type = tx_type.upper()
     if tx_type not in ("BUY", "SELL"):

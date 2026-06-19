@@ -1,20 +1,16 @@
-"""Pobieranie wycen instrumentów (yfinance dla rynków zagranicznych i GPW przez .WA,
-stooq jako alternatywa dla GPW) + cache. Waluta wykrywana automatycznie.
+"""Pobieranie wycen instrumentów (yfinance — rynki zagraniczne i GPW przez .WA) + cache.
+Waluta wykrywana automatycznie.
 
 Yahoo dla giełdy londyńskiej zwraca ceny w pensach (GBx) — normalizujemy do GBP
 (dzielenie przez 100), żeby przeliczenie kursem NBP było poprawne.
+
+Gdy Yahoo nie ma poprawnej historii dla danego ISIN, ratunkiem jest import
+dziennych cen z CSV (format stooq) — patrz `import_prices`.
 """
 from __future__ import annotations
 
-import io
 import sqlite3
 from datetime import datetime
-
-import httpx
-
-_TIMEOUT = 20.0
-STOOQ_HIST = "https://stooq.com/q/d/l/?s={ticker}&d1={start}&d2={end}&i=d"
-STOOQ_LAST = "https://stooq.pl/q/l/?s={ticker}&f=sd2t2ohlc&e=csv"
 
 
 def _cache_put(conn: sqlite3.Connection, isin: str, day: str, price: float, source: str) -> None:
@@ -87,40 +83,6 @@ def _yf_hist(ticker: str, start: str, end: str) -> tuple[list[tuple[str, float]]
         return [], None
 
 
-# ---------------------------------------------------------------- stooq (GPW/PLN)
-
-def _stooq_last(ticker: str) -> tuple[str, float, str] | None:
-    try:
-        resp = httpx.get(STOOQ_LAST.format(ticker=ticker.lower()), timeout=_TIMEOUT)
-        resp.raise_for_status()
-        lines = resp.text.strip().splitlines()
-        if len(lines) < 2 or "," not in lines[1]:
-            return None
-        cols = lines[1].split(",")  # symbol,date,time,open,high,low,close
-        return cols[1], float(cols[6]), "PLN"
-    except Exception:
-        return None
-
-
-def _stooq_hist(ticker: str, start: str, end: str) -> tuple[list[tuple[str, float]], str]:
-    url = STOOQ_HIST.format(ticker=ticker.lower(), start=start.replace("-", ""), end=end.replace("-", ""))
-    try:
-        resp = httpx.get(url, timeout=_TIMEOUT)
-        resp.raise_for_status()
-        reader = io.StringIO(resp.text)
-        header = reader.readline()
-        if not header.lower().startswith("date"):
-            return [], "PLN"
-        out = []
-        for line in reader:
-            cols = line.strip().split(",")
-            if len(cols) >= 5:
-                out.append((cols[0], float(cols[4])))
-        return out, "PLN"
-    except Exception:
-        return [], "PLN"
-
-
 # ---------------------------------------------------------------- API publiczne
 
 def _sync_currency(conn: sqlite3.Connection, isin: str, currency: str | None) -> None:
@@ -134,7 +96,7 @@ def fetch_latest(conn: sqlite3.Connection, instrument: dict) -> tuple[str, float
     ticker, source = instrument.get("ticker"), instrument.get("source")
     if not ticker or not source:
         return None
-    result = _stooq_last(ticker) if source == "stooq" else _yf_last(ticker)
+    result = _yf_last(ticker)
     if result is None:
         return None
     day, price, ccy = result
@@ -149,10 +111,7 @@ def fetch_history(conn: sqlite3.Connection, instrument: dict, start: str, end: s
     ticker, source = instrument.get("ticker"), instrument.get("source")
     if not ticker or not source:
         return 0
-    if source == "stooq":
-        series, ccy = _stooq_hist(ticker, start, end)
-    else:
-        series, ccy = _yf_hist(ticker, start, end)
+    series, ccy = _yf_hist(ticker, start, end)
     for day, price in series:
         _cache_put(conn, instrument["isin"], day, price, source)
     _sync_currency(conn, instrument["isin"], ccy)
@@ -166,13 +125,6 @@ def latest_cached_price(conn: sqlite3.Connection, isin: str) -> tuple[str, float
         (isin,),
     ).fetchone()
     return (row[0], row[1]) if row else None
-
-
-def resolve_currency(ticker: str, source: str) -> str | None:
-    """Zwraca wykrytą walutę dla tickera (do auto-uzupełnienia w UI)."""
-    if source == "stooq":
-        return "PLN"
-    return _normalize_ccy(_yf_currency(ticker), 0.0)[0]
 
 
 # ---------------------------------------------------------------- import cen z CSV

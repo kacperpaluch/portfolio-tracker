@@ -5,7 +5,7 @@ from datetime import date
 
 import pytest
 
-from app.returns import twr, twr_detail, twr_index, xirr
+from app.returns import twr_detail, twr_index, xirr
 
 
 def test_xirr_simple_doubling_one_year():
@@ -37,7 +37,7 @@ def test_xirr_requires_sign_change():
 
 def test_twr_no_cashflows_equals_simple_return():
     series = [(date(2025, 1, 1), 1000.0), (date(2026, 1, 1), 1100.0)]
-    assert twr(series, {}) == pytest.approx(0.10, abs=1e-6)
+    assert twr_detail(series, {})[1] == pytest.approx(0.10, abs=1e-6)
 
 
 def test_twr_neutralizes_deposit_timing():
@@ -48,7 +48,7 @@ def test_twr_neutralizes_deposit_timing():
         (date(2026, 1, 1), 1760.0),  # 1600 -> 1760 (+10%)
     ]
     cf = {date(2025, 7, 1): 500.0}
-    result = twr(series, cf)
+    result = twr_detail(series, cf)[1]
     assert result == pytest.approx(0.1733, abs=1e-3)
 
 

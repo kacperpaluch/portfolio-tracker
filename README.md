@@ -200,7 +200,7 @@ portfolio-tracker/
 │   │   ├── db.py          # SQLite: połączenie, schemat (CREATE TABLE IF NOT EXISTS), sesje
 │   │   ├── importer.py    # parsing CSV (CP1250, ';', przecinek, K/S), dedup po import_hash
 │   │   ├── instruments.py # tworzenie instrumentów z importu, seed ISIN→ticker, edycja mapowań
-│   │   ├── prices.py      # providery yfinance/stooq, auto-detekcja waluty (GBx→GBP), cache
+│   │   ├── prices.py      # provider yfinance + import cen z CSV (ratunek), auto-detekcja waluty (GBx→GBP), cache
 │   │   ├── fx.py          # klient NBP + cache fx_rates, lookback na weekendy/święta
 │   │   ├── cpi.py         # klient Eurostat HICP + cache cpi_index (inflacja pod benchmark)
 │   │   ├── portfolio.py   # agregacja pozycji (średni koszt), wycena, P/L (zreal. + niezreal.)

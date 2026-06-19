@@ -6,7 +6,7 @@ import sqlite3
 from datetime import date, timedelta
 
 from . import cpi, fx, prices
-from .returns import twr, twr_detail, twr_index, xirr
+from .returns import twr_detail, twr_index, xirr
 
 
 def backfill_all(conn: sqlite3.Connection) -> dict:
@@ -400,7 +400,8 @@ def portfolio_twr(conn: sqlite3.Connection) -> float | None:
         d = date.fromisoformat(f["ts"][:10])
         cf_by_day[d] = cf_by_day.get(d, 0.0) + f["amount_pln"]
 
-    return twr(series, cf_by_day)
+    detail = twr_detail(series, cf_by_day)
+    return detail[1] if detail is not None else None
 
 
 def portfolio_daily_changes(conn: sqlite3.Connection) -> list[dict]:

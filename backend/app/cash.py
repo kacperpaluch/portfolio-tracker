@@ -31,11 +31,6 @@ def deposits_total(conn: sqlite3.Connection) -> float:
     return round(row[0], 2)
 
 
-def list_flows(conn: sqlite3.Connection) -> list[dict]:
-    rows = conn.execute("SELECT * FROM cash_flows ORDER BY ts DESC, id DESC").fetchall()
-    return [dict(r) for r in rows]
-
-
 def list_external(conn: sqlite3.Connection) -> list[dict]:
     """Tylko wpłaty/wypłaty (do ręcznej edycji w UI)."""
     rows = conn.execute(
@@ -50,7 +45,7 @@ def add_flow(conn: sqlite3.Connection, ts: str, kind: str, amount: float, note: 
     if kind not in ("deposit", "withdrawal"):
         raise ValueError("kind musi być 'deposit' lub 'withdrawal'")
     # Normalizacja daty (akceptuje 'YYYY-MM-DD' lub pełny ISO).
-    ts = _normalize_ts(ts)
+    ts = normalize_ts(ts)
     signed = abs(amount) if kind == "deposit" else -abs(amount)
     cur = conn.execute(
         "INSERT INTO cash_flows (ts, kind, amount_pln, note, import_hash) VALUES (?, ?, ?, ?, NULL)",
@@ -85,9 +80,10 @@ def remove_trade_cash(conn: sqlite3.Connection, import_hash: str) -> None:
     conn.execute("DELETE FROM cash_flows WHERE import_hash = ?", (h,))
 
 
-def _normalize_ts(ts: str) -> str:
+def normalize_ts(ts: str) -> str:
+    """Akceptuje datę, datetime-local lub pełny ISO; zwraca ISO 8601."""
     ts = ts.strip()
-    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d.%m.%Y"):
+    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d.%m.%Y"):
         try:
             return datetime.strptime(ts, fmt).isoformat()
         except ValueError:
