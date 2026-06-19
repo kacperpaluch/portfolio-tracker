@@ -54,11 +54,13 @@ def update_instrument(
     source: str | None,
     category: str | None = None,
     active: bool | None = None,
+    name: str | None = None,
 ) -> dict | None:
     """Aktualizuje mapowanie instrumentu. needs_config wyłączamy, gdy komplet danych."""
     existing = conn.execute("SELECT * FROM instruments WHERE isin = ?", (isin,)).fetchone()
     if existing is None:
         return None
+    name_val = (name or "").strip() or existing["name"]
     ticker = (ticker or "").strip() or None
     currency = (currency or "").strip().upper() or None
     source = (source or "").strip().lower() or None
@@ -68,9 +70,9 @@ def update_instrument(
     conn.execute(
         """
         UPDATE instruments
-           SET ticker = ?, currency = ?, source = ?, category = ?, active = ?, needs_config = ?
+           SET name = ?, ticker = ?, currency = ?, source = ?, category = ?, active = ?, needs_config = ?
          WHERE isin = ?
         """,
-        (ticker, currency, source, category, active_val, needs_config, isin),
+        (name_val, ticker, currency, source, category, active_val, needs_config, isin),
     )
     return dict(conn.execute("SELECT * FROM instruments WHERE isin = ?", (isin,)).fetchone())

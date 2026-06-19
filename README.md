@@ -83,7 +83,9 @@ stopę zwrotu oraz porównanie z benchmarkiem — **wszystko w PLN**.
   kurs NBP** (kolumny `Instrument` / `Kurs NBP` + znacznik, co napędzało dany dzień — ruch ceny
   czy złoty) oraz eksportem do CSV. Suma kolumn = zmiana całkowita.
 - **Historia transakcji** — pełna lista kupna/sprzedaży.
-- **Mapowanie ISIN → ticker** ręcznie w UI (z wstępnym seedem dla znanych instrumentów).
+- **Mapowanie ISIN → ticker** ręcznie w UI (z wstępnym seedem dla znanych instrumentów);
+  edytowalna **nazwa własna** instrumentu (np. `PZU World` zamiast `ETFPZUWORLD` z importu) —
+  rename przetrwa każdy kolejny import (idempotentny).
 - **Eksport i backup** — pobranie transakcji (CSV) i całej bazy (.db) z UI; **nocny backup**
   bazy z crona (~03:00) do `data/backup/` z retencją + „Backup teraz" na żądanie.
 - **Codzienne odświeżanie** cen i kursów (cron APScheduler, domyślnie ~21:00 Europe/Warsaw) —
@@ -277,7 +279,7 @@ Pozycje nie są materializowane — liczone w locie z `transactions` (chronologi
 | `DELETE` | `/api/transactions/{id}` | usunięcie transakcji (i jej przepływu gotówki) |
 | `GET` | `/api/instruments/{isin}/history` | dzienna historia waloru (cena natywna, kurs, PLN, ilość) |
 | `GET` / `PUT` | `/api/allocation` | alokacja docelowa vs rzeczywista (grupy + gotówka) |
-| `GET` / `PUT` | `/api/instruments[/{isin}]` | podgląd / edycja mapowań ISIN→ticker |
+| `GET` / `PUT` | `/api/instruments[/{isin}]` | podgląd / edycja mapowań ISIN→ticker + nazwa własna + kategoria |
 | `GET` | `/api/cash` | saldo gotówki + lista wpłat/wypłat |
 | `POST` / `DELETE` | `/api/cash[/{id}]` | dodaj / usuń wpłatę-wypłatę |
 | `POST` | `/api/refresh` | odświeżenie bieżących cen i kursów + dociągnięcie luk w historii (od ostatniego dnia w cache) |

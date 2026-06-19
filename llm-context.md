@@ -116,7 +116,7 @@ scheduler.py → cash, instruments, prices, fx, db, backup
 
 | Tabela | Klucz | Kolumny | Rola |
 |---|---|---|---|
-| `instruments` | `isin` | name, ticker, currency, source, category, active, needs_config | mapowanie waloru |
+| `instruments` | `isin` | name (edytowalna własna nazwa w UI, przetrwa import), ticker, currency, source, category, active, needs_config | mapowanie waloru |
 | `transactions` | `id` | ts, isin→, type(BUY/SELL), quantity, price_pln, value_pln, commission_pln, **import_hash UNIQUE** | handel |
 | `prices` | (isin,date) | price (waluta natywna), source | cache wycen |
 | `fx_rates` | (date,currency) | rate_to_pln | cache kursów NBP |
@@ -158,7 +158,7 @@ odczyt
 | GET | `/api/daily-changes` | dzienny P/L (zmiana wyceny ETF D/D, koszt transakcji odjęty) + rozbicie `instrument_pln`/`fx_pln` — `history.portfolio_daily_changes` |
 | GET | `/api/drawdown` | obsunięcie portfela (drawdown) na indeksie TWR: krzywa „pod wodą" + max/bieżące DD z datami szczytu/dołka/odbicia — `history.portfolio_drawdown` |
 | GET | `/api/instruments/{isin}/history` | widok waloru (cena natywna/PLN, atrybucja) |
-| GET/PUT | `/api/instruments[/{isin}]` | mapowania ISIN→ticker (+ category) |
+| GET/PUT | `/api/instruments[/{isin}]` | mapowania ISIN→ticker (+ name własna, + category) |
 | GET | `/api/cash` / POST / DELETE `/{id}` | księga gotówki |
 | GET/PUT | `/api/allocation` | alokacja docelowa vs rzeczywista |
 | POST | `/api/refresh` | bieżące ceny + FX + dociągnięcie luk od ostatniego dnia w cache, TYLKO trzymane walory (`history.refresh_latest`); odświeża też CPI |

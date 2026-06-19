@@ -93,6 +93,7 @@ def get_instruments() -> list[dict]:
 
 
 class InstrumentUpdate(BaseModel):
+    name: str | None = None
     ticker: str | None = None
     currency: str | None = None
     source: str | None = None
@@ -106,6 +107,7 @@ def put_instrument(isin: str, payload: InstrumentUpdate) -> dict:
         updated = instruments_mod.update_instrument(
             conn,
             isin,
+            name=payload.name,
             ticker=payload.ticker,
             currency=payload.currency,
             source=payload.source,

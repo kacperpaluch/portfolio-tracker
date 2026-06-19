@@ -7,12 +7,16 @@ export default function InstrumentsPanel({ instruments, onSave }) {
   return (
     <table>
       <thead>
-        <tr><th>Instrument / ISIN</th><th>Ticker</th><th>Źródło</th><th>Kategoria</th><th>Waluta</th><th>Status</th><th></th></tr>
+        <tr><th>Instrument / ISIN</th><th>Nazwa własna</th><th>Ticker</th><th>Źródło</th><th>Kategoria</th><th>Waluta</th><th>Status</th><th></th></tr>
       </thead>
       <tbody>
         {instruments.map((inst) => (
           <tr key={inst.isin}>
             <td>{inst.name}<div className="tag">{inst.isin}</div></td>
+            <td>
+              <input className="cell" value={valueOf(inst, "name")} placeholder={inst.name}
+                onChange={(e) => edit(inst.isin, "name", e.target.value)} />
+            </td>
             <td>
               <input className="cell" value={valueOf(inst, "ticker")} placeholder="np. FWIA.DE"
                 onChange={(e) => edit(inst.isin, "ticker", e.target.value)} />
@@ -31,6 +35,7 @@ export default function InstrumentsPanel({ instruments, onSave }) {
             <td>{inst.needs_config ? <span className="badge">do uzupełnienia</span> : <span className="pos">OK</span>}</td>
             <td>
               <button onClick={() => onSave(inst.isin, {
+                name: valueOf(inst, "name"),
                 ticker: valueOf(inst, "ticker"),
                 source: valueOf(inst, "source") || "yfinance",
                 currency: inst.currency,
