@@ -7,14 +7,14 @@ export default function InstrumentsPanel({ instruments, onSave }) {
   return (
     <table>
       <thead>
-        <tr><th>Instrument / ISIN</th><th>Nazwa własna</th><th>Ticker</th><th>Źródło</th><th>Kategoria</th><th>Waluta</th><th>Status</th><th></th></tr>
+        <tr><th>Nazwa z importu</th><th>Nazwa własna</th><th>Ticker</th><th>Źródło</th><th>Kategoria</th><th>Waluta</th><th>Status</th><th></th></tr>
       </thead>
       <tbody>
         {instruments.map((inst) => (
           <tr key={inst.isin}>
-            <td>{inst.name}<div className="tag">{inst.isin}</div></td>
+            <td>{inst.imported_name || inst.name}<div className="tag">{inst.isin}</div></td>
             <td>
-              <input className="cell" value={valueOf(inst, "name")} placeholder={inst.name}
+              <input className="cell" value={valueOf(inst, "name")} placeholder={inst.imported_name || inst.name}
                 onChange={(e) => edit(inst.isin, "name", e.target.value)} />
             </td>
             <td>

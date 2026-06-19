@@ -11,9 +11,10 @@ DB_PATH = Path(os.environ.get("DB_PATH", Path(__file__).resolve().parents[2] / "
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS instruments (
-    isin         TEXT PRIMARY KEY,
-    name         TEXT NOT NULL,
-    ticker       TEXT,
+    isin          TEXT PRIMARY KEY,
+    name          TEXT NOT NULL,
+    imported_name TEXT,                        -- nazwa z importu (read-only, nie nadpisywana przez UI)
+    ticker        TEXT,
     currency     TEXT,                       -- 'EUR' | 'PLN'
     source       TEXT,                       -- 'yfinance' | 'stooq'
     category     TEXT,                       -- klasa aktywów: 'Akcje' | 'Obligacje' | ...
@@ -88,6 +89,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(instruments)")}
     if "category" not in cols:
         conn.execute("ALTER TABLE instruments ADD COLUMN category TEXT")
+    if "imported_name" not in cols:
+        conn.execute("ALTER TABLE instruments ADD COLUMN imported_name TEXT")
 
 
 def init_db(conn: sqlite3.Connection | None = None) -> None:

@@ -33,10 +33,10 @@ def ensure_instrument(conn: sqlite3.Connection, isin: str, name: str) -> None:
     needs_config = 0 if (ticker and seed.get("currency") and seed.get("source")) else 1
     conn.execute(
         """
-        INSERT INTO instruments (isin, name, ticker, currency, source, active, needs_config)
-        VALUES (?, ?, ?, ?, ?, 1, ?)
+        INSERT INTO instruments (isin, name, imported_name, ticker, currency, source, active, needs_config)
+        VALUES (?, ?, ?, ?, ?, ?, 1, ?)
         """,
-        (isin, name, ticker, seed.get("currency"), seed.get("source"), needs_config),
+        (isin, name, name, ticker, seed.get("currency"), seed.get("source"), needs_config),
     )
 
 

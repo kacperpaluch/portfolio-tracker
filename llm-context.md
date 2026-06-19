@@ -116,7 +116,7 @@ scheduler.py → cash, instruments, prices, fx, db, backup
 
 | Tabela | Klucz | Kolumny | Rola |
 |---|---|---|---|
-| `instruments` | `isin` | name (edytowalna własna nazwa w UI, przetrwa import), ticker, currency, source, category, active, needs_config | mapowanie waloru |
+| `instruments` | `isin` | name (edytowalna własna nazwa w UI, przetrwa import), imported_name (nazwa z importu, read-only, zapisywana tylko przy tworzeniu), ticker, currency, source, category, active, needs_config | mapowanie waloru |
 | `transactions` | `id` | ts, isin→, type(BUY/SELL), quantity, price_pln, value_pln, commission_pln, **import_hash UNIQUE** | handel |
 | `prices` | (isin,date) | price (waluta natywna), source | cache wycen |
 | `fx_rates` | (date,currency) | rate_to_pln | cache kursów NBP |

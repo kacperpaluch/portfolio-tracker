@@ -85,7 +85,8 @@ stopę zwrotu oraz porównanie z benchmarkiem — **wszystko w PLN**.
 - **Historia transakcji** — pełna lista kupna/sprzedaży.
 - **Mapowanie ISIN → ticker** ręcznie w UI (z wstępnym seedem dla znanych instrumentów);
   edytowalna **nazwa własna** instrumentu (np. `PZU World` zamiast `ETFPZUWORLD` z importu) —
-  rename przetrwa każdy kolejny import (idempotentny).
+  nazwa z importu zapisana osobno (`imported_name`) i widoczna read-only obok; rename
+  przetrwa każdy kolejny import (idempotentny).
 - **Eksport i backup** — pobranie transakcji (CSV) i całej bazy (.db) z UI; **nocny backup**
   bazy z crona (~03:00) do `data/backup/` z retencją + „Backup teraz" na żądanie.
 - **Codzienne odświeżanie** cen i kursów (cron APScheduler, domyślnie ~21:00 Europe/Warsaw) —
