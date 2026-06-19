@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS instruments (
     imported_name TEXT,                        -- nazwa z importu (read-only, nie nadpisywana przez UI)
     ticker        TEXT,
     currency     TEXT,                       -- 'EUR' | 'PLN'
-    source       TEXT,                       -- 'yfinance' | 'stooq'
+    source       TEXT,                       -- 'yfinance' | 'csv'
     category     TEXT,                       -- klasa aktywów: 'Akcje' | 'Obligacje' | ...
     active       INTEGER NOT NULL DEFAULT 1,
     needs_config INTEGER NOT NULL DEFAULT 1
