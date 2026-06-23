@@ -83,8 +83,7 @@ def daily_changes_csv(conn: sqlite3.Connection) -> str:
     rows = history_mod.portfolio_daily_changes(conn)
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["date", "value_pln", "flow_pln", "change_pln", "instrument_pln", "fx_pln", "change_pct"])
+    w.writerow(["date", "value_pln", "flow_pln", "change_pln", "change_pct"])
     for r in rows:
-        w.writerow([r["date"], r["value_pln"], r["flow_pln"], r["change_pln"],
-                    r["instrument_pln"], r["fx_pln"], r["change_pct"]])
+        w.writerow([r["date"], r["value_pln"], r["flow_pln"], r["change_pln"], r["change_pct"]])
     return buf.getvalue()

@@ -130,19 +130,9 @@ def test_history_pct_null_before_first_contribution():
     assert all(r["portfolio_pct"] is not None for r in series)
 
 
-def test_daily_changes_split_pln_is_all_instrument():
-    """Instrument w PLN: cały dzienny ruch to instrument, efekt kursu = 0."""
+def test_daily_changes_fx_move_is_captured_in_change():
+    """Cena bez zmian, rośnie tylko kurs: change_pln łapie cały efekt EUR/PLN."""
     conn = _db()
-    _setup(conn)  # PLN, skok 100 -> 120 dnia 2025-06-01
-    by_date = {r["date"]: r for r in portfolio_daily_changes(conn)}
-    r = by_date["2025-06-01"]
-    assert r["fx_pln"] == pytest.approx(0.0)
-    assert r["instrument_pln"] == pytest.approx(200.0)
-    assert r["instrument_pln"] + r["fx_pln"] == pytest.approx(r["change_pln"])
-
-
-def _setup_eur_fx(conn):
-    """Instrument w EUR: cena stała 100, kurs 4.0 -> 4.2 (sam efekt waluty)."""
     conn.execute(
         "INSERT INTO instruments (isin, name, ticker, currency, source, active, needs_config) "
         "VALUES ('EU01', 'EUR ETF', 'X.DE', 'EUR', 'yfinance', 1, 0)"
@@ -156,26 +146,11 @@ def _setup_eur_fx(conn):
     conn.execute("INSERT INTO fx_rates (date,currency,rate_to_pln) VALUES ('2025-03-03','EUR',4.0)")
     conn.execute("INSERT INTO fx_rates (date,currency,rate_to_pln) VALUES ('2025-03-04','EUR',4.2)")
     conn.commit()
-
-
-def test_daily_changes_split_fx_only():
-    """Cena bez zmian, rośnie tylko kurs: cały dzienny ruch to efekt FX."""
-    conn = _db()
-    _setup_eur_fx(conn)
     by_date = {r["date"]: r for r in portfolio_daily_changes(conn)}
     r = by_date["2025-03-04"]
-    # 10 szt × 100 EUR × (4.2 − 4.0) = 200 zł z kursu, 0 z instrumentu.
-    assert r["fx_pln"] == pytest.approx(200.0)
-    assert r["instrument_pln"] == pytest.approx(0.0)
-    assert r["instrument_pln"] + r["fx_pln"] == pytest.approx(r["change_pln"])
-
-
-def test_daily_changes_split_invariant_holds_every_day():
-    """instrument_pln + fx_pln == change_pln dla każdego dnia (niezmiennik addytywny)."""
-    conn = _db()
-    _setup_eur_fx(conn)
-    for r in portfolio_daily_changes(conn):
-        assert r["instrument_pln"] + r["fx_pln"] == pytest.approx(r["change_pln"], abs=0.01)
+    # 10 szt × 100 EUR × (4.2 − 4.0) = 200 zł — change łyka efekt kursu (bez atrybucji).
+    assert r["change_pln"] == pytest.approx(200.0)
+    assert r["value_pln"] == pytest.approx(4200.0)
 
 
 # --- drawdown (obsunięcie portfela na indeksie TWR) ---------------------------

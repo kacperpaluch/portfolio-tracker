@@ -412,11 +412,6 @@ def portfolio_daily_changes(conn: sqlite3.Connection) -> list[dict]:
     gdzie przepływ = koszt kupna (+) / przychód ze sprzedaży (−) tego dnia — dzięki temu sam
     zakup nie liczy się jako zysk. `flow_pln` pokazuje ten przepływ (czytelność skoków).
     Seria rosnąco po dacie; dni bez notowań mają zmianę 0 (forward-fill ceny).
-
-    `change_pln` rozbijane na dwa źródła (`instrument_pln + fx_pln == change_pln`):
-    - `fx_pln`  = efekt zmiany kursu NBP: Σ ilość × cena_dziś × (kurs_dziś − kurs_wczoraj),
-    - `instrument_pln` = reszta, czyli ruch samej ceny instrumentu (dla PLN = całość).
-    Dzięki temu widać, czy dzień zrobił ETF, czy złoty (np. skok fixingu w poniedziałek).
     """
     txs = conn.execute(
         "SELECT ts, isin, type, quantity, value_pln FROM transactions ORDER BY ts ASC"
@@ -451,7 +446,6 @@ def portfolio_daily_changes(conn: sqlite3.Connection) -> list[dict]:
                 holdings[isin] = holdings.get(isin, 0.0) + delta
 
         total = 0.0
-        fx_comp = 0.0  # efekt kursu NBP D/D (Σ ilość × cena_dziś × Δkurs)
         for isin, qty in holdings.items():
             if qty <= 1e-9:
                 continue
@@ -463,26 +457,16 @@ def portfolio_daily_changes(conn: sqlite3.Connection) -> list[dict]:
             if rate is None:
                 continue
             total += qty * price * rate
-            if prev_day is not None and ccy != "PLN":
-                rate_prev = _forward_fill(fx_map.get(ccy), prev_day)
-                if rate_prev is not None:
-                    fx_comp += qty * price * (rate - rate_prev)
 
         if prev_val is not None:
             flow = trade_flow.get(day, 0.0)
             change = total - prev_val - flow
             base = prev_val + flow
-            # Instrument = reszta po wyjęciu kursu; liczone z zaokrąglonych wartości,
-            # by kolumny zawsze sumowały się do change_pln (bez błędu o grosz).
-            change_r = round(change, 2)
-            fx_r = round(fx_comp, 2)
             out.append({
                 "date": day,
                 "value_pln": round(total, 2),
                 "flow_pln": round(flow, 2),
-                "change_pln": change_r,
-                "instrument_pln": round(change_r - fx_r, 2),
-                "fx_pln": fx_r,
+                "change_pln": round(change, 2),
                 "change_pct": round(change / base * 100, 2) if abs(base) > 1e-9 else None,
             })
         prev_val = total

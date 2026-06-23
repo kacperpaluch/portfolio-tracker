@@ -42,7 +42,7 @@ stopę zwrotu oraz porównanie z benchmarkiem — **wszystko w PLN**.
 - **Ręczne dodawanie/usuwanie transakcji** — formularz w UI (z dedupem jak w imporcie).
 - **Widok waloru** — klik w nazwę pokazuje wykres wartości inwestycji w czasie (rzeczywista vs
   przy stałym kursie) z **atrybucją zysku na instrument vs walutę** (ile dał ETF, a ile ruch
-  EUR/PLN) oraz tabelę dzień po dniu (cena giełdowa, kurs NBP, cena PLN, szt., wartość).
+  EUR/PLN w widoku tego waloru) oraz tabelę dzień po dniu (cena giełdowa, kurs NBP, cena PLN, szt., wartość).
 - **Wycena w PLN** — instrumenty notowane w EUR/USD/GBP przeliczane bieżącym kursem NBP;
   **waluta wykrywana automatycznie** z notowania (z obsługą londyńskich pensów GBx → GBP).
 - **Import cen z CSV (ratunek dla danych Yahoo)** — gdy Yahoo nie oddaje poprawnej historii
@@ -79,9 +79,7 @@ stopę zwrotu oraz porównanie z benchmarkiem — **wszystko w PLN**.
   (np. 60/40) i porównaj docelowy vs rzeczywisty udział grup z kwotą do rebalansu (gotówka
   liczona jako osobna grupa); wykres **donut** obok tabeli pokazuje rzeczywisty rozkład grup.
 - **Zmiany dzienne** — tabela zysku/straty dzień-po-dniu (wynik rynkowy ETF, z odjętym kosztem
-  kupna/sprzedaży, więc zakup nie liczy się jako zysk) z **rozbiciem na efekt instrumentu vs
-  kurs NBP** (kolumny `Instrument` / `Kurs NBP` + znacznik, co napędzało dany dzień — ruch ceny
-  czy złoty) oraz eksportem do CSV. Suma kolumn = zmiana całkowita.
+  kupna/sprzedaży, więc zakup nie liczy się jako zysk) z eksportem do CSV.
 - **Historia transakcji** — pełna lista kupna/sprzedaży.
 - **Mapowanie ISIN → ticker** ręcznie w UI (z wstępnym seedem dla znanych instrumentów);
   edytowalna **nazwa własna** instrumentu (np. `PZU World` zamiast `ETFPZUWORLD` z importu) —
@@ -274,7 +272,7 @@ Pozycje nie są materializowane — liczone w locie z `transactions` (chronologi
 | `GET` | `/api/portfolio?refresh=false` | pozycje + sumy (wartość, P/L zreal./niezreal., gotówka, XIRR, TWR, zwroty w okresach) |
 | `GET` | `/api/summary` | zwięzły digest (wartość, P/L, zmiana D/D, zwroty, alokacja vs cel) — pod powiadomienia/n8n |
 | `GET` | `/api/history?benchmark_rate=0.05&cpi_spread=0.02` | dzienna seria `value_pln` + dwa benchmarki: `benchmark_pln` (stała stopa) i `benchmark_cpi_pln` (inflacja HICP + `cpi_spread`); + warianty `_pct` |
-| `GET` | `/api/daily-changes` | dzienny zysk/strata (zmiana wyceny ETF D/D, koszt transakcji odjęty) + rozbicie `instrument_pln` / `fx_pln` |
+| `GET` | `/api/daily-changes` | dzienny zysk/strata (zmiana wyceny ETF D/D, koszt transakcji odjęty; zakup nie liczy się jako zysk) |
 | `GET` | `/api/drawdown` | obsunięcie portfela (drawdown) na indeksie TWR: krzywa „pod wodą" + max/bieżące DD z datami szczytu/dołka/odbicia |
 | `GET` / `POST` | `/api/transactions` | historia transakcji / ręczne dodanie |
 | `DELETE` | `/api/transactions/{id}` | usunięcie transakcji (i jej przepływu gotówki) |
