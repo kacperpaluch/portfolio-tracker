@@ -49,8 +49,9 @@ Internetu bez dodatkowej warstwy dostępu (np. VPN, Tailscale lub reverse proxy 
 - **Prywatny interfejs typu wealth cockpit** — jasna, czytelna przestrzeń robocza z ciemnym
   sidebarem; osobne sekcje Pulpit, Portfel, Aktywność, Alokacja, Analiza oraz Dane i ustawienia.
   Widok mobilny korzysta z dolnej nawigacji i zachowuje pełną funkcjonalność.
-- **Import CSV** z biura maklerskiego (format GPW „historia PW", kodowanie CP1250) —
-  idempotentny: CSV ze starymi + nowymi danymi importuje tylko nowe, starych nie rusza.
+- **Import CSV** z biura maklerskiego (GPW „historia PW” oraz eMAKLER
+  „Transakcje bieżące”, kodowanie CP1250) — format jest rozpoznawany automatycznie, a import
+  jest idempotentny: CSV ze starymi + nowymi danymi importuje tylko nowe, starych nie rusza.
 - **Ręczne dodawanie/usuwanie transakcji** — formularz w UI (z dedupem jak w imporcie).
 - **Widok waloru** — klik w nazwę pokazuje wykres wartości inwestycji w czasie (rzeczywista vs
   przy stałym kursie) z **atrybucją zysku na instrument vs walutę** (ile dał ETF, a ile ruch
@@ -354,11 +355,22 @@ bez ręcznej aktualizacji:
 
 ## Format pliku CSV
 
-Eksport „historia PW" z biura maklerskiego:
+Obsługiwane są dwa automatycznie rozpoznawane eksporty.
+
+Eksport „historia PW” z biura maklerskiego:
 
 - kodowanie **CP1250** (Windows-1250), separator `;`, liczby z **przecinkiem dziesiętnym**;
 - kolumny (po pozycji): `data; papier; isin; ilość; [K/S]; cena; wartość; prowizja; po prowizji; waluta`;
 - `K` = kupno (BUY), `S` = sprzedaż (SELL); data `DD.MM.YYYY HH:MM:SS`.
+
+Eksport eMAKLER „Transakcje bieżące”:
+
+- parser pomija preambułę zawierającą dane rachunku i odnajduje tabelę po nagłówku;
+- kolumny tabeli: `Czas transakcji;Papier;Giełda;K/S;Liczba;Kurs;Waluta;Wartość;Waluta`;
+- raport nie zawiera ISIN-u, dlatego para papier + giełda jest mapowana jawnie do zweryfikowanego
+  instrumentu; nierozpoznany papier przerywa cały import z czytelnym błędem;
+- `Wartość` w PLN jest pełnym kosztem transakcji, a jednostkowe `price_pln` jest wyliczane jako
+  wartość / liczba. Prowizja jest zapisywana jako zero.
 
 Przykład struktury: `backend/tests/sample_hisPW.csv` (fikcyjne dane). Prawdziwe eksporty są
 celowo wykluczone z repo (`.gitignore`), bo zawierają dane osobiste.

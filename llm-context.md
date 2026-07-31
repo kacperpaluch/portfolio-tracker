@@ -183,7 +183,7 @@ odczyt
 
 | Metoda | Ścieżka | Opis |
 |---|---|---|
-| POST | `/api/import` | import CSV transakcji (multipart `file`) |
+| POST | `/api/import` | import CSV transakcji (multipart `file`): auto-detekcja GPW „historia PW” / eMAKLER „Transakcje bieżące” |
 | POST | `/api/prices/import` | import dziennych cen waloru z CSV (multipart `isin`+`file`+opcjonalnie `currency`, format stooq) → cache `prices` (`prices.import_prices`); waluta wymagana do wyceny |
 | GET/POST | `/api/transactions` | lista / ręczne dodanie transakcji |
 | PUT | `/api/transactions/{id}` | edycja transakcji + atomowe odtworzenie cash flow |
@@ -275,6 +275,7 @@ aktywny tylko gdy katalog istnieje). Dockerfile robi to w etapie multi-stage.
 - **GBx (pensy LSE)** — Yahoo zwraca pensy; ZAWSZE normalizuj `/100` + waluta `GBP`.
 - **Named volume vs bind mount** — po zmianie na named volume w `/ship` dane z `./data` trzeba zmigrować (`docker cp ./data/portfolio.db <kontener>:/app/data/`).
 - **Dedup** — każda nowa ścieżka tworzenia transakcji MUSI używać tego samego `import_hash` co `parse_csv`/`add_transaction`, inaczej powstaną duplikaty.
+- **eMAKLER „Transakcje bieżące”** — `importer.py` wykrywa 9-kolumnową tabelę po nagłówku mimo preambuły z danymi rachunku. Raport nie ma ISIN-u, więc `instruments.BROKER_ALIASES` mapuje zweryfikowaną parę symbol+giełda do ISIN-u; brak aliasu przerywa cały import. Kurs natywny jest tylko walidowany, `value_pln` pochodzi z pełnej wartości PLN (z prowizją), `price_pln = round(value_pln / quantity, 4)`, `commission_pln = 0`.
 - **Dane osobiste** — prawdziwe CSV (`*.csv`) są gitignorowane; w repo jest tylko `backend/tests/sample_hisPW.csv` (fikcyjny, z wyjątkiem w `.gitignore`).
 - **Lokalna baza nigdy do Git** — `.gitignore` obejmuje `data/`, `*.db`, `*.sqlite`,
   `*.sqlite3` oraz pliki SQLite `-wal`/`-shm`/`-journal`. Ignorowane są też `.env*`,

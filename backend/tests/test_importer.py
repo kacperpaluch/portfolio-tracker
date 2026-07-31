@@ -7,10 +7,20 @@ from pathlib import Path
 import pytest
 
 from app.db import SCHEMA
-from app.importer import import_transactions, parse_csv, parse_number
+from app.importer import detect_csv_format, import_transactions, parse_csv, parse_number
 
 # Fikcyjny plik przykładowy commitowany do repo (prawdziwe dane brokera są gitignorowane).
 CSV_PATH = Path(__file__).resolve().parent / "sample_hisPW.csv"
+
+EMAKLER_CSV = """mBank S.A. Bankowość Detaliczna
+#Imię i nazwisko
+Jan Kowalski
+
+eMAKLER - Transakcje bieżące
+Czas transakcji;Papier;Giełda;K/S;Liczba;Kurs;Waluta;Wartość;Waluta
+31.07.2026 11:38:55;WEBN GR ETF;DEU-XETRA;K;1;12,6440;EUR;54,57;PLN
+31.07.2026 11:36:26;WEBN GR ETF;DEU-XETRA;K;8;12,6480;EUR;436,80;PLN
+""".encode("cp1250")
 
 
 def _csv_bytes() -> bytes:
@@ -38,6 +48,41 @@ def test_parse_csv_basic():
     assert first["type"] == "BUY"
     assert first["quantity"] == 10
     assert first["price_pln"] == pytest.approx(30.00)
+
+
+def test_detects_both_csv_formats():
+    assert detect_csv_format(_csv_bytes()) == "legacy_hispw"
+    assert detect_csv_format(EMAKLER_CSV) == "emakler_current"
+
+
+def test_parse_emakler_current_transactions():
+    rows = parse_csv(EMAKLER_CSV)
+    assert len(rows) == 2
+    assert rows[0]["isin"] == "IE0003XJA0J9"
+    assert rows[0]["type"] == "BUY"
+    assert rows[0]["price_pln"] == pytest.approx(54.57)
+    assert rows[1]["quantity"] == 8
+    assert rows[1]["price_pln"] == pytest.approx(54.60)
+    assert rows[1]["value_pln"] == pytest.approx(436.80)
+    assert rows[1]["commission_pln"] == 0
+
+
+def test_emakler_import_is_idempotent():
+    conn = _mem_db()
+    first = import_transactions(conn, EMAKLER_CSV)
+    second = import_transactions(conn, EMAKLER_CSV)
+    assert first["format"] == "emakler_current"
+    assert first["imported"] == 2
+    assert second["imported"] == 0
+    assert second["skipped_duplicates"] == 2
+
+
+def test_emakler_rejects_unknown_instrument_without_partial_import():
+    content = EMAKLER_CSV.replace(b"WEBN GR ETF", b"UNKNOWN ETF", 1)
+    conn = _mem_db()
+    with pytest.raises(ValueError, match="Brak mapowania ISIN"):
+        import_transactions(conn, content)
+    assert conn.execute("SELECT COUNT(*) FROM transactions").fetchone()[0] == 0
 
 
 def test_parse_handles_sells():

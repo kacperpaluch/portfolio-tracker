@@ -12,7 +12,8 @@ wyceny i pokazuje wartość, zysk/stratę oraz stopy zwrotu — **wszystko w PLN
 - **Czytelny wealth cockpit** — jasna przestrzeń robocza z ciemnym sidebarem; osobne
   sekcje Pulpit, Portfel, Aktywność, Alokacja, Analiza oraz Dane i ustawienia.
 - **Responsywny interfejs** — desktopowy sidebar i dolna nawigacja na telefonie.
-- **Import CSV** z biura maklerskiego (format GPW „historia PW", CP1250) — idempotentny
+- **Import CSV** z biura maklerskiego (GPW „historia PW” oraz eMAKLER
+  „Transakcje bieżące”, CP1250) — format rozpoznawany automatycznie, import idempotentny
   (CSV ze starymi + nowymi danymi importuje tylko nowe).
 - **Ręczne dodawanie/usuwanie transakcji** w UI (z tym samym dedupem co import).
 - **Wycena w PLN** — ETF-y notowane w EUR/USD/GBP przeliczane bieżącym kursem NBP;

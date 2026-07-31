@@ -58,11 +58,19 @@ def health() -> dict:
     return {"status": "ok"}
 
 
+MAX_IMPORT_BYTES = 10 * 1024 * 1024
+
+
 @app.post("/api/import")
 async def import_csv(file: UploadFile = File(...)) -> dict:
-    content = await file.read()
+    content = await file.read(MAX_IMPORT_BYTES + 1)
+    if len(content) > MAX_IMPORT_BYTES:
+        raise HTTPException(status_code=413, detail="Plik CSV jest większy niż 10 MB")
     with db_session() as conn:
-        return import_transactions(conn, content)
+        try:
+            return import_transactions(conn, content)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/api/prices/import")

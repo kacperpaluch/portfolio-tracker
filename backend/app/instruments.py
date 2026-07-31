@@ -8,7 +8,7 @@ import sqlite3
 # ceny, a ticker można w każdej chwili zmienić w UI. GPW notowane przez sufiks .WA (PLN).
 SEED: dict[str, dict[str, str]] = {
     "IE000716YHJ7": {"ticker": "FWIA.DE", "currency": "EUR", "source": "yfinance"},        # Invesco FTSE All-World
-    "IE0003XJA0J9": {"ticker": "WEBN.DE", "currency": "EUR", "source": "yfinance"},        # Amundi Prime All Country World
+    "IE0003XJA0J9": {"name": "Amundi Prime All Country World UCITS ETF Acc", "ticker": "WEBN.DE", "currency": "EUR", "source": "yfinance"},
     "IE00BMW42181": {"ticker": "ESIH.L", "currency": "GBP", "source": "yfinance"},         # iShares MSCI Europe Health Care
     "IE00B43HR379": {"ticker": "IUHC.L", "currency": "USD", "source": "yfinance"},         # iShares S&P 500 Health Care
     "IE00BYZK4669": {"ticker": "AGED.L", "currency": "USD", "source": "yfinance"},         # iShares Ageing Population
@@ -17,6 +17,19 @@ SEED: dict[str, dict[str, str]] = {
     "PLPZUMW00018": {"ticker": "ETFPZUWORLD.WA", "currency": "PLN", "source": "yfinance"}, # ETF PZU World (GPW)
     "SE0024738389": {"ticker": "ETNVCOIN50.WA", "currency": "PLN", "source": "yfinance"},  # ETNVCOIN50 (GPW)
 }
+
+# Eksport „Transakcje bieżące” eMAKLER nie zawiera ISIN-u. Brokerowy symbol
+# i giełdę mapujemy jawnie, zamiast zgadywać po samej nazwie papieru. Kolejne
+# instrumenty z tego raportu należy dopisać tutaj po zweryfikowaniu ISIN-u.
+BROKER_ALIASES: dict[tuple[str, str, str], str] = {
+    ("emakler", "WEBN GR ETF", "DEU-XETRA"): "IE0003XJA0J9",
+}
+
+
+def resolve_broker_instrument(broker: str, symbol: str, exchange: str) -> str | None:
+    """Zwraca ISIN dla identyfikatora używanego w eksporcie brokera."""
+    key = (broker.strip().lower(), symbol.strip().upper(), exchange.strip().upper())
+    return BROKER_ALIASES.get(key)
 
 
 def ensure_instrument(conn: sqlite3.Connection, isin: str, name: str) -> None:

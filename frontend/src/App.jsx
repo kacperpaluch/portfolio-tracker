@@ -215,7 +215,10 @@ export default function App() {
     if (!file) return;
     run(
       () => api.importCsv(file),
-      (r) => `Zaimportowano ${r.imported} transakcji. Pominięte duplikaty: ${r.skipped_duplicates}.`,
+      (r) => {
+        const format = r.format === "emakler_current" ? "eMAKLER" : "historia PW";
+        return `Format: ${format}. Zaimportowano ${r.imported} transakcji. Pominięte duplikaty: ${r.skipped_duplicates}.`;
+      },
     ).catch(() => {});
     event.target.value = "";
   };
@@ -538,7 +541,7 @@ export default function App() {
 
       <section className="surface settings-split">
         <div>
-          <SectionHeader eyebrow="Import" title="Import transakcji" description="Dotychczasowy format CSV pozostaje dostępny do czasu wdrożenia nowego brokera." />
+          <SectionHeader eyebrow="Import" title="Import transakcji" description="Obsługuje CSV „historia PW” oraz eMAKLER „Transakcje bieżące”. Format jest rozpoznawany automatycznie." />
           <input ref={fileRef} type="file" accept=".csv" className="hidden-file" onChange={onImport} />
           <button className="secondary" onClick={() => fileRef.current?.click()} disabled={busy}>Wybierz plik CSV</button>
         </div>
