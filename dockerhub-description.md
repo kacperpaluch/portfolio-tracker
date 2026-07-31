@@ -23,11 +23,18 @@ wyceny i pokazuje wartość, zysk/stratę oraz stopy zwrotu — **wszystko w PLN
 - **Wykres wartości w czasie** + **dwa benchmarki** (przełączane): konfigurowalna stała stopa (np. 5%/rok) oraz **inflacja + X%** (realny indeks HICP dla Polski, Eurostat). Przełącznik trybu: wartość konta (PLN) **lub** stopa zwrotu (%) vs benchmarki w %.
 - **XIRR i TWR** — roczny zwrot money-weighted (z timingiem wpłat) oraz time-weighted (wynik portfela).
 - **Obsunięcie (drawdown)** — wykres „pod wodą" (spadek od szczytu) na indeksie TWR — flow-neutral, więc wpłaty nie maskują spadków; max + bieżące DD z datami.
-- **Alokacja docelowa** — kategorie ETF-ów, wagi modelu (np. 60/40) i porównanie z rebalansem.
+- **Alokacja docelowa** — kategorie ETF-ów, wagi modelu i plan podziału nowej wpłaty
+  pomiędzy niedoważone klasy bez sugerowania sprzedaży.
+- **Kontrola jakości danych** — ostrzeżenia o brakujących lub starych cenach i kursach,
+  konfiguracji instrumentów, alokacji, sprzedaży ponad stan i niespójności gotówki.
+- **Atrybucja wyniku** — zrealizowany i niezrealizowany wynik według ETF-ów i klas aktywów,
+  historia wpłat, prowizje i aktywność inwestycyjna.
 - **Widok waloru** — historia dzień po dniu + atrybucja zysku na instrument vs walutę (kurs PLN).
 - **Zmiany dzienne** — dzienny wynik rynkowy ETF, skorygowany o przepływy handlowe, z eksportem CSV.
-- **Historia transakcji** i ręczne mapowanie ISIN → ticker.
-- **Eksport i backup** — pobranie transakcji (CSV) i całej bazy z UI + nocny backup bazy (cron).
+- **Historia transakcji** — wyszukiwanie, filtry, edycja, notatki i prowizje oraz ręczne
+  mapowanie ISIN → ticker.
+- **Eksport, backup i restore** — nocne kopie, kontrola integralności i SHA-256, ostrzeżenie
+  o wieku kopii, pobieranie backupów oraz bezpieczne odtwarzanie z automatyczną kopią „przed".
 - **Codzienne odświeżanie** cen i kursów (cron ~21:00 Europe/Warsaw) + dociąganie luk w historii po awarii. Odpytuje tylko aktualnie trzymane walory — sprzedany ETF nie zaśmieca bazy.
 
 ## Źródła danych
@@ -54,6 +61,7 @@ Aplikacja: `http://localhost:8000`. Dane SQLite są trzymane poza obrazem, w nam
 | `REFRESH_MINUTE` | `0` | minuta dziennego odświeżania |
 | `BACKUP_HOUR` / `BACKUP_MINUTE` | `3` / `0` | pora nocnego backupu |
 | `BACKUP_KEEP` | `14` | liczba przechowywanych kopii |
+| `BACKUP_STALE_HOURS` | `36` | próg ostrzeżenia o wieku ostatniej poprawnej kopii |
 | `DB_PATH` | `/app/data/portfolio.db` | ścieżka bazy SQLite |
 
 Stack: FastAPI + SQLite + yfinance · frontend React/Recharts · obraz multi-arch (arm64 + amd64).

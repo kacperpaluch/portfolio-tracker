@@ -66,3 +66,64 @@ def test_backup_retention(tmp_path, monkeypatch):
     backup_mod._prune()
     remaining = sorted(p.name for p in (tmp_path / "bk").glob("portfolio-*.db"))
     assert remaining == ["portfolio-2026-06-12.db", "portfolio-2026-06-13.db", "portfolio-2026-06-14.db"]
+
+
+def test_validate_rejects_non_sqlite_file(tmp_path):
+    invalid = tmp_path / "broken.db"
+    invalid.write_text("not a database")
+    result = backup_mod.validate_database(invalid)
+    assert result["valid"] is False
+    assert "SQLite" in result["error"]
+
+
+def test_restore_recovers_snapshot_and_creates_safety_backup(tmp_path, monkeypatch):
+    from app import db
+
+    monkeypatch.setattr(db, "DB_PATH", tmp_path / "current.db")
+    monkeypatch.setattr(backup_mod, "BACKUP_DIR", tmp_path / "backups")
+    monkeypatch.setattr(backup_mod, "BACKUP_KEEP", 10)
+    db.init_db()
+
+    conn = db.get_connection()
+    add_transaction(
+        conn, ts="2026-06-17", isin="A", name="A",
+        tx_type="BUY", quantity=1, price_pln=100,
+    )
+    conn.close()
+    snapshot = tmp_path / "snapshot.db"
+    backup_mod.backup_database(dest=snapshot)
+
+    conn = db.get_connection()
+    add_transaction(
+        conn, ts="2026-06-18", isin="B", name="B",
+        tx_type="BUY", quantity=1, price_pln=200,
+    )
+    conn.close()
+
+    result = backup_mod.restore_database(snapshot)
+    restored = db.get_connection()
+    assert restored.execute("SELECT COUNT(*) FROM transactions").fetchone()[0] == 1
+    restored.close()
+
+    safety = backup_mod.BACKUP_DIR / result["safety_backup"]
+    assert safety.exists()
+    safety_conn = sqlite3.connect(safety)
+    assert safety_conn.execute("SELECT COUNT(*) FROM transactions").fetchone()[0] == 2
+    safety_conn.close()
+    assert result["validation"]["valid"] is True
+
+
+def test_backup_status_reports_latest_valid_copy(tmp_path, monkeypatch):
+    from app import db
+
+    monkeypatch.setattr(db, "DB_PATH", tmp_path / "current.db")
+    monkeypatch.setattr(backup_mod, "BACKUP_DIR", tmp_path / "backups")
+    monkeypatch.setattr(backup_mod, "BACKUP_STALE_HOURS", 36)
+    db.init_db()
+    backup_mod.backup_database()
+
+    status = backup_mod.backup_status()
+    assert status["healthy"] is True
+    assert status["stale"] is False
+    assert status["latest_validation"]["valid"] is True
+    assert len(status["backups"]) == 1

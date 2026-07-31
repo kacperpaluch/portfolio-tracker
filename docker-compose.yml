@@ -14,6 +14,8 @@ services:
       - BACKUP_HOUR=3
       - BACKUP_MINUTE=0
       - BACKUP_KEEP=14
+      # UI ostrzega, jeśli ostatnia poprawna kopia jest starsza niż ten próg:
+      - BACKUP_STALE_HOURS=36
     volumes:
       - portfolio_tracker_data:/app/data
 

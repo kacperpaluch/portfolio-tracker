@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     price_pln      REAL NOT NULL,
     value_pln      REAL NOT NULL,
     commission_pln REAL NOT NULL DEFAULT 0,
+    note           TEXT,
     import_hash    TEXT NOT NULL UNIQUE
 );
 CREATE INDEX IF NOT EXISTS idx_tx_isin ON transactions(isin);
@@ -91,6 +92,9 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE instruments ADD COLUMN category TEXT")
     if "imported_name" not in cols:
         conn.execute("ALTER TABLE instruments ADD COLUMN imported_name TEXT")
+    tx_cols = {r["name"] for r in conn.execute("PRAGMA table_info(transactions)")}
+    if "note" not in tx_cols:
+        conn.execute("ALTER TABLE transactions ADD COLUMN note TEXT")
 
 
 def init_db(conn: sqlite3.Connection | None = None) -> None:

@@ -12,9 +12,11 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from . import allocation as allocation_mod
+from . import analytics as analytics_mod
 from . import backup as backup_mod
 from . import cash as cash_mod
 from . import cpi as cpi_mod
+from . import data_quality as data_quality_mod
 from . import history as history_mod
 from . import instruments as instruments_mod
 from . import portfolio as portfolio_mod
@@ -126,6 +128,20 @@ def get_allocation() -> dict:
         return allocation_mod.compute(conn)
 
 
+class ContributionPlanIn(BaseModel):
+    amount_pln: float
+
+
+@app.post("/api/allocation/plan")
+def post_contribution_plan(payload: ContributionPlanIn) -> dict:
+    """Dzieli nową wpłatę zgodnie z celem, bez sugerowania sprzedaży."""
+    with db_session() as conn:
+        try:
+            return allocation_mod.contribution_plan(conn, payload.amount_pln)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+
 class TargetAllocationIn(BaseModel):
     targets: dict[str, float]
 
@@ -183,6 +199,18 @@ def get_drawdown() -> dict:
         return history_mod.portfolio_drawdown(conn)
 
 
+@app.get("/api/analytics")
+def get_analytics() -> dict:
+    with db_session() as conn:
+        return analytics_mod.build(conn)
+
+
+@app.get("/api/data-quality")
+def get_data_quality() -> dict:
+    with db_session() as conn:
+        return data_quality_mod.inspect(conn)
+
+
 @app.get("/api/export/daily-changes.csv")
 def export_daily_changes_csv() -> Response:
     with db_session() as conn:
@@ -235,12 +263,65 @@ def export_db() -> FileResponse:
 def backup_now() -> dict:
     """Tworzy backup bazy po stronie serwera (do BACKUP_DIR, z retencją)."""
     path = backup_mod.backup_database()
-    return {"file": path.name, "dir": str(path.parent), "backups": backup_mod.list_backups()}
+    return {"file": path.name, **backup_mod.backup_status()}
 
 
 @app.get("/api/backups")
 def get_backups() -> dict:
-    return {"dir": str(backup_mod.BACKUP_DIR), "backups": backup_mod.list_backups()}
+    return backup_mod.backup_status()
+
+
+@app.get("/api/backups/{filename}/download")
+def download_backup(filename: str) -> FileResponse:
+    try:
+        path = backup_mod.resolve_backup(filename)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Backup nie istnieje")
+    return FileResponse(path, media_type="application/octet-stream", filename=path.name)
+
+
+class RestoreBackupIn(BaseModel):
+    confirmation: str
+
+
+@app.post("/api/backups/{filename}/restore")
+def restore_backup(filename: str, payload: RestoreBackupIn) -> dict:
+    if payload.confirmation != "PRZYWRÓĆ":
+        raise HTTPException(status_code=400, detail='Wymagane potwierdzenie „PRZYWRÓĆ"')
+    try:
+        path = backup_mod.resolve_backup(filename)
+        return backup_mod.restore_database(path)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Backup nie istnieje")
+
+
+MAX_RESTORE_BYTES = 250 * 1024 * 1024
+
+
+@app.post("/api/backups/restore-upload")
+async def restore_uploaded_backup(
+    file: UploadFile = File(...),
+    confirmation: str = Form(...),
+) -> dict:
+    if confirmation != "PRZYWRÓĆ":
+        raise HTTPException(status_code=400, detail='Wymagane potwierdzenie „PRZYWRÓĆ"')
+    content = await file.read(MAX_RESTORE_BYTES + 1)
+    if len(content) > MAX_RESTORE_BYTES:
+        raise HTTPException(status_code=413, detail="Plik backupu jest większy niż 250 MB")
+    suffix = Path(file.filename or "backup.db").suffix or ".db"
+    with tempfile.NamedTemporaryFile(prefix="portfolio-restore-", suffix=suffix, delete=False) as handle:
+        handle.write(content)
+        uploaded = Path(handle.name)
+    try:
+        return backup_mod.restore_database(uploaded)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        uploaded.unlink(missing_ok=True)
 
 
 @app.get("/api/transactions")
@@ -250,7 +331,7 @@ def get_transactions() -> list[dict]:
         rows = conn.execute(
             """
             SELECT t.id, t.ts, t.type, t.quantity, t.price_pln, t.value_pln,
-                   t.commission_pln, t.isin, i.name, i.ticker
+                   t.commission_pln, t.note, t.isin, i.name, i.ticker
               FROM transactions t
               LEFT JOIN instruments i ON i.isin = t.isin
              ORDER BY t.ts DESC, t.id DESC
@@ -267,6 +348,7 @@ class TransactionIn(BaseModel):
     quantity: float
     price_pln: float
     commission_pln: float = 0.0
+    note: str | None = None
 
 
 @app.post("/api/transactions")
@@ -283,9 +365,33 @@ def add_transaction(payload: TransactionIn) -> dict:
                 quantity=payload.quantity,
                 price_pln=payload.price_pln,
                 commission_pln=payload.commission_pln,
+                note=payload.note,
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.put("/api/transactions/{tx_id}")
+def update_transaction(tx_id: int, payload: TransactionIn) -> dict:
+    with db_session() as conn:
+        try:
+            updated = importer.update_transaction(
+                conn,
+                tx_id,
+                ts=payload.ts,
+                isin=payload.isin,
+                name=payload.name,
+                tx_type=payload.type,
+                quantity=payload.quantity,
+                price_pln=payload.price_pln,
+                commission_pln=payload.commission_pln,
+                note=payload.note,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Transakcja nie znaleziona")
+    return updated
 
 
 @app.delete("/api/transactions/{tx_id}")

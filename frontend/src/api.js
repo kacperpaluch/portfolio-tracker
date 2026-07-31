@@ -47,6 +47,12 @@ export const api = {
       body: JSON.stringify(body),
     }).then(json),
   deleteTransaction: (id) => fetch(`/api/transactions/${id}`, { method: "DELETE" }).then(json),
+  updateTransaction: (id, body) =>
+    fetch(`/api/transactions/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then(json),
   instrumentHistory: (isin) => fetch(`/api/instruments/${isin}/history`).then(json),
   dailyChanges: () => fetch("/api/daily-changes").then(json),
   drawdown: () => fetch("/api/drawdown").then(json),
@@ -60,6 +66,18 @@ export const api = {
   deleteCash: (id) => fetch(`/api/cash/${id}`, { method: "DELETE" }).then(json),
   backupNow: () => fetch("/api/backup-now", { method: "POST" }).then(json),
   backups: () => fetch("/api/backups").then(json),
+  restoreBackup: (filename) =>
+    fetch(`/api/backups/${encodeURIComponent(filename)}/restore`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmation: "PRZYWRÓĆ" }),
+    }).then(json),
+  restoreUploadedBackup: (file) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("confirmation", "PRZYWRÓĆ");
+    return fetch("/api/backups/restore-upload", { method: "POST", body: fd }).then(json);
+  },
   allocation: () => fetch("/api/allocation").then(json),
   setAllocation: (targets) =>
     fetch("/api/allocation", {
@@ -67,4 +85,12 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ targets }),
     }).then(json),
+  contributionPlan: (amountPln) =>
+    fetch("/api/allocation/plan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount_pln: amountPln }),
+    }).then(json),
+  analytics: () => fetch("/api/analytics").then(json),
+  dataQuality: () => fetch("/api/data-quality").then(json),
 };

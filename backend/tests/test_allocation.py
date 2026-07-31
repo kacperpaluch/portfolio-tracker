@@ -88,3 +88,30 @@ def test_unassigned_group():
     by = {g["category"]: g for g in res["groups"]}
     assert "Nieprzypisane" in by
     assert by["Nieprzypisane"]["actual_pln"] == pytest.approx(500.0)
+
+
+def test_contribution_plan_without_selling():
+    conn = _db()
+    _inst(conn, "AKC", "Akcje")
+    _inst(conn, "OBL", "Obligacje")
+    _tx(conn, "AKC", 10, 600, "h1")
+    _tx(conn, "OBL", 10, 300, "h2")
+    _price(conn, "AKC", 60)
+    _price(conn, "OBL", 30)
+    cash_mod.add_flow(conn, "2026-01-01", "deposit", 1000)
+    alloc.set_targets(conn, {"Akcje": 60, "Obligacje": 30, "Gotówka": 10})
+
+    plan = alloc.contribution_plan(conn, 100)
+    by = {r["category"]: r for r in plan["recommendations"]}
+    assert plan["future_total_pln"] == pytest.approx(1100)
+    assert plan["reserved_cash_pln"] == pytest.approx(10)
+    assert plan["invested_pln"] == pytest.approx(90)
+    assert by["Akcje"]["amount_pln"] == pytest.approx(60)
+    assert by["Obligacje"]["amount_pln"] == pytest.approx(30)
+
+
+def test_contribution_plan_requires_complete_target():
+    conn = _db()
+    alloc.set_targets(conn, {"Akcje": 80})
+    with pytest.raises(ValueError, match="100%"):
+        alloc.contribution_plan(conn, 1000)

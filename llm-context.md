@@ -77,7 +77,9 @@ chunka, dzięki czemu kod własny aplikacji pozostaje mały.
 backend/app/
   main.py        # FastAPI: WSZYSTKIE endpointy, lifespan (start crona), serwowanie frontend/dist
   db.py          # połączenie SQLite, SCHEMA (CREATE IF NOT EXISTS), _migrate(), db_session()
-  importer.py    # parse_csv (CP1250), import_transactions, add_transaction, delete_transaction
+  importer.py    # parse_csv, import/add/update/delete transaction + spójność cash flow
+  analytics.py   # atrybucja wyniku: instrumenty, kategorie, wpłaty i aktywność
+  data_quality.py # diagnostyka cen, FX, konfiguracji, alokacji i księgi gotówki
   instruments.py # ensure_instrument (+ SEED ISIN->ticker), list/update_instrument
   prices.py      # yfinance: fetch_latest/fetch_history, auto-detekcja waluty (GBx->GBP), cache; parse_price_csv/import_prices (import cen z CSV, format stooq)
   fx.py          # NBP: get_rate (lookback), backfill_range, cache w fx_rates
@@ -88,7 +90,7 @@ backend/app/
   returns.py     # czyste funkcje: xirr() (Newton+bisekcja), twr_detail()/twr_index() (łańcuch podokresów, indeks growth-of-1)
   allocation.py  # compute (grupy vs cel + rebalans), get/set_targets
   summary.py     # build() — digest pod powiadomienia (kompozycja portfolio+history+allocation)
-  backup.py      # backup_database (online copy + retencja), transactions_csv, list_backups
+  backup.py      # online backup, retencja, status, integrity/SHA-256, download i bezpieczny restore
   scheduler.py   # start_scheduler() — APScheduler: refresh_job (~21:00, woła history.refresh_latest) + backup_job (~03:00)
 frontend/src/
   App.jsx        # shell, NAV/PAGE_META, ?tab=, stan, loadAll/run, akcje i sześć widoków
@@ -104,18 +106,18 @@ frontend/src/
 ### Architektura interfejsu
 
 `App.jsx` utrzymuje jeden wspólny snapshot danych (`portfolio`, `history`, `instruments`,
-`transactions`, `cash`, `allocation`, `dailyChanges`, `drawdown`, `backups`). `loadAll()`
-pobiera dziewięć endpointów równolegle, a `run()` wykonuje mutację, przeładowuje snapshot
+`transactions`, `cash`, `allocation`, `dailyChanges`, `drawdown`, `backups`, `quality`,
+`analytics`). `loadAll()` pobiera jedenaście endpointów równolegle, a `run()` wykonuje mutację, przeładowuje snapshot
 i publikuje toast. Parametry benchmarków są odświeżane osobno z debounce 350 ms.
 
 | `tab` | Ekran | Główne komponenty / odpowiedzialność |
 |---|---|---|
 | `overview` | Pulpit | hero wartości, TWR/XIRR/gotówka, kompaktowy `HistoryChart`, `AllocationDonut`, największe pozycje |
 | `portfolio` | Portfel | KPI otwartych pozycji, `PositionsTable`, `CashPanel` |
-| `activity` | Aktywność | `TransactionForm`, `TransactionsTable`, `DailyChangesTable` |
-| `allocation` | Alokacja | `AllocationPanel` i pełny donut docelowy/rzeczywisty |
-| `analysis` | Analiza | `ReturnsStrip`, pełny `HistoryChart`, benchmarki i `DrawdownChart` |
-| `settings` | Dane i ustawienia | synchronizacja, `InstrumentsPanel`, import, `DataPanel` |
+| `activity` | Aktywność | `TransactionForm`, filtrowanie/edycja w `TransactionsTable`, `DailyChangesTable` |
+| `allocation` | Alokacja | `AllocationPanel`, donut oraz `RebalancePlanner` dla nowej wpłaty bez sprzedaży |
+| `analysis` | Analiza | `AnalyticsBreakdown`, `ReturnsStrip`, pełny `HistoryChart`, benchmarki i `DrawdownChart` |
+| `settings` | Dane i ustawienia | `DataQualityPanel`, synchronizacja, `InstrumentsPanel`, import, `DataPanel` |
 
 Wspólne elementy wizualne (`SectionHeader`, `Metric`, `StatusDot`) są lokalnymi komponentami
 `App.jsx`. Desktop używa stałego sidebara; poniżej 820 px sidebar zastępuje dolna nawigacja.
@@ -128,11 +130,13 @@ udostępniania. Inicjały w nagłówku prowadzą wyłącznie do lokalnych ustawi
 ### Zależności między modułami (kierunek importów)
 
 ```
-main.py → importer, instruments, prices, fx, cpi, cash, portfolio, history, allocation, scheduler
+main.py → importer, instruments, prices, fx, cpi, cash, portfolio, history, allocation, analytics, data_quality, scheduler
 importer.py → cash, instruments
 portfolio.py → cash, fx, prices
 history.py → cpi, fx, prices, returns
 allocation.py → cash, portfolio
+analytics.py → portfolio, history
+data_quality.py → portfolio
 summary.py → portfolio, history, allocation
 backup.py → db
 cash.py, fx.py, cpi.py, prices.py, instruments.py, returns.py, db.py → (liście, bez zależności wewn.)
@@ -146,7 +150,7 @@ scheduler.py → cash, instruments, prices, fx, db, backup
 | Tabela | Klucz | Kolumny | Rola |
 |---|---|---|---|
 | `instruments` | `isin` | name (edytowalna własna nazwa w UI, przetrwa import), imported_name (nazwa z importu, read-only, zapisywana tylko przy tworzeniu), ticker, currency, source, category, active, needs_config | mapowanie waloru |
-| `transactions` | `id` | ts, isin→, type(BUY/SELL), quantity, price_pln, value_pln, commission_pln, **import_hash UNIQUE** | handel |
+| `transactions` | `id` | ts, isin→, type(BUY/SELL), quantity, price_pln, value_pln, commission_pln, note, **import_hash UNIQUE** | handel |
 | `prices` | (isin,date) | price (waluta natywna), source | cache wycen |
 | `fx_rates` | (date,currency) | rate_to_pln | cache kursów NBP |
 | `cpi_index` | `month` | idx (HICP, baza 2015=100) | cache inflacji (miesięczny, `month`='YYYY-MM-01') |
@@ -169,7 +173,9 @@ odczyt
    → portfolio.value_positions  → pozycje, P/L, gotówka, wartość konta
    → history.portfolio_history  → seria wartości + benchmark + stopy zwrotu %
    → history.portfolio_xirr/twr → stopy zwrotu
-   → allocation.compute         → grupy vs cel
+   → allocation.compute/contribution_plan → grupy vs cel + plan nowej wpłaty bez sprzedaży
+   → analytics.build            → atrybucja instrumentów/kategorii, wpłaty i aktywność
+   → data_quality.inspect       → błędy i ostrzeżenia o kompletności/spójności
    → history.instrument_history → widok waloru + atrybucja FX
 ```
 
@@ -180,7 +186,11 @@ odczyt
 | POST | `/api/import` | import CSV transakcji (multipart `file`) |
 | POST | `/api/prices/import` | import dziennych cen waloru z CSV (multipart `isin`+`file`+opcjonalnie `currency`, format stooq) → cache `prices` (`prices.import_prices`); waluta wymagana do wyceny |
 | GET/POST | `/api/transactions` | lista / ręczne dodanie transakcji |
+| PUT | `/api/transactions/{id}` | edycja transakcji + atomowe odtworzenie cash flow |
 | DELETE | `/api/transactions/{id}` | usunięcie transakcji (+ przepływ gotówki) |
+| GET | `/api/data-quality` | kontrola cen, FX, konfiguracji, kategorii, alokacji, oversell i cash reconciliation |
+| GET | `/api/analytics` | atrybucja wyniku, klasy, instrumenty, wpłaty, prowizje i aktywność |
+| POST | `/api/allocation/plan` | plan podziału nowej wpłaty bez sprzedaży (`amount_pln`) |
 | GET | `/api/portfolio?refresh=` | pozycje + sumy (P/L, cash, XIRR, TWR, `returns` 1M/3M/YTD/1R/all) |
 | GET | `/api/summary` | digest pod powiadomienia/n8n: konto, P/L, zmiana D/D, zwroty, alokacja vs cel (`summary.build`) |
 | GET | `/api/history?benchmark_rate=&cpi_spread=` | seria `value_pln` + 2 benchmarki: `benchmark_pln` (stała stopa) i `benchmark_cpi_pln` (inflacja HICP + `cpi_spread`) + warianty `_pct` + `portfolio_pct` (przełącznik trybu PLN/% i widoczności benchmarków w `HistoryChart`) |
@@ -196,7 +206,10 @@ odczyt
 | GET | `/api/export/transactions.csv` | eksport transakcji (CSV) |
 | GET | `/api/export/daily-changes.csv` | eksport dziennych zmian wartości (CSV) — `backup.daily_changes_csv` |
 | GET | `/api/export/db` | pobranie spójnej kopii bazy SQLite |
-| GET/POST | `/api/backups` / `/api/backup-now` | lista kopii / backup na żądanie |
+| GET/POST | `/api/backups` / `/api/backup-now` | status/lista kopii / zweryfikowany backup na żądanie |
+| GET | `/api/backups/{file}/download` | pobranie wybranej kopii |
+| POST | `/api/backups/{file}/restore` | restore kopii serwerowej; wymaga tekstu `PRZYWRÓĆ` |
+| POST | `/api/backups/restore-upload` | restore przesłanej bazy; limit 250 MB i walidacja przed zapisem |
 | GET | `/api/health` | health check |
 
 Dokumentacja generowana z kodu (zawsze zgodna, bez ręcznej aktualizacji):
@@ -276,7 +289,12 @@ aktywny tylko gdy katalog istnieje). Dockerfile robi to w etapie multi-stage.
   screenshotów uruchom osobną bazę demonstracyjną albo mock API.
 - **Cron tylko w produkcji** — scheduler startuje w `lifespan`; pod `TestClient` bez bloku `with` się nie uruchamia. `init_db()` wołane przy imporcie modułu (niezależnie od lifespan).
 - **Atrybucja/positions czytają z cache** — bez `backfill`/`refresh` historia i wykresy będą puste.
-- **Backupy są w named volume** (`data/backup/` obok bazy) — czyli wewnątrz wolumenu Dockera. Nocny backup (~03:00, `BACKUP_HOUR`) + retencja (`BACKUP_KEEP`, domyślnie 14). Do trzymania kopii poza wolumenem użyj `/api/export/db` albo zbinduj `data/` na host.
+- **Backupy są w named volume** (`data/backup/` obok bazy) — czyli wewnątrz wolumenu Dockera.
+  Nocny backup (~03:00, `BACKUP_HOUR`) + retencja (`BACKUP_KEEP`, domyślnie 14) i próg
+  ostrzeżenia `BACKUP_STALE_HOURS` (36 h). Każda kopia przechodzi nagłówek SQLite,
+  `integrity_check`, kontrolę tabel i SHA-256. Restore zawsze tworzy
+  `portfolio-pre-restore-<timestamp>.db`, zanim dotknie aktywnej bazy. Do trzymania kopii poza
+  wolumenem użyj downloadu konkretnej kopii albo `/api/export/db`.
 
 ## 12. Jak rozbudować — gdzie co dopisać
 

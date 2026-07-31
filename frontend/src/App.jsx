@@ -14,6 +14,9 @@ import AllocationDonut from "./components/AllocationDonut.jsx";
 import DailyChangesTable from "./components/DailyChangesTable.jsx";
 import ReturnsStrip from "./components/ReturnsStrip.jsx";
 import DataPanel from "./components/DataPanel.jsx";
+import DataQualityPanel from "./components/DataQualityPanel.jsx";
+import RebalancePlanner from "./components/RebalancePlanner.jsx";
+import AnalyticsBreakdown from "./components/AnalyticsBreakdown.jsx";
 
 const NAV = [
   ["overview", "Pulpit", "01"],
@@ -38,7 +41,7 @@ const PAGE_META = {
   activity: ["Aktywność", "Transakcje i dzienne zmiany wartości"],
   allocation: ["Alokacja", "Kontroluj zgodność portfela z założonym planem"],
   analysis: ["Analiza", "Zwroty, benchmarki i ryzyko portfela"],
-  settings: ["Dane i ustawienia", "Instrumenty, synchronizacja i kopie zapasowe"],
+  settings: ["Dane i ustawienia", "Jakość danych, instrumenty, synchronizacja i kopie zapasowe"],
 };
 
 function initialPage() {
@@ -100,6 +103,8 @@ export default function App() {
   const [dailyChanges, setDailyChanges] = useState([]);
   const [drawdown, setDrawdown] = useState(null);
   const [backups, setBackups] = useState(null);
+  const [quality, setQuality] = useState(null);
+  const [analytics, setAnalytics] = useState(null);
   const [detail, setDetail] = useState(null);
   const [page, setPage] = useState(initialPage);
   const [benchmarkRate, setBenchmarkRate] = useState(5);
@@ -117,7 +122,7 @@ export default function App() {
   };
 
   const loadAll = async () => {
-    const [pf, hist, insts, txs, cs, alloc, daily, dd, bk] = await Promise.all([
+    const [pf, hist, insts, txs, cs, alloc, daily, dd, bk, dq, analysis] = await Promise.all([
       api.portfolio(),
       api.history(benchmarkRate / 100, cpiSpread / 100),
       api.instruments(),
@@ -127,6 +132,8 @@ export default function App() {
       api.dailyChanges(),
       api.drawdown(),
       api.backups(),
+      api.dataQuality(),
+      api.analytics(),
     ]);
     setPortfolio(pf);
     setHistory(hist);
@@ -137,6 +144,8 @@ export default function App() {
     setDailyChanges(daily);
     setDrawdown(dd);
     setBackups(bk);
+    setQuality(dq);
+    setAnalytics(analysis);
   };
 
   useEffect(() => {
@@ -386,7 +395,12 @@ export default function App() {
         />
         <TransactionsTable
           transactions={transactions}
+          instruments={instruments}
           onOpen={openDetail}
+          onUpdate={(id, body) => run(
+            () => api.updateTransaction(id, body),
+            "Transakcja została zaktualizowana.",
+          )}
           onDelete={(id) => {
             if (window.confirm("Usunąć tę transakcję? Wpłynie to na wycenę i historię portfela.")) {
               run(() => api.deleteTransaction(id), "Transakcja została usunięta.").catch(() => {});
@@ -407,22 +421,40 @@ export default function App() {
   );
 
   const Allocation = (
-    <section className="surface">
-      <SectionHeader
-        eyebrow="Plan inwestycyjny"
-        title="Alokacja docelowa i rzeczywista"
-        description="Zobacz, gdzie portfel odchyla się od Twoich założeń i jaka kwota przywróci równowagę."
-      />
-      <AllocationPanel
-        allocation={allocation}
-        onSave={(targets) => run(() => api.setAllocation(targets), "Model docelowy został zapisany.").catch(() => {})}
-      />
-    </section>
+    <>
+      <section className="surface">
+        <SectionHeader
+          eyebrow="Plan inwestycyjny"
+          title="Alokacja docelowa i rzeczywista"
+          description="Zobacz, gdzie portfel odchyla się od Twoich założeń i jaka kwota przywróci równowagę."
+        />
+        <AllocationPanel
+          allocation={allocation}
+          onSave={(targets) => run(() => api.setAllocation(targets), "Model docelowy został zapisany.").catch(() => {})}
+        />
+      </section>
+      <section className="surface">
+        <SectionHeader
+          eyebrow="Nowa wpłata"
+          title="Rebalancing bez sprzedawania"
+          description="Podaj kwotę, a aplikacja podzieli ją między niedoważone klasy aktywów i zachowa docelową gotówkę."
+        />
+        <RebalancePlanner allocation={allocation} onPlan={(amount) => api.contributionPlan(amount)} />
+      </section>
+    </>
   );
 
   const Analysis = (
     <>
       <ReturnsStrip returns={totals.returns} />
+      <section className="surface">
+        <SectionHeader
+          eyebrow="Atrybucja"
+          title="Co buduje Twój wynik"
+          description="Wynik otwartych i zamkniętych pozycji, klasy aktywów, wpłaty oraz zgodność z planem."
+        />
+        <AnalyticsBreakdown analytics={analytics} allocation={allocation} onOpen={openDetail} />
+      </section>
       <section className="surface">
         <SectionHeader
           eyebrow="Porównanie"
@@ -450,6 +482,18 @@ export default function App() {
 
   const Settings = (
     <>
+      <section className="surface">
+        <SectionHeader
+          eyebrow="Kontrola"
+          title="Kondycja danych"
+          description="Automatyczna kontrola cen, kursów walut, konfiguracji, alokacji, transakcji i księgi gotówki."
+        />
+        <DataQualityPanel
+          quality={quality}
+          busy={busy}
+          onRefresh={() => run(() => api.dataQuality(), "Kontrola jakości została odświeżona.").catch(() => {})}
+        />
+      </section>
       <section className="surface">
         <SectionHeader eyebrow="Synchronizacja" title="Źródła danych" description="Zarządzaj wycenami i danymi potrzebnymi do obliczeń." />
         <div className="sync-grid">
@@ -505,6 +549,14 @@ export default function App() {
             backups={backups}
             busy={busy}
             onBackup={() => run(() => api.backupNow(), "Kopia zapasowa została utworzona.").catch(() => {})}
+            onRestore={(filename) => run(
+              () => api.restoreBackup(filename),
+              (result) => `Baza została przywrócona. Kopia bezpieczeństwa: ${result.safety_backup}.`,
+            ).catch(() => {})}
+            onRestoreUpload={(file) => run(
+              () => api.restoreUploadedBackup(file),
+              (result) => `Baza została przywrócona z pliku. Kopia bezpieczeństwa: ${result.safety_backup}.`,
+            ).catch(() => {})}
           />
         </div>
       </section>
@@ -529,7 +581,9 @@ export default function App() {
           ))}
         </nav>
         <div className="sidebar-foot">
-          <StatusDot tone={staleCount ? "warn" : "good"}>{staleCount ? "Sprawdź wyceny" : "Dane aktualne"}</StatusDot>
+          <StatusDot tone={quality?.status === "good" ? "good" : "warn"}>
+            {quality?.status === "error" ? "Błędy danych" : quality?.status === "warning" ? "Sprawdź dane" : "Dane aktualne"}
+          </StatusDot>
           <small>Wszystkie wartości w PLN</small>
         </div>
       </aside>

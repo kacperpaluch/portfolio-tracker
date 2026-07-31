@@ -8,7 +8,7 @@ import pytest
 from app import cash as cash_mod
 from app import history as history_mod
 from app.db import SCHEMA
-from app.importer import add_transaction, delete_transaction, import_transactions
+from app.importer import add_transaction, delete_transaction, import_transactions, update_transaction
 
 
 def _db() -> sqlite3.Connection:
@@ -50,6 +50,26 @@ def test_delete_removes_tx_and_cashflow():
     assert _count(conn, "cash_flows") == 0
     # Usunięcie nieistniejącej -> False.
     assert delete_transaction(conn, 999) is False
+
+
+def test_update_rebuilds_transaction_and_cashflow():
+    conn = _db()
+    created = add_transaction(
+        conn, ts="2026-06-17", isin="X", name="X", tx_type="BUY",
+        quantity=10, price_pln=30.0,
+    )
+    updated = update_transaction(
+        conn, created["id"], ts="2026-06-18", isin="X", name="X",
+        tx_type="SELL", quantity=2, price_pln=40.0, commission_pln=1.5,
+        note="Częściowa realizacja",
+    )
+    assert updated["type"] == "SELL"
+    assert updated["value_pln"] == pytest.approx(80)
+    assert updated["note"] == "Częściowa realizacja"
+    flows = conn.execute("SELECT kind, amount_pln FROM cash_flows").fetchall()
+    assert len(flows) == 1
+    assert flows[0]["kind"] == "sell"
+    assert flows[0]["amount_pln"] == pytest.approx(80)
 
 
 def test_import_only_new_when_mixed_old_and_new():

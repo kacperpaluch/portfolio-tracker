@@ -128,6 +128,7 @@ def add_transaction(
     quantity: float,
     price_pln: float,
     commission_pln: float = 0.0,
+    note: str | None = None,
 ) -> dict:
     """Dodaje pojedynczą transakcję ręcznie. Idempotentne (ten sam hash co import)."""
     ts = cash_mod.normalize_ts(ts)
@@ -135,6 +136,10 @@ def add_transaction(
     tx_type = tx_type.upper()
     if tx_type not in ("BUY", "SELL"):
         raise ValueError("type musi być 'BUY' lub 'SELL'")
+    if quantity <= 0:
+        raise ValueError("quantity musi być większe od zera")
+    if price_pln < 0:
+        raise ValueError("price_pln nie może być ujemne")
     value_pln = round(quantity * price_pln, 2)
     import_hash = hashlib.sha1(
         f"{ts}|{isin}|{tx_type}|{quantity}|{price_pln}".encode()
@@ -144,10 +149,13 @@ def add_transaction(
     cur = conn.execute(
         """
         INSERT OR IGNORE INTO transactions
-            (ts, isin, type, quantity, price_pln, value_pln, commission_pln, import_hash)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (ts, isin, type, quantity, price_pln, value_pln, commission_pln, note, import_hash)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (ts, isin, tx_type, quantity, price_pln, value_pln, commission_pln, import_hash),
+        (
+            ts, isin, tx_type, quantity, price_pln, value_pln, commission_pln,
+            (note or "").strip() or None, import_hash,
+        ),
     )
     if cur.rowcount == 1:
         cash_mod.record_trade_cash(conn, ts, tx_type, value_pln, import_hash)
@@ -155,6 +163,65 @@ def add_transaction(
         return {"created": True, "id": cur.lastrowid}
     conn.commit()
     return {"created": False, "reason": "duplicate"}
+
+
+def update_transaction(
+    conn: sqlite3.Connection,
+    tx_id: int,
+    *,
+    ts: str,
+    isin: str,
+    name: str | None,
+    tx_type: str,
+    quantity: float,
+    price_pln: float,
+    commission_pln: float = 0.0,
+    note: str | None = None,
+) -> dict | None:
+    """Edytuje transakcję i atomowo odtwarza powiązany ruch gotówkowy."""
+    existing = conn.execute(
+        "SELECT import_hash FROM transactions WHERE id = ?", (tx_id,)
+    ).fetchone()
+    if existing is None:
+        return None
+
+    ts = cash_mod.normalize_ts(ts)
+    isin = isin.strip()
+    tx_type = tx_type.upper()
+    if tx_type not in ("BUY", "SELL"):
+        raise ValueError("type musi być 'BUY' lub 'SELL'")
+    if quantity <= 0:
+        raise ValueError("quantity musi być większe od zera")
+    if price_pln < 0:
+        raise ValueError("price_pln nie może być ujemne")
+    value_pln = round(quantity * price_pln, 2)
+    import_hash = hashlib.sha1(
+        f"{ts}|{isin}|{tx_type}|{quantity}|{price_pln}".encode()
+    ).hexdigest()
+    duplicate = conn.execute(
+        "SELECT 1 FROM transactions WHERE import_hash = ? AND id != ?",
+        (import_hash, tx_id),
+    ).fetchone()
+    if duplicate:
+        raise ValueError("Taka transakcja już istnieje")
+
+    ensure_instrument(conn, isin, (name or isin).strip())
+    cash_mod.remove_trade_cash(conn, existing["import_hash"])
+    conn.execute(
+        """
+        UPDATE transactions
+           SET ts = ?, isin = ?, type = ?, quantity = ?, price_pln = ?,
+               value_pln = ?, commission_pln = ?, note = ?, import_hash = ?
+         WHERE id = ?
+        """,
+        (
+            ts, isin, tx_type, quantity, price_pln, value_pln, commission_pln,
+            (note or "").strip() or None, import_hash, tx_id,
+        ),
+    )
+    cash_mod.record_trade_cash(conn, ts, tx_type, value_pln, import_hash)
+    conn.commit()
+    return dict(conn.execute("SELECT * FROM transactions WHERE id = ?", (tx_id,)).fetchone())
 
 
 def delete_transaction(conn: sqlite3.Connection, tx_id: int) -> bool:

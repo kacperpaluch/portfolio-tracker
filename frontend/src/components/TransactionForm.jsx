@@ -2,7 +2,10 @@ import { useState } from "react";
 
 export default function TransactionForm({ instruments, onAdd }) {
   const today = new Date().toISOString().slice(0, 10);
-  const empty = { ts: today, isin: "", type: "BUY", quantity: "", price_pln: "", newIsin: "", newName: "" };
+  const empty = {
+    ts: today, isin: "", type: "BUY", quantity: "", price_pln: "",
+    commission_pln: "", note: "", newIsin: "", newName: "",
+  };
   const [f, setF] = useState(empty);
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
   const adding = f.isin === "__new__";
@@ -15,6 +18,8 @@ export default function TransactionForm({ instruments, onAdd }) {
     onAdd({
       ts: f.ts, isin, name: adding ? f.newName.trim() : undefined,
       type: f.type, quantity: qty, price_pln: price,
+      commission_pln: parseFloat(f.commission_pln) || 0,
+      note: f.note.trim() || undefined,
     });
     setF({ ...empty, ts: f.ts });
   };
@@ -39,6 +44,8 @@ export default function TransactionForm({ instruments, onAdd }) {
       </select>
       <input className="cell narrow" type="number" step="any" placeholder="szt." value={f.quantity} onChange={(e) => set("quantity", e.target.value)} />
       <input className="cell narrow" type="number" step="any" placeholder="cena PLN" value={f.price_pln} onChange={(e) => set("price_pln", e.target.value)} />
+      <input className="cell narrow" type="number" step="0.01" min="0" placeholder="prowizja" value={f.commission_pln} onChange={(e) => set("commission_pln", e.target.value)} />
+      <input className="cell tx-note" placeholder="notatka (opcjonalnie)" value={f.note} onChange={(e) => set("note", e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
       <button className="primary" onClick={submit}>Dodaj</button>
     </div>
   );
