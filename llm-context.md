@@ -112,7 +112,7 @@ i publikuje toast. Parametry benchmarków są odświeżane osobno z debounce 350
 
 | `tab` | Ekran | Główne komponenty / odpowiedzialność |
 |---|---|---|
-| `overview` | Pulpit | hero wartości, TWR/XIRR/gotówka, kompaktowy `HistoryChart`, `AllocationDonut`, największe pozycje |
+| `overview` | Pulpit | hero wartości, TWR/XIRR/gotówka, kompaktowy `HistoryChart`, przełącznik `AllocationDonut` / `HoldingsStructureChart`, największe pozycje z udziałem w portfelu |
 | `portfolio` | Portfel | KPI otwartych pozycji, `PositionsTable`, `CashPanel` |
 | `activity` | Aktywność | `TransactionForm`, filtrowanie/edycja w `TransactionsTable`, `DailyChangesTable` |
 | `allocation` | Alokacja | `AllocationPanel`, donut oraz `RebalancePlanner` dla nowej wpłaty bez sprzedaży |
@@ -123,6 +123,8 @@ Wspólne elementy wizualne (`SectionHeader`, `Metric`, `StatusDot`) są lokalnym
 `App.jsx`. Desktop używa stałego sidebara; poniżej 820 px sidebar zastępuje dolna nawigacja.
 Tabele pozostają poziomo przewijalne na małych ekranach. Kolory i typografia są definiowane
 tokenami CSS w `:root`; wykresy mają odpowiadające im jawne kolory Recharts.
+`portfolioStructure.js` współdzieli regułę wartości struktury między wykresem walorów i tabelą:
+bieżąca wycena, a przy jej braku koszt; mianownik obejmuje wszystkie pozycje oraz dodatnią gotówkę.
 
 Interfejs jest celowo jednoosobowy: brak onboardingu, zespołów, profili i publicznego
 udostępniania. Inicjały w nagłówku prowadzą wyłącznie do lokalnych ustawień.

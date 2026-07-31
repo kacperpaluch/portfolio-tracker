@@ -11,6 +11,8 @@ wyceny i pokazuje wartość, zysk/stratę oraz stopy zwrotu — **wszystko w PLN
 
 - **Czytelny wealth cockpit** — jasna przestrzeń robocza z ciemnym sidebarem; osobne
   sekcje Pulpit, Portfel, Aktywność, Alokacja, Analiza oraz Dane i ustawienia.
+- **Struktura portfela na Pulpicie** — przełączany widok kategorii i walorów, procentowe
+  udziały pozycji oraz wskaźnik koncentracji w trzech największych inwestycjach.
 - **Responsywny interfejs** — desktopowy sidebar i dolna nawigacja na telefonie.
 - **Import CSV** z biura maklerskiego (GPW „historia PW” oraz eMAKLER
   „Transakcje bieżące”, CP1250) — format rozpoznawany automatycznie, import idempotentny

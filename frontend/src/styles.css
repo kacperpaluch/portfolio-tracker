@@ -306,6 +306,19 @@ a { color: inherit; }
 
 .chart-surface, .allocation-snapshot { min-height: 390px; margin-bottom: 0; }
 .allocation-snapshot { display: flex; flex-direction: column; }
+.structure-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-self: center;
+  width: min(220px, 100%);
+  margin: -9px auto 13px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-raised);
+}
+.structure-toggle button { min-height: 30px; border-radius: 7px; background: transparent; color: var(--muted); font-size: 11px; font-weight: 750; }
+.structure-toggle button.active { background: var(--surface); box-shadow: 0 1px 4px rgba(29,48,36,.1); color: var(--accent); }
 
 .section-head {
   display: flex;
@@ -494,6 +507,31 @@ select.cell { width: 160px; }
 
 .alloc-donut { width: 100%; max-width: 480px; margin: -14px auto 10px; }
 .allocation-snapshot .alloc-donut { margin-top: -24px; }
+.holdings-structure { display: flex; min-height: 275px; flex: 1; flex-direction: column; }
+.holding-bars { display: flex; flex: 1; flex-direction: column; justify-content: center; gap: 9px; }
+.holding-bar-row {
+  display: grid;
+  grid-template-columns: minmax(78px, .9fr) minmax(70px, 1.2fr) 42px;
+  align-items: center;
+  width: 100%;
+  min-height: 31px;
+  gap: 8px;
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+button.holding-bar-row:hover .holding-bar-label strong { color: var(--accent); }
+.holding-bar-label { min-width: 0; overflow: hidden; }
+.holding-bar-label strong, .holding-bar-label small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.holding-bar-label strong { font-size: 11px; }
+.holding-bar-label small { margin-top: 2px; color: var(--muted); font-size: 9px; }
+.holding-bar-track { height: 8px; overflow: hidden; border-radius: 99px; background: var(--accent-soft); }
+.holding-bar-track i { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.holding-bar-row.other .holding-bar-track i { background: #7b8580; }
+.holding-bar-row.cash .holding-bar-track i { background: #b27a1c; }
+.holding-bar-value { color: var(--text-soft); font-size: 11px; font-weight: 750; text-align: right; font-variant-numeric: tabular-nums; }
+.holdings-concentration { margin-top: 14px; }
 .alloc-actions { display: flex; align-items: center; gap: 14px; margin-top: 18px; }
 
 .sync-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }

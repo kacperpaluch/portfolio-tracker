@@ -11,6 +11,7 @@ import CashPanel from "./components/CashPanel.jsx";
 import InstrumentsPanel from "./components/InstrumentsPanel.jsx";
 import AllocationPanel from "./components/AllocationPanel.jsx";
 import AllocationDonut from "./components/AllocationDonut.jsx";
+import HoldingsStructureChart from "./components/HoldingsStructureChart.jsx";
 import DailyChangesTable from "./components/DailyChangesTable.jsx";
 import ReturnsStrip from "./components/ReturnsStrip.jsx";
 import DataPanel from "./components/DataPanel.jsx";
@@ -107,6 +108,7 @@ export default function App() {
   const [analytics, setAnalytics] = useState(null);
   const [detail, setDetail] = useState(null);
   const [page, setPage] = useState(initialPage);
+  const [structureView, setStructureView] = useState("categories");
   const [benchmarkRate, setBenchmarkRate] = useState(5);
   const [cpiSpread, setCpiSpread] = useState(2);
   const [busy, setBusy] = useState(false);
@@ -316,20 +318,30 @@ export default function App() {
         <aside className="surface allocation-snapshot">
           <SectionHeader
             eyebrow="Struktura"
-            title="Alokacja"
-            action={<button className="text-button" onClick={() => navigate("allocation")}>Szczegóły</button>}
+            title="Portfel"
+            action={structureView === "categories"
+              ? <button className="text-button" onClick={() => navigate("allocation")}>Szczegóły alokacji</button>
+              : <button className="text-button" onClick={() => navigate("portfolio")}>Pełny portfel</button>}
           />
-          {allocationGroups.length ? (
-            <>
-              <AllocationDonut groups={allocationGroups} total={allocation?.total_pln} compact />
-              {largestDrift && (
-                <div className="insight-line">
-                  <span>Największe odchylenie</span>
-                  <strong>{largestDrift.category} · {largestDrift.drift_pp > 0 ? "+" : ""}{largestDrift.drift_pp.toFixed(1)} pp</strong>
-                </div>
-              )}
-            </>
-          ) : <EmptyAllocation onOpen={() => navigate("allocation")} />}
+          <div className="structure-toggle" role="group" aria-label="Sposób prezentacji struktury portfela">
+            <button className={structureView === "categories" ? "active" : ""} aria-pressed={structureView === "categories"} onClick={() => setStructureView("categories")}>Kategorie</button>
+            <button className={structureView === "holdings" ? "active" : ""} aria-pressed={structureView === "holdings"} onClick={() => setStructureView("holdings")}>Walory</button>
+          </div>
+          {structureView === "categories" ? (
+            allocationGroups.length ? (
+              <>
+                <AllocationDonut groups={allocationGroups} total={allocation?.total_pln} compact />
+                {largestDrift && (
+                  <div className="insight-line">
+                    <span>Największe odchylenie</span>
+                    <strong>{largestDrift.category} · {largestDrift.drift_pp > 0 ? "+" : ""}{largestDrift.drift_pp.toFixed(1)} pp</strong>
+                  </div>
+                )}
+              </>
+            ) : <EmptyAllocation onOpen={() => navigate("allocation")} />
+          ) : (
+            <HoldingsStructureChart positions={positions} cashPln={totals.cash_pln} onOpen={openDetail} />
+          )}
         </aside>
       </section>
 
@@ -342,6 +354,7 @@ export default function App() {
         />
         <PositionsTable
           positions={[...positions].sort((a, b) => (b.value_pln || 0) - (a.value_pln || 0)).slice(0, 5)}
+          allPositions={positions}
           totals={totals}
           onOpen={openDetail}
           compact

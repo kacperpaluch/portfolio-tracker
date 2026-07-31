@@ -91,6 +91,9 @@ Internetu bez dodatkowej warstwy dostępu (np. VPN, Tailscale lub reverse proxy 
 - **Alokacja docelowa** — przypisz ETF-om kategorie (akcje/obligacje/…), ustaw wagi modelu
   (np. 60/40) i porównaj docelowy vs rzeczywisty udział grup z kwotą do rebalansu (gotówka
   liczona jako osobna grupa); wykres **donut** obok tabeli pokazuje rzeczywisty rozkład grup.
+- **Struktura według walorów** — na Pulpicie przełączaj między kategoriami a poziomym
+  wykresem największych pozycji, pozostałych aktywów i gotówki. Widok pokazuje udział
+  procentowy oraz koncentrację w trzech największych walorach; kliknięcie otwiera szczegóły.
 - **Planowanie nowej wpłaty** — symulator dzieli wskazaną kwotę pomiędzy niedoważone klasy,
   zachowuje docelową gotówkę i nie sugeruje sprzedaży istniejących pozycji.
 - **Kontrola jakości danych** — automatycznie wykrywa brakujące i stare ceny, kursy FX,
@@ -122,7 +125,7 @@ Interfejs celowo rozdziela codzienne sprawdzanie portfela od operacji administra
 
 | Sekcja | Zawartość |
 |---|---|
-| **Pulpit** | łączna wartość konta, wynik całkowity, ostatnia zmiana, TWR, XIRR, gotówka, główny wykres, skrót alokacji i największe pozycje |
+| **Pulpit** | łączna wartość konta, wynik całkowity, ostatnia zmiana, TWR, XIRR, gotówka, główny wykres, przełączana struktura kategorii/walorów i największe pozycje z udziałami |
 | **Portfel** | pełna tabela otwartych pozycji, koszt, wartość, zysk niezrealizowany i zrealizowany oraz konto gotówkowe |
 | **Aktywność** | ręczne dodawanie i edycja transakcji, notatki, filtry, historia kupna/sprzedaży i dzienne zmiany wartości |
 | **Alokacja** | rzeczywisty i docelowy udział kategorii, odchylenie, kwota rebalansu oraz plan podziału nowej wpłaty bez sprzedaży |

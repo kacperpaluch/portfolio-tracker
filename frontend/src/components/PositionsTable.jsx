@@ -1,4 +1,5 @@
 import { fmtPln, fmtPct, cls, daysSince } from "../format.js";
+import { portfolioStructureTotal, positionStructureValue } from "../portfolioStructure.js";
 
 // Znacznik świeżości ceny. Pokazuje „kiedy ostatnia cena"; gdy nieświeża (> weekend +
 // ewentualne święto) — ostrzeżenie, że czas ręcznie zaimportować CSV.
@@ -14,9 +15,13 @@ function PriceAge({ date }) {
   );
 }
 
-export default function PositionsTable({ positions, totals, onOpen, compact = false }) {
+export default function PositionsTable({ positions, allPositions = positions, totals, onOpen, compact = false }) {
   if (!positions || positions.length === 0)
     return <div className="spinner">Brak pozycji. Zaimportuj plik CSV.</div>;
+  const structureTotal = portfolioStructureTotal(allPositions, totals?.cash_pln);
+  const positionsShare = structureTotal
+    ? allPositions.reduce((sum, position) => sum + positionStructureValue(position), 0) / structureTotal * 100
+    : null;
   return (
     <table>
       <thead>
@@ -27,6 +32,7 @@ export default function PositionsTable({ positions, totals, onOpen, compact = fa
           <th>Koszt</th>
           <th>Cena</th>
           <th>Wartość</th>
+          <th>Udział</th>
           <th>Zysk/strata</th>
           <th>%</th>
         </tr>
@@ -48,6 +54,7 @@ export default function PositionsTable({ positions, totals, onOpen, compact = fa
               <PriceAge date={p.price_date} />
             </td>
             <td>{fmtPln(p.value_pln)}</td>
+            <td>{structureTotal ? `${(positionStructureValue(p) / structureTotal * 100).toFixed(1)}%` : "—"}</td>
             <td className={cls(p.pl_pln)}>{fmtPln(p.pl_pln)}</td>
             <td className={cls(p.pl_pct)}>{fmtPct(p.pl_pct)}</td>
           </tr>
@@ -61,6 +68,7 @@ export default function PositionsTable({ positions, totals, onOpen, compact = fa
             <td>{fmtPln(totals.cost_pln)}</td>
             <td></td>
             <td>{fmtPln(totals.value_pln ?? totals.value_pln_partial)}</td>
+            <td>{positionsShare == null ? "—" : `${positionsShare.toFixed(1)}%`}</td>
             <td className={cls(totals.unrealized_pl_pln)}>{fmtPln(totals.unrealized_pl_pln)}</td>
             <td className={cls(totals.pl_pct)}>{fmtPct(totals.pl_pct)}</td>
           </tr>
