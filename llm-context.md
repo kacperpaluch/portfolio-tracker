@@ -14,6 +14,8 @@ maklerskie (konto IKE). Importuje transakcje z CSV (lub dodaje ręcznie), pobier
 przelicza waluty kursem NBP i liczy wartość, P/L (zrealizowany + niezrealizowany),
 XIRR/TWR, benchmark, alokację docelową oraz atrybucję zysku (instrument vs waluta).
 **Wszystko wyrażone w PLN.** Jeden użytkownik, brak autoryzacji (self-hosted w sieci domowej).
+Frontend ma formę prywatnego „wealth cockpit": jasna przestrzeń robocza, ciemny sidebar
+i sześć sekcji rozdzielających codzienny podgląd portfela od konfiguracji danych.
 
 ## 2. Stack i technologie
 
@@ -28,7 +30,7 @@ XIRR/TWR, benchmark, alokację docelową oraz atrybucję zysku (instrument vs wa
 | Inflacja (benchmark) | **Eurostat HICP** (`prc_hicp_midx`, PL, miesięczny) | darmowe, bez klucza; GUS BDL ma CPI tylko rocznie/kwartalnie |
 | Harmonogram | **APScheduler** (BackgroundScheduler) | dzienne odświeżanie ~21:00 |
 | Klient HTTP | **httpx** | zapytania do NBP/Eurostat |
-| Frontend | **React 18** + **Vite 5** + **Recharts 2** | SPA, build serwowany statycznie |
+| Frontend | **React 18** + **Vite 5** + **Recharts 2** | responsywne SPA, jasny wealth cockpit z ciemnym sidebarem |
 | Konteneryzacja | **Docker** multi-stage, multi-arch (arm64+amd64) | obraz `kpa90/portfolio-tracker` |
 
 ## 3. Zależności
@@ -56,8 +58,11 @@ zastąpić bezpośrednim klientem HTTP do API cen (wtedy pandas/numpy znikają).
 | `recharts` | wykresy (Area/Line/Composed) |
 | `vite`, `@vitejs/plugin-react` | bundler/dev server |
 
-Brak routera, brak biblioteki stanu — cały stan trzyma `App.jsx` (`useState`) i schodzi propsami
-do komponentów w `components/`. Świadomie proste. Helpery formatujące współdzielone przez `format.js`.
+Brak zewnętrznego routera i biblioteki stanu — cały stan trzyma `App.jsx` (`useState`) i
+schodzi propsami do komponentów w `components/`. Nawigacja używa History API oraz parametru
+`?tab=`; obsługuje Wstecz/Dalej i mapuje stare identyfikatory zakładek na nowe sekcje.
+Helpery formatujące są współdzielone przez `format.js`. Vite wydziela Recharts do osobnego
+chunka, dzięki czemu kod własny aplikacji pozostaje mały.
 
 ### Usługi zewnętrzne (bez kluczy API)
 
@@ -86,15 +91,39 @@ backend/app/
   backup.py      # backup_database (online copy + retencja), transactions_csv, list_backups
   scheduler.py   # start_scheduler() — APScheduler: refresh_job (~21:00, woła history.refresh_latest) + backup_job (~03:00)
 frontend/src/
-  App.jsx        # orkiestracja: stan (useState), loadAll (Promise.all), run(), handlery, layout zakładek
-  components/    # jeden komponent = jeden plik: Cards, ReturnsStrip, HistoryChart, DrawdownChart,
+  App.jsx        # shell, NAV/PAGE_META, ?tab=, stan, loadAll/run, akcje i sześć widoków
+  components/    # jeden komponent = jeden plik: ReturnsStrip, HistoryChart, DrawdownChart,
                  #   InstrumentDetail, PositionsTable, TransactionForm, TransactionsTable, CashPanel,
-                 #   InstrumentsPanel, AllocationPanel (+ AllocationDonut), DataPanel, BackupModal,
+                 #   InstrumentsPanel, AllocationPanel (+ AllocationDonut), DataPanel,
                  #   DailyChangesTable
-  format.js      # wspólne helpery: fmtPln, fmtPct, cls, fmtDate
-  api.js         # cienki klient REST (fetch)
-  styles.css     # ciemny motyw, bez frameworka CSS, responsywny (@media <640px)
+  format.js      # wspólne helpery: fmtPln, fmtPct, cls, fmtDate, daysSince
+  api.js         # cienki klient REST + detail/message z błędów backendu
+  styles.css     # tokeny UI, jasny motyw + ciemny sidebar, desktop/tablet/mobile
 ```
+
+### Architektura interfejsu
+
+`App.jsx` utrzymuje jeden wspólny snapshot danych (`portfolio`, `history`, `instruments`,
+`transactions`, `cash`, `allocation`, `dailyChanges`, `drawdown`, `backups`). `loadAll()`
+pobiera dziewięć endpointów równolegle, a `run()` wykonuje mutację, przeładowuje snapshot
+i publikuje toast. Parametry benchmarków są odświeżane osobno z debounce 350 ms.
+
+| `tab` | Ekran | Główne komponenty / odpowiedzialność |
+|---|---|---|
+| `overview` | Pulpit | hero wartości, TWR/XIRR/gotówka, kompaktowy `HistoryChart`, `AllocationDonut`, największe pozycje |
+| `portfolio` | Portfel | KPI otwartych pozycji, `PositionsTable`, `CashPanel` |
+| `activity` | Aktywność | `TransactionForm`, `TransactionsTable`, `DailyChangesTable` |
+| `allocation` | Alokacja | `AllocationPanel` i pełny donut docelowy/rzeczywisty |
+| `analysis` | Analiza | `ReturnsStrip`, pełny `HistoryChart`, benchmarki i `DrawdownChart` |
+| `settings` | Dane i ustawienia | synchronizacja, `InstrumentsPanel`, import, `DataPanel` |
+
+Wspólne elementy wizualne (`SectionHeader`, `Metric`, `StatusDot`) są lokalnymi komponentami
+`App.jsx`. Desktop używa stałego sidebara; poniżej 820 px sidebar zastępuje dolna nawigacja.
+Tabele pozostają poziomo przewijalne na małych ekranach. Kolory i typografia są definiowane
+tokenami CSS w `:root`; wykresy mają odpowiadające im jawne kolory Recharts.
+
+Interfejs jest celowo jednoosobowy: brak onboardingu, zespołów, profili i publicznego
+udostępniania. Inicjały w nagłówku prowadzą wyłącznie do lokalnych ustawień.
 
 ### Zależności między modułami (kierunek importów)
 
@@ -213,6 +242,8 @@ cd backend && .venv/bin/python -m pytest
 
 Frontend w produkcji: `npm run build` → `frontend/dist`, serwowany przez FastAPI (mount w `main.py`,
 aktywny tylko gdy katalog istnieje). Dockerfile robi to w etapie multi-stage.
+`frontend/vite.config.js` dzieli bundle na kod aplikacji i chunk wykresów oraz w dev proxuje
+`/api` do backendu wskazanego przez `VITE_API_TARGET` (domyślnie `localhost:8000`).
 
 ## 10. Deployment
 
@@ -232,6 +263,17 @@ aktywny tylko gdy katalog istnieje). Dockerfile robi to w etapie multi-stage.
 - **Named volume vs bind mount** — po zmianie na named volume w `/ship` dane z `./data` trzeba zmigrować (`docker cp ./data/portfolio.db <kontener>:/app/data/`).
 - **Dedup** — każda nowa ścieżka tworzenia transakcji MUSI używać tego samego `import_hash` co `parse_csv`/`add_transaction`, inaczej powstaną duplikaty.
 - **Dane osobiste** — prawdziwe CSV (`*.csv`) są gitignorowane; w repo jest tylko `backend/tests/sample_hisPW.csv` (fikcyjny, z wyjątkiem w `.gitignore`).
+- **Lokalna baza nigdy do Git** — `.gitignore` obejmuje `data/`, `*.db`, `*.sqlite`,
+  `*.sqlite3` oraz pliki SQLite `-wal`/`-shm`/`-journal`. Ignorowane są też `.env*`,
+  środowiska Pythona, `node_modules` i build `frontend/dist`. Przed commitem sprawdź
+  `git ls-files 'data/**' '*.db' '*.sqlite*' '*.csv'`; jedynym oczekiwanym wynikiem CSV
+  jest fikcyjny fixture testowy.
+- **Lokalna baza nigdy do obrazu** — `.dockerignore` lustrzanie wyklucza bazy, `data/`,
+  CSV, `.env*`, środowiska, cache i build frontendu z kontekstu Docker BuildKit.
+- **Screenshoty dokumentacji muszą używać danych demonstracyjnych** — nigdy nie wykonuj
+  zrzutów README na prywatnej bazie. Publiczne nazwy i identyfikatory rzeczywistych ETF-ów
+  są dozwolone, ale transakcje, daty, ceny, kwoty i wyniki muszą być syntetyczne. Do
+  screenshotów uruchom osobną bazę demonstracyjną albo mock API.
 - **Cron tylko w produkcji** — scheduler startuje w `lifespan`; pod `TestClient` bez bloku `with` się nie uruchamia. `init_db()` wołane przy imporcie modułu (niezależnie od lifespan).
 - **Atrybucja/positions czytają z cache** — bez `backfill`/`refresh` historia i wykresy będą puste.
 - **Backupy są w named volume** (`data/backup/` obok bazy) — czyli wewnątrz wolumenu Dockera. Nocny backup (~03:00, `BACKUP_HOUR`) + retencja (`BACKUP_KEEP`, domyślnie 14). Do trzymania kopii poza wolumenem użyj `/api/export/db` albo zbinduj `data/` na host.
@@ -245,7 +287,8 @@ aktywny tylko gdy katalog istnieje). Dockerfile robi to w etapie multi-stage.
 | Kolejny benchmark (np. realny indeks ETF) | skopiuj wzorzec benchmarku inflacyjnego: klient+cache jak `cpi.py`, nowe pole w `portfolio_history` (mnożnik `seria(d)/seria(wpłata)`), param w `/api/history`, linia + przełącznik w `HistoryChart` |
 | FIFO / realizowany P/L per lot | `portfolio.compute_positions` — kolejka lotów zamiast średniego kosztu |
 | Dywidendy / podatki | nowe `kind` w `cash_flows` + obsługa w imporcie i `cash.balance`; uwzględnij w XIRR |
-| Nowe metryki/raporty | endpoint w `main.py` + funkcja w module backendu + nowy komponent w `frontend/src/components/` podpięty jedną linią w `App.jsx` |
+| Nowe metryki/raporty | endpoint w `main.py` + funkcja w module backendu + komponent w `frontend/src/components/` i sekcja odpowiedniego widoku w `App.jsx` |
+| Nowy główny ekran UI | dodaj identyfikator do `NAV` i `PAGE_META`, element do `pages`, zachowaj `?tab=` i responsywną dolną nawigację |
 | Zadanie cykliczne | `scheduler.py` — kolejny `add_job` |
 | Eksport danych | endpoint w `main.py` (np. CSV/JSON z `transactions`/`portfolio`) |
 

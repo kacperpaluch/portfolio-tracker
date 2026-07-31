@@ -1,6 +1,15 @@
 // Cienki klient API. Ścieżki względne — w dev proxowane przez Vite, w prod ten sam origin.
-const json = (r) => {
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+const json = async (r) => {
+  if (!r.ok) {
+    let message = `HTTP ${r.status}`;
+    try {
+      const body = await r.json();
+      message = body.detail || body.message || message;
+    } catch {
+      // Odpowiedź bez JSON — pozostaw czytelny kod HTTP.
+    }
+    throw new Error(message);
+  }
   return r.json();
 };
 

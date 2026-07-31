@@ -14,7 +14,7 @@ function PriceAge({ date }) {
   );
 }
 
-export default function PositionsTable({ positions, totals, onOpen }) {
+export default function PositionsTable({ positions, totals, onOpen, compact = false }) {
   if (!positions || positions.length === 0)
     return <div className="spinner">Brak pozycji. Zaimportuj plik CSV.</div>;
   return (
@@ -35,7 +35,7 @@ export default function PositionsTable({ positions, totals, onOpen }) {
         {positions.map((p) => (
           <tr key={p.isin}>
             <td>
-              <span className="link" onClick={() => onOpen?.(p.isin)}>{p.name}</span>
+              <button className="instrument-link" onClick={() => onOpen?.(p.isin)}>{p.name}</button>
               {" "}{p.needs_config && <span className="badge">brak tickera</span>}
               <div className="tag">{p.ticker || p.isin} · {p.currency || "?"}</div>
             </td>
@@ -53,17 +53,19 @@ export default function PositionsTable({ positions, totals, onOpen }) {
           </tr>
         ))}
       </tbody>
-      <tfoot>
-        <tr>
-          <td>Razem (otwarte)</td>
-          <td colSpan={2}></td>
-          <td>{fmtPln(totals.cost_pln)}</td>
-          <td></td>
-          <td>{fmtPln(totals.value_pln ?? totals.value_pln_partial)}</td>
-          <td className={cls(totals.unrealized_pl_pln)}>{fmtPln(totals.unrealized_pl_pln)}</td>
-          <td className={cls(totals.pl_pct)}>{fmtPct(totals.pl_pct)}</td>
-        </tr>
-      </tfoot>
+      {!compact && (
+        <tfoot>
+          <tr>
+            <td>Razem (otwarte)</td>
+            <td colSpan={2}></td>
+            <td>{fmtPln(totals.cost_pln)}</td>
+            <td></td>
+            <td>{fmtPln(totals.value_pln ?? totals.value_pln_partial)}</td>
+            <td className={cls(totals.unrealized_pl_pln)}>{fmtPln(totals.unrealized_pl_pln)}</td>
+            <td className={cls(totals.pl_pct)}>{fmtPct(totals.pl_pct)}</td>
+          </tr>
+        </tfoot>
+      )}
     </table>
   );
 }

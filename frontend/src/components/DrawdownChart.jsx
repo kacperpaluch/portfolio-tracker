@@ -14,7 +14,7 @@ import { fmtPct, fmtDate } from "../format.js";
 // (flow-neutral, więc wpłaty nie maskują spadków). Wartości ≤ 0.
 export default function DrawdownChart({ data }) {
   if (!data || !data.series || data.series.length === 0)
-    return <div className="spinner">Brak danych historycznych — kliknij „Backfill historii".</div>;
+    return <div className="spinner">Brak danych historycznych — uzupełnij historię w sekcji „Dane i ustawienia".</div>;
 
   const { series, max_drawdown, max_drawdown_from, max_drawdown_to, recovery_date, current_drawdown } = data;
   const minVal = Math.min(0, ...series.map((p) => p.drawdown_pct));
@@ -43,29 +43,29 @@ export default function DrawdownChart({ data }) {
         <ComposedChart data={series} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
           <defs>
             <linearGradient id="dd" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#f85149" stopOpacity={0.05} />
-              <stop offset="100%" stopColor="#f85149" stopOpacity={0.4} />
+              <stop offset="0%" stopColor="#c44c46" stopOpacity={0.03} />
+              <stop offset="100%" stopColor="#c44c46" stopOpacity={0.22} />
             </linearGradient>
           </defs>
-          <CartesianGrid stroke="#2c3845" strokeDasharray="3 3" vertical={false} />
-          <XAxis dataKey="date" tick={{ fill: "#8b97a6", fontSize: 11 }} minTickGap={40} stroke="#2c3845" />
+          <CartesianGrid stroke="#dce3dc" strokeDasharray="3 3" vertical={false} />
+          <XAxis dataKey="date" tick={{ fill: "#68766d", fontSize: 11 }} minTickGap={40} stroke="#dce3dc" />
           <YAxis
-            tick={{ fill: "#8b97a6", fontSize: 11 }}
-            stroke="#2c3845"
+            tick={{ fill: "#68766d", fontSize: 11 }}
+            stroke="#dce3dc"
             width={50}
             domain={[Math.floor(minVal), 0]}
             tickFormatter={(v) => `${v}%`}
           />
           <Tooltip
-            contentStyle={{ background: "#1a212b", border: "1px solid #2c3845", borderRadius: 8, color: "#e6edf3" }}
+            contentStyle={{ background: "#ffffff", border: "1px solid #c8d3ca", borderRadius: 10, color: "#19231d", fontSize: 12 }}
             formatter={(v) => [fmtPct(v), "Obsunięcie"]}
           />
-          <ReferenceLine y={0} stroke="#2c3845" />
+          <ReferenceLine y={0} stroke="#c8d3ca" />
           <Area
             type="monotone"
             isAnimationActive={false}
             dataKey="drawdown_pct"
-            stroke="#f85149"
+            stroke="#c44c46"
             strokeWidth={2}
             fill="url(#dd)"
           />

@@ -2,24 +2,32 @@
 
 [![Docker Hub](https://img.shields.io/docker/pulls/kpa90/portfolio-tracker?logo=docker)](https://hub.docker.com/r/kpa90/portfolio-tracker)
 
-Self-hostowany tracker portfela ETF-ów dla inwestora kupującego przez polskie biuro
-maklerskie (np. konto IKE). Importuje historię transakcji z CSV, pobiera bieżące wyceny,
-przelicza waluty kursem NBP i pokazuje wartość, zysk/stratę (zrealizowany + niezrealizowany),
-stopę zwrotu oraz porównanie z benchmarkiem — **wszystko w PLN**.
+Prywatny, self-hostowany tracker portfela ETF-ów dla jednego inwestora kupującego przez
+polskie biuro maklerskie (np. konto IKE). Importuje historię transakcji z CSV, pobiera
+bieżące wyceny, przelicza waluty kursem NBP i pokazuje wartość, zysk/stratę
+(zrealizowany + niezrealizowany), stopę zwrotu oraz porównanie z benchmarkiem —
+**wszystko w PLN**.
+
+Projekt jest przeznaczony do uruchomienia we własnym środowisku. Nie ma kont użytkowników,
+rejestracji ani autoryzacji, dlatego nie należy wystawiać go bezpośrednio do publicznego
+Internetu bez dodatkowej warstwy dostępu (np. VPN, Tailscale lub reverse proxy z logowaniem).
 
 ## Zrzuty ekranu
 
-> Dane na zrzutach są przykładowe (fikcyjne), wygenerowane na potrzeby dokumentacji.
+> Nazwy i identyfikatory ETF-ów są publiczne i rzeczywiste, ale wszystkie transakcje,
+> liczby, daty, ceny oraz wyniki są syntetycznymi danymi demonstracyjnymi. Zrzuty nie
+> korzystają z prywatnej bazy właściciela aplikacji.
 
-| Pulpit | Alokacja | Transakcje |
+| Pulpit | Alokacja | Aktywność |
 |---|---|---|
-| ![Pulpit](docs/screenshots/dashboard.png) | ![Alokacja](docs/screenshots/allocation.png) | ![Transakcje](docs/screenshots/transactions.png) |
+| ![Pulpit](docs/screenshots/dashboard.png) | ![Alokacja](docs/screenshots/allocation.png) | ![Aktywność](docs/screenshots/transactions.png) |
 
 ---
 
 ## Spis treści
 
 - [Funkcje](#funkcje)
+- [Interfejs aplikacji](#interfejs-aplikacji)
 - [Kluczowe koncepcje](#kluczowe-koncepcje)
 - [Stack technologiczny](#stack-technologiczny)
 - [Uruchomienie](#uruchomienie)
@@ -30,6 +38,7 @@ stopę zwrotu oraz porównanie z benchmarkiem — **wszystko w PLN**.
 - [Jak działa wycena (logika finansowa)](#jak-działa-wycena-logika-finansowa)
 - [API](#api)
 - [Format pliku CSV](#format-pliku-csv)
+- [Prywatność i bezpieczeństwo danych](#prywatność-i-bezpieczeństwo-danych)
 - [Testy](#testy)
 - [Jak rozbudować](#jak-rozbudować)
 
@@ -37,6 +46,9 @@ stopę zwrotu oraz porównanie z benchmarkiem — **wszystko w PLN**.
 
 ## Funkcje
 
+- **Prywatny interfejs typu wealth cockpit** — jasna, czytelna przestrzeń robocza z ciemnym
+  sidebarem; osobne sekcje Pulpit, Portfel, Aktywność, Alokacja, Analiza oraz Dane i ustawienia.
+  Widok mobilny korzysta z dolnej nawigacji i zachowuje pełną funkcjonalność.
 - **Import CSV** z biura maklerskiego (format GPW „historia PW", kodowanie CP1250) —
   idempotentny: CSV ze starymi + nowymi danymi importuje tylko nowe, starych nie rusza.
 - **Ręczne dodawanie/usuwanie transakcji** — formularz w UI (z dedupem jak w imporcie).
@@ -93,6 +105,23 @@ stopę zwrotu oraz porównanie z benchmarkiem — **wszystko w PLN**.
   trzymane** walory (saldo > 0) — sprzedany do zera ETF nie jest już pobierany ani nie zaśmieca
   bazy nowymi punktami (jego historia z okresu posiadania zostaje w cache).
 
+## Interfejs aplikacji
+
+Interfejs celowo rozdziela codzienne sprawdzanie portfela od operacji administracyjnych:
+
+| Sekcja | Zawartość |
+|---|---|
+| **Pulpit** | łączna wartość konta, wynik całkowity, ostatnia zmiana, TWR, XIRR, gotówka, główny wykres, skrót alokacji i największe pozycje |
+| **Portfel** | pełna tabela otwartych pozycji, koszt, wartość, zysk niezrealizowany i zrealizowany oraz konto gotówkowe |
+| **Aktywność** | ręczne dodawanie transakcji, historia kupna/sprzedaży i dzienne zmiany wartości |
+| **Alokacja** | rzeczywisty i docelowy udział kategorii, odchylenie oraz kwota potrzebna do rebalansu |
+| **Analiza** | stopy zwrotu 1M/3M/YTD/1R/od początku, wykres wartości lub zwrotu, benchmark stały, inflacja + premia i drawdown |
+| **Dane i ustawienia** | odświeżanie wycen, backfill historii, HICP, mapowanie instrumentów, import, eksport i backup |
+
+Najważniejsze operacje mają własne komunikaty postępu i błędów. Usunięcie transakcji albo
+operacji gotówkowej wymaga potwierdzenia. Bieżąca sekcja jest zapisana w parametrze `tab`
+adresu URL, więc działają przyciski Wstecz/Dalej i bezpośrednie odnośniki do widoków.
+
 ## Kluczowe koncepcje
 
 Zrozumienie tych założeń wyjaśnia, dlaczego liczby wychodzą tak, a nie inaczej:
@@ -124,7 +153,7 @@ Zrozumienie tych założeń wyjaśnia, dlaczego liczby wychodzą tak, a nie inac
 | Kursy walut | **NBP API** (tabela A) | darmowe, oficjalne, bez klucza |
 | Harmonogram | **APScheduler** | dzienne odświeżanie w tle |
 | HTTP klient | **httpx** | zapytania do NBP |
-| Frontend | **React** + **Vite** + **Recharts** | pulpit, wykresy, responsywny (mobile) |
+| Frontend | **React** + **Vite** + **Recharts** | jasny wealth cockpit, wykresy, responsywny desktop/mobile |
 | Konteneryzacja | **Docker** (multi-stage, multi-arch arm64+amd64) | self-hosting |
 
 Źródła danych:
@@ -162,6 +191,9 @@ cd frontend
 npm install && npm run dev
 ```
 
+Inny backend deweloperski można wskazać przez
+`VITE_API_TARGET=http://127.0.0.1:8001 npm run dev`.
+
 ## Konfiguracja
 
 Zmienne środowiskowe (ustawiane w `docker-compose.yml`):
@@ -178,18 +210,20 @@ Zmienne środowiskowe (ustawiane w `docker-compose.yml`):
 
 ## Sposób użycia
 
-1. **Importuj CSV** — wgraj eksport historii rachunku. Tworzą się transakcje i instrumenty
-   (znane ISIN-y dostają od razu ticker; nieznane oznaczane są „do uzupełnienia").
-2. **Instrumenty** — uzupełnij/popraw ticker dla pozycji bez mapowania (waluta wykryje się
-   sama przy pobraniu ceny).
-3. **Odśwież ceny** — pobiera bieżące wyceny (yfinance) i kursy (NBP).
-4. **Backfill historii** — pobiera dzienne ceny i kursy od daty pierwszej transakcji
-   (zasila wykres wartości w czasie).
-5. **Gotówka** (opcjonalnie) — dodaj swoje wpłaty/wypłaty, aby śledzić niezainwestowaną
-   gotówkę i policzyć XIRR oraz benchmark całego rachunku.
-6. **Pobierz inflację** (opcjonalnie) — zaciąga serię HICP z Eurostatu pod benchmark
-   „inflacja + X%". Osobny przycisk **niezależny od cen** — nie odpala yfinance, więc nie
-   nadpisze ręcznie zaimportowanych cen z CSV. (Robi to też nocny cron przy okazji odświeżania.)
+1. Otwórz **Dane i ustawienia → Import transakcji** i wgraj eksport historii rachunku.
+   Powstaną transakcje oraz instrumenty; znane ISIN-y dostaną ticker automatycznie.
+2. W **Dane i ustawienia → Instrumenty** uzupełnij ticker lub kategorię pozycji oznaczonych
+   jako wymagające konfiguracji. Waluta zostanie wykryta przy pobieraniu ceny.
+3. W **Dane i ustawienia → Źródła danych** wybierz **Odśwież**, aby pobrać bieżące wyceny
+   z Yahoo Finance i kursy NBP.
+4. Przy pierwszym uruchomieniu wybierz **Uzupełnij** przy pełnej historii. Backfill pobierze
+   dzienne ceny i kursy od pierwszej transakcji, zasilając wykresy i miary ryzyka.
+5. W sekcji **Portfel → Konto gotówkowe** dodaj wpłaty i wypłaty. Dzięki temu wartość konta,
+   XIRR i benchmarki uwzględnią niezainwestowaną gotówkę oraz timing przepływów.
+6. Opcjonalnie pobierz HICP w **Dane i ustawienia**, aby uruchomić benchmark
+   „inflacja + X%". Ta operacja nie dotyka tabeli cen i nie nadpisuje ręcznych importów.
+7. Na co dzień korzystaj z **Pulpitu**; szczegółowe TWR, XIRR, benchmarki i drawdown są
+   zebrane w sekcji **Analiza**.
 
 ## Architektura
 
@@ -215,11 +249,11 @@ portfolio-tracker/
 │   └── tests/             # pytest (+ sample_hisPW.csv — fikcyjne dane testowe)
 ├── frontend/              # Vite + React + Recharts (build serwowany przez FastAPI z /frontend/dist)
 │   └── src/
-│       ├── App.jsx        # orkiestracja: stan, ładowanie danych (loadAll), handlery, layout zakładek
-│       ├── components/    # jeden komponent = jeden plik (Cards, HistoryChart, DrawdownChart, AllocationDonut, …)
+│       ├── App.jsx        # shell, routing przez ?tab=, stan, ładowanie danych, akcje i sześć widoków aplikacji
+│       ├── components/    # tabele, formularze, wykresy, alokacja, backup i modal instrumentu
 │       ├── format.js      # wspólne helpery formatujące (fmtPln, fmtPct, cls, fmtDate)
-│       ├── api.js         # cienki klient REST
-│       └── styles.css
+│       ├── api.js         # cienki klient REST + czytelne błędy zwracane przez backend
+│       └── styles.css     # tokeny UI, jasny motyw + ciemny sidebar, layout i breakpointy mobilne
 ├── Dockerfile            # multi-stage: build frontendu (node) → obraz Pythona z backendem
 └── docker-compose.yml
 ```
@@ -310,6 +344,26 @@ Eksport „historia PW" z biura maklerskiego:
 
 Przykład struktury: `backend/tests/sample_hisPW.csv` (fikcyjne dane). Prawdziwe eksporty są
 celowo wykluczone z repo (`.gitignore`), bo zawierają dane osobiste.
+
+## Prywatność i bezpieczeństwo danych
+
+- Aplikacja jest **jednoużytkownikowa** i nie ma wbudowanego logowania. Uruchamiaj ją w
+  zaufanej sieci lokalnej albo za prywatnym tunelem/VPN.
+- Produkcyjna baza znajduje się w named volume Dockera `portfolio_tracker_data`, poza
+  repozytorium Git. Lokalny wariant `data/portfolio.db` również jest ignorowany.
+- `.gitignore` wyklucza katalog `data/`, bazy `*.db`, `*.sqlite`, `*.sqlite3`, pliki
+  dziennika SQLite (`-wal`, `-shm`, `-journal`), prawdziwe eksporty `*.csv`, pliki `.env`,
+  środowiska Pythona, zależności Node i katalogi buildów.
+- `.dockerignore` stosuje te same zabezpieczenia dla kontekstu budowania obrazu, dlatego
+  lokalna baza, eksporty brokera i pliki środowiskowe nie są wysyłane do buildera Dockera.
+- Jedynym śledzonym CSV jest `backend/tests/sample_hisPW.csv`; zawiera wyłącznie fikcyjne
+  dane testowe i jest jawnie dopuszczony wyjątkiem w `.gitignore`.
+- Zrzuty ekranu w dokumentacji korzystają z odseparowanej bazy demonstracyjnej. Mogą
+  prezentować publiczne nazwy i identyfikatory prawdziwych ETF-ów, ale transakcje, ceny,
+  daty, kwoty i wyniki muszą pozostać syntetyczne. Nie należy commitować screenshotów
+  wykonanych na prywatnej bazie.
+- Backup w aplikacji tworzy spójną kopię SQLite wewnątrz wolumenu. Kopię poza serwer można
+  pobrać przez **Dane i ustawienia → Backup i eksport → Pobierz całą bazę**.
 
 ## Testy
 

@@ -12,13 +12,13 @@ import {
 } from "recharts";
 import { fmtPln, fmtPct } from "../format.js";
 
-export default function HistoryChart({ data, benchmarkRate = 5, cpiSpread = 2 }) {
+export default function HistoryChart({ data, benchmarkRate = 5, cpiSpread = 2, compact = false }) {
   const [mode, setMode] = useState("pln"); // "pln" | "pct"
   const [showBench, setShowBench] = useState(true);
   const [showCpi, setShowCpi] = useState(true);
 
   if (!data || data.length === 0)
-    return <div className="spinner">Brak danych historycznych — kliknij „Backfill historii".</div>;
+    return <div className="spinner">Brak danych historycznych — uzupełnij historię w sekcji „Dane i ustawienia".</div>;
 
   // Benchmark inflacyjny pokazujemy tylko gdy backend zwrócił dane CPI (Eurostat pobrany).
   const hasCpi = data.some((d) => d.benchmark_cpi_pln != null);
@@ -51,32 +51,32 @@ export default function HistoryChart({ data, benchmarkRate = 5, cpiSpread = 2 })
           </button>
         )}
       </div>
-      <ResponsiveContainer width="100%" height={300}>
+      <ResponsiveContainer width="100%" height={compact ? 270 : 330}>
         <ComposedChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
           <defs>
             <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#4493f8" stopOpacity={0.35} />
-              <stop offset="100%" stopColor="#4493f8" stopOpacity={0} />
+              <stop offset="0%" stopColor="#347a50" stopOpacity={0.20} />
+              <stop offset="100%" stopColor="#347a50" stopOpacity={0} />
             </linearGradient>
           </defs>
-          <CartesianGrid stroke="#2c3845" strokeDasharray="3 3" vertical={false} />
-          <XAxis dataKey="date" tick={{ fill: "#8b97a6", fontSize: 11 }} minTickGap={40} stroke="#2c3845" />
+          <CartesianGrid stroke="#dce3dc" strokeDasharray="3 3" vertical={false} />
+          <XAxis dataKey="date" tick={{ fill: "#68766d", fontSize: 11 }} minTickGap={40} stroke="#dce3dc" />
           <YAxis
-            tick={{ fill: "#8b97a6", fontSize: 11 }}
-            stroke="#2c3845"
+            tick={{ fill: "#68766d", fontSize: 11 }}
+            stroke="#dce3dc"
             width={70}
             tickFormatter={yFmt}
           />
           <Tooltip
-            contentStyle={{ background: "#1a212b", border: "1px solid #2c3845", borderRadius: 8, color: "#e6edf3" }}
+            contentStyle={{ background: "#ffffff", border: "1px solid #c8d3ca", borderRadius: 10, color: "#19231d", fontSize: 12 }}
             formatter={(v, name) => [tipFmt(v), labels[name] || name]}
           />
-          <Legend formatter={(name) => labels[name] || name} wrapperStyle={{ fontSize: 12 }} />
+          {!compact && <Legend formatter={(name) => labels[name] || name} wrapperStyle={{ fontSize: 10 }} />}
           <Area
             type="monotone"
             isAnimationActive={false}
             dataKey={valueKey}
-            stroke="#4493f8"
+            stroke="#347a50"
             strokeWidth={2}
             fill="url(#g)"
             connectNulls={!isPct}
@@ -86,7 +86,7 @@ export default function HistoryChart({ data, benchmarkRate = 5, cpiSpread = 2 })
               type="monotone"
               isAnimationActive={false}
               dataKey={benchKey}
-              stroke="#d29922"
+              stroke="#a06d13"
               strokeWidth={2}
               strokeDasharray="5 4"
               dot={false}
@@ -98,7 +98,7 @@ export default function HistoryChart({ data, benchmarkRate = 5, cpiSpread = 2 })
               type="monotone"
               isAnimationActive={false}
               dataKey={cpiKey}
-              stroke="#a371f7"
+              stroke="#7059a5"
               strokeWidth={2}
               strokeDasharray="2 3"
               dot={false}

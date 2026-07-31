@@ -25,7 +25,7 @@ export default function AllocationPanel({ allocation, onSave }) {
   }, 0);
 
   if (groups.length === 0)
-    return <div className="spinner">Brak danych. Przypisz instrumentom kategorie w zakładce „Instrumenty".</div>;
+    return <div className="spinner">Brak danych. Przypisz instrumentom kategorie w sekcji „Dane i ustawienia".</div>;
 
   return (
     <div>

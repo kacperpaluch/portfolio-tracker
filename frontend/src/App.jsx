@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api.js";
-import Cards from "./components/Cards.jsx";
-import ReturnsStrip from "./components/ReturnsStrip.jsx";
+import { cls, daysSince, fmtPct, fmtPln } from "./format.js";
 import HistoryChart from "./components/HistoryChart.jsx";
 import DrawdownChart from "./components/DrawdownChart.jsx";
 import InstrumentDetail from "./components/InstrumentDetail.jsx";
@@ -11,17 +10,85 @@ import TransactionsTable from "./components/TransactionsTable.jsx";
 import CashPanel from "./components/CashPanel.jsx";
 import InstrumentsPanel from "./components/InstrumentsPanel.jsx";
 import AllocationPanel from "./components/AllocationPanel.jsx";
-import BackupModal from "./components/BackupModal.jsx";
+import AllocationDonut from "./components/AllocationDonut.jsx";
 import DailyChangesTable from "./components/DailyChangesTable.jsx";
+import ReturnsStrip from "./components/ReturnsStrip.jsx";
+import DataPanel from "./components/DataPanel.jsx";
 
-const TABS = [
-  ["dashboard", "Pulpit"],
-  ["daily", "Zmiany dzienne"],
-  ["transactions", "Transakcje"],
-  ["allocation", "Alokacja"],
-  ["cash", "Gotówka"],
-  ["instruments", "Instrumenty"],
+const NAV = [
+  ["overview", "Pulpit", "01"],
+  ["portfolio", "Portfel", "02"],
+  ["activity", "Aktywność", "03"],
+  ["allocation", "Alokacja", "04"],
+  ["analysis", "Analiza", "05"],
+  ["settings", "Dane i ustawienia", "06"],
 ];
+
+const LEGACY_TABS = {
+  dashboard: "overview",
+  transactions: "activity",
+  daily: "activity",
+  cash: "portfolio",
+  instruments: "settings",
+};
+
+const PAGE_META = {
+  overview: ["Pulpit", "Najważniejsze informacje o Twoim portfelu"],
+  portfolio: ["Portfel", "Pozycje, wyniki i niezainwestowana gotówka"],
+  activity: ["Aktywność", "Transakcje i dzienne zmiany wartości"],
+  allocation: ["Alokacja", "Kontroluj zgodność portfela z założonym planem"],
+  analysis: ["Analiza", "Zwroty, benchmarki i ryzyko portfela"],
+  settings: ["Dane i ustawienia", "Instrumenty, synchronizacja i kopie zapasowe"],
+};
+
+function initialPage() {
+  const fromUrl = new URLSearchParams(window.location.search).get("tab");
+  const normalized = LEGACY_TABS[fromUrl] || fromUrl;
+  return NAV.some(([id]) => id === normalized) ? normalized : "overview";
+}
+
+function SectionHeader({ eyebrow, title, description, action }) {
+  return (
+    <div className="section-head">
+      <div>
+        {eyebrow && <div className="eyebrow">{eyebrow}</div>}
+        <h2>{title}</h2>
+        {description && <p>{description}</p>}
+      </div>
+      {action}
+    </div>
+  );
+}
+
+function Metric({ label, value, detail, tone, featured = false }) {
+  return (
+    <div className={`metric ${featured ? "featured" : ""}`}>
+      <span className="metric-label">{label}</span>
+      <strong className={`metric-value ${tone || ""}`}>{value}</strong>
+      {detail && <span className="metric-detail">{detail}</span>}
+    </div>
+  );
+}
+
+function StatusDot({ tone = "good", children }) {
+  return (
+    <span className={`status-chip ${tone}`}>
+      <i aria-hidden="true" />
+      {children}
+    </span>
+  );
+}
+
+function EmptyAllocation({ onOpen }) {
+  return (
+    <div className="empty-state compact">
+      <span className="empty-mark">A</span>
+      <strong>Brak modelu alokacji</strong>
+      <p>Przypisz instrumentom kategorie i ustaw docelowe udziały.</p>
+      <button className="text-button" onClick={onOpen}>Skonfiguruj alokację</button>
+    </div>
+  );
+}
 
 export default function App() {
   const [portfolio, setPortfolio] = useState(null);
@@ -33,230 +100,466 @@ export default function App() {
   const [dailyChanges, setDailyChanges] = useState([]);
   const [drawdown, setDrawdown] = useState(null);
   const [backups, setBackups] = useState(null);
-  const [showBackup, setShowBackup] = useState(false);
   const [detail, setDetail] = useState(null);
-  const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get("tab") || "dashboard");
+  const [page, setPage] = useState(initialPage);
   const [benchmarkRate, setBenchmarkRate] = useState(5);
   const [cpiSpread, setCpiSpread] = useState(2);
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState(null);
   const fileRef = useRef();
+  const flashTimer = useRef();
 
   const flash = (text, ok = true) => {
+    window.clearTimeout(flashTimer.current);
     setMsg({ text, ok });
-    setTimeout(() => setMsg(null), 5000);
+    flashTimer.current = window.setTimeout(() => setMsg(null), 5000);
   };
 
   const loadAll = async () => {
     const [pf, hist, insts, txs, cs, alloc, daily, dd, bk] = await Promise.all([
-      api.portfolio(), api.history(benchmarkRate / 100, cpiSpread / 100), api.instruments(), api.transactions(), api.cash(), api.allocation(), api.dailyChanges(), api.drawdown(), api.backups(),
+      api.portfolio(),
+      api.history(benchmarkRate / 100, cpiSpread / 100),
+      api.instruments(),
+      api.transactions(),
+      api.cash(),
+      api.allocation(),
+      api.dailyChanges(),
+      api.drawdown(),
+      api.backups(),
     ]);
-    setPortfolio(pf); setHistory(hist); setInstruments(insts); setTransactions(txs); setCash(cs); setAllocation(alloc); setDailyChanges(daily); setDrawdown(dd); setBackups(bk);
+    setPortfolio(pf);
+    setHistory(hist);
+    setInstruments(insts);
+    setTransactions(txs);
+    setCash(cs);
+    setAllocation(alloc);
+    setDailyChanges(daily);
+    setDrawdown(dd);
+    setBackups(bk);
   };
 
   useEffect(() => {
-    loadAll().catch((e) => flash(`Błąd ładowania: ${e.message}`, false));
+    loadAll()
+      .catch((e) => flash(`Nie udało się załadować danych: ${e.message}`, false))
+      .finally(() => setLoading(false));
+    return () => window.clearTimeout(flashTimer.current);
   }, []);
 
-  // Przeładuj samą historię po zmianie parametrów benchmarków (stała stopa / inflacja+X%).
   useEffect(() => {
-    api.history(benchmarkRate / 100, cpiSpread / 100).then(setHistory).catch(() => {});
+    const onPopState = () => setPage(initialPage());
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      api.history(benchmarkRate / 100, cpiSpread / 100).then(setHistory).catch(() => {});
+    }, 350);
+    return () => window.clearTimeout(timer);
   }, [benchmarkRate, cpiSpread]);
+
+  const navigate = (next) => {
+    setPage(next);
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", next);
+    window.history.pushState({}, "", url);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const run = async (fn, okMsg) => {
     setBusy(true);
     try {
-      await fn();
+      const result = await fn();
       await loadAll();
-      if (okMsg) flash(okMsg);
+      if (okMsg) flash(typeof okMsg === "function" ? okMsg(result) : okMsg);
+      return result;
     } catch (e) {
-      flash(`Błąd: ${e.message}`, false);
+      flash(`Nie udało się wykonać operacji: ${e.message}`, false);
+      throw e;
     } finally {
       setBusy(false);
     }
   };
 
   const openDetail = (isin) => {
-    api.instrumentHistory(isin).then(setDetail).catch((e) => flash(`Błąd: ${e.message}`, false));
+    api.instrumentHistory(isin).then(setDetail).catch((e) => flash(`Nie udało się otworzyć instrumentu: ${e.message}`, false));
   };
 
   const onImportPrices = (isin, file) => {
-    // Waluta jest potrzebna do wyceny, a CSV jej nie niesie. Jeśli instrument ją ma —
-    // używamy jej; jeśli nie — pytamy (NIE zgadujemy PLN, bo stooq notuje też w USD/EUR/GBP).
     let currency = detail?.currency;
     if (!currency) {
       currency = window.prompt(
-        "Instrument nie ma ustawionej waluty. Podaj walutę cen z tego CSV (np. PLN, USD, EUR, GBP):",
+        "Podaj walutę cen z tego pliku (np. PLN, USD, EUR, GBP):",
         "PLN",
       );
-      if (!currency) return; // anulowano
+      if (!currency) return;
     }
-    run(async () => {
-      const r = await api.importPrices(isin, file, currency.trim().toUpperCase());
-      flash(`Wczytano ${r.imported} cen (${r.first_date} – ${r.last_date}). Waluta: ${r.currency}.`);
-      setDetail(await api.instrumentHistory(isin));  // odśwież otwarty modal
-    });
+    run(
+      () => api.importPrices(isin, file, currency.trim().toUpperCase()),
+      (r) => `Wczytano ${r.imported} cen z okresu ${r.first_date} – ${r.last_date}.`,
+    ).then(() => api.instrumentHistory(isin).then(setDetail)).catch(() => {});
   };
 
-  const onImport = (e) => {
-    const file = e.target.files?.[0];
+  const onImport = (event) => {
+    const file = event.target.files?.[0];
     if (!file) return;
-    run(async () => {
-      const r = await api.importCsv(file);
-      flash(`Zaimportowano ${r.imported} transakcji (pominięto duplikatów: ${r.skipped_duplicates}).`);
-    });
-    e.target.value = "";
+    run(
+      () => api.importCsv(file),
+      (r) => `Zaimportowano ${r.imported} transakcji. Pominięte duplikaty: ${r.skipped_duplicates}.`,
+    ).catch(() => {});
+    event.target.value = "";
   };
+
+  const totals = portfolio?.totals || {};
+  const positions = portfolio?.positions || [];
+  const accountValue = totals.portfolio_value_pln ?? totals.value_pln ?? totals.value_pln_partial;
+  const latestDaily = dailyChanges.length ? dailyChanges[dailyChanges.length - 1] : null;
+  const latestPriceDate = useMemo(
+    () => positions.map((p) => p.price_date).filter(Boolean).sort().at(-1),
+    [positions],
+  );
+  const staleCount = positions.filter((p) => (daysSince(p.price_date) ?? 0) > 4).length;
+  const allocationGroups = allocation?.groups || [];
+  const largestDrift = [...allocationGroups]
+    .filter((g) => g.drift_pp != null)
+    .sort((a, b) => Math.abs(b.drift_pp) - Math.abs(a.drift_pp))[0];
+  const pageMeta = PAGE_META[page] || PAGE_META.overview;
+
+  if (loading) {
+    return (
+      <div className="boot-screen">
+        <div className="brand-mark">P</div>
+        <div className="boot-copy">
+          <strong>Portfolio</strong>
+          <span>Porządkujemy Twoje dane…</span>
+        </div>
+      </div>
+    );
+  }
+
+  const Overview = (
+    <>
+      <section className="hero-grid">
+        <div className="hero-card">
+          <div className="hero-topline">
+            <span>Łączna wartość</span>
+            <StatusDot tone={staleCount ? "warn" : "good"}>
+              {staleCount ? `${staleCount} nieaktualne wyceny` : `Aktualne ${latestPriceDate || ""}`}
+            </StatusDot>
+          </div>
+          <div className="hero-value">{fmtPln(accountValue)}</div>
+          <div className="hero-performance">
+            <span className={cls(totals.total_pl_pln)}>
+              {fmtPln(totals.total_pl_pln)}
+              <small> od początku</small>
+            </span>
+            {latestDaily && (
+              <span className={cls(latestDaily.change_pln)}>
+                {fmtPln(latestDaily.change_pln)}
+                <small> ostatnia sesja</small>
+              </span>
+            )}
+          </div>
+          <div className="hero-actions">
+            <button className="primary" onClick={() => navigate("activity")}>Dodaj transakcję</button>
+            <button className="secondary" onClick={() => run(() => api.refresh(), "Wyceny zostały odświeżone.").catch(() => {})} disabled={busy}>
+              {busy ? "Odświeżam…" : "Odśwież wyceny"}
+            </button>
+          </div>
+        </div>
+
+        <div className="summary-stack">
+          <Metric
+            label="Wynik portfela"
+            value={totals.twr == null ? "—" : fmtPct(totals.twr * 100)}
+            detail="TWR · bez wpływu wpłat"
+            tone={cls(totals.twr)}
+          />
+          <Metric
+            label="Twój wynik"
+            value={totals.xirr == null ? "—" : fmtPct(totals.xirr * 100)}
+            detail="XIRR · z timingiem wpłat"
+            tone={cls(totals.xirr)}
+          />
+          <Metric
+            label="Gotówka"
+            value={fmtPln(totals.cash_pln)}
+            detail={`${positions.length} ${positions.length === 1 ? "pozycja" : "pozycji"} w portfelu`}
+          />
+        </div>
+      </section>
+
+      <section className="dashboard-grid">
+        <div className="surface chart-surface">
+          <SectionHeader
+            eyebrow="Wynik w czasie"
+            title="Portfel vs plan"
+            description="Wartość konta wraz z wybranymi punktami odniesienia."
+            action={<button className="text-button" onClick={() => navigate("analysis")}>Pełna analiza</button>}
+          />
+          <HistoryChart data={history} benchmarkRate={benchmarkRate} cpiSpread={cpiSpread} compact />
+        </div>
+
+        <aside className="surface allocation-snapshot">
+          <SectionHeader
+            eyebrow="Struktura"
+            title="Alokacja"
+            action={<button className="text-button" onClick={() => navigate("allocation")}>Szczegóły</button>}
+          />
+          {allocationGroups.length ? (
+            <>
+              <AllocationDonut groups={allocationGroups} total={allocation?.total_pln} compact />
+              {largestDrift && (
+                <div className="insight-line">
+                  <span>Największe odchylenie</span>
+                  <strong>{largestDrift.category} · {largestDrift.drift_pp > 0 ? "+" : ""}{largestDrift.drift_pp.toFixed(1)} pp</strong>
+                </div>
+              )}
+            </>
+          ) : <EmptyAllocation onOpen={() => navigate("allocation")} />}
+        </aside>
+      </section>
+
+      <section className="surface">
+        <SectionHeader
+          eyebrow="Aktywa"
+          title="Największe pozycje"
+          description="Bieżąca wartość, koszt i wynik otwartych inwestycji."
+          action={<button className="text-button" onClick={() => navigate("portfolio")}>Zobacz cały portfel</button>}
+        />
+        <PositionsTable
+          positions={[...positions].sort((a, b) => (b.value_pln || 0) - (a.value_pln || 0)).slice(0, 5)}
+          totals={totals}
+          onOpen={openDetail}
+          compact
+        />
+      </section>
+    </>
+  );
+
+  const Portfolio = (
+    <>
+      <div className="metric-grid four">
+        <Metric label="Wartość pozycji" value={fmtPln(totals.value_pln ?? totals.value_pln_partial)} detail={`${positions.length} otwartych`} featured />
+        <Metric label="Koszt" value={fmtPln(totals.cost_pln)} detail="Kapitał w otwartych pozycjach" />
+        <Metric label="Zysk niezrealizowany" value={fmtPln(totals.unrealized_pl_pln)} detail={fmtPct(totals.pl_pct)} tone={cls(totals.unrealized_pl_pln)} />
+        <Metric label="Zysk zrealizowany" value={fmtPln(totals.realized_pl_pln)} detail="Zamknięte transakcje" tone={cls(totals.realized_pl_pln)} />
+      </div>
+      <section className="surface">
+        <SectionHeader eyebrow="Pozycje" title="Twój portfel" description="Kliknij instrument, aby zobaczyć historię i źródła wyniku." />
+        <PositionsTable positions={positions} totals={totals} onOpen={openDetail} />
+      </section>
+      <section className="surface">
+        <SectionHeader eyebrow="Płynność" title="Konto gotówkowe" description="Wpłaty, wypłaty i środki oczekujące na inwestycję." />
+        <CashPanel
+          cash={cash}
+          onAdd={(body) => run(() => api.addCash(body), "Operacja gotówkowa została dodana.").catch(() => {})}
+          onDelete={(id) => {
+            if (window.confirm("Usunąć tę operację gotówkową?")) {
+              run(() => api.deleteCash(id), "Operacja została usunięta.").catch(() => {});
+            }
+          }}
+        />
+      </section>
+    </>
+  );
+
+  const Activity = (
+    <>
+      <section className="surface">
+        <SectionHeader eyebrow="Nowa operacja" title="Dodaj transakcję" description="Wprowadź zakup lub sprzedaż ręcznie." />
+        <TransactionForm
+          instruments={instruments}
+          onAdd={(body) => run(
+            () => api.addTransaction(body),
+            (r) => r.created ? "Transakcja została dodana." : "Taka transakcja już istnieje.",
+          ).catch(() => {})}
+        />
+      </section>
+      <section className="surface">
+        <SectionHeader
+          eyebrow="Historia"
+          title="Transakcje"
+          description={`${transactions.length} operacji zapisanych w portfelu.`}
+          action={<a className="text-button" href="/api/export/transactions.csv">Eksportuj CSV</a>}
+        />
+        <TransactionsTable
+          transactions={transactions}
+          onOpen={openDetail}
+          onDelete={(id) => {
+            if (window.confirm("Usunąć tę transakcję? Wpłynie to na wycenę i historię portfela.")) {
+              run(() => api.deleteTransaction(id), "Transakcja została usunięta.").catch(() => {});
+            }
+          }}
+        />
+      </section>
+      <section className="surface">
+        <SectionHeader
+          eyebrow="Dzień po dniu"
+          title="Zmiany wartości"
+          description="Wynik rynkowy bez traktowania zakupu jako zysku."
+          action={<a className="text-button" href="/api/export/daily-changes.csv">Eksportuj dane</a>}
+        />
+        <DailyChangesTable rows={dailyChanges} />
+      </section>
+    </>
+  );
+
+  const Allocation = (
+    <section className="surface">
+      <SectionHeader
+        eyebrow="Plan inwestycyjny"
+        title="Alokacja docelowa i rzeczywista"
+        description="Zobacz, gdzie portfel odchyla się od Twoich założeń i jaka kwota przywróci równowagę."
+      />
+      <AllocationPanel
+        allocation={allocation}
+        onSave={(targets) => run(() => api.setAllocation(targets), "Model docelowy został zapisany.").catch(() => {})}
+      />
+    </section>
+  );
+
+  const Analysis = (
+    <>
+      <ReturnsStrip returns={totals.returns} />
+      <section className="surface">
+        <SectionHeader
+          eyebrow="Porównanie"
+          title="Wartość i stopa zwrotu"
+          description="Porównaj wynik portfela ze stałą stopą oraz inflacją."
+          action={(
+            <div className="benchmark-fields">
+              <label>Stała stopa <input type="number" step="0.5" value={benchmarkRate} onChange={(e) => setBenchmarkRate(parseFloat(e.target.value) || 0)} />%</label>
+              <label>Inflacja + <input type="number" step="0.5" value={cpiSpread} onChange={(e) => setCpiSpread(parseFloat(e.target.value) || 0)} />%</label>
+            </div>
+          )}
+        />
+        <HistoryChart data={history} benchmarkRate={benchmarkRate} cpiSpread={cpiSpread} />
+      </section>
+      <section className="surface">
+        <SectionHeader
+          eyebrow="Ryzyko"
+          title="Obsunięcie od szczytu"
+          description="Spadki liczone na indeksie TWR, dlatego wpłaty i wypłaty nie zniekształcają wyniku."
+        />
+        <DrawdownChart data={drawdown} />
+      </section>
+    </>
+  );
+
+  const Settings = (
+    <>
+      <section className="surface">
+        <SectionHeader eyebrow="Synchronizacja" title="Źródła danych" description="Zarządzaj wycenami i danymi potrzebnymi do obliczeń." />
+        <div className="sync-grid">
+          <div className="sync-item">
+            <div>
+              <span className="sync-kicker">Wyceny i kursy NBP</span>
+              <strong>{latestPriceDate ? `Ostatnie dane: ${latestPriceDate}` : "Brak danych"}</strong>
+              <p>Aktualizuje bieżące ceny i uzupełnia krótkie luki.</p>
+            </div>
+            <button className="secondary" disabled={busy} onClick={() => run(() => api.refresh(), "Wyceny zostały odświeżone.").catch(() => {})}>Odśwież</button>
+          </div>
+          <div className="sync-item">
+            <div>
+              <span className="sync-kicker">Pełna historia</span>
+              <strong>Historia wycen instrumentów</strong>
+              <p>Odbudowuje dane potrzebne do wykresów i analizy.</p>
+            </div>
+            <button className="secondary" disabled={busy} onClick={() => run(() => api.backfill(), "Historia wycen została uzupełniona.").catch(() => {})}>Uzupełnij</button>
+          </div>
+          <div className="sync-item">
+            <div>
+              <span className="sync-kicker">Inflacja</span>
+              <strong>Eurostat HICP dla Polski</strong>
+              <p>Aktualizuje benchmark inflacja + premia.</p>
+            </div>
+            <button className="secondary" disabled={busy} onClick={() => run(() => api.refreshCpi(), "Dane inflacyjne zostały odświeżone.").catch(() => {})}>Pobierz</button>
+          </div>
+        </div>
+      </section>
+
+      <section className="surface">
+        <SectionHeader
+          eyebrow="Instrumenty"
+          title="Nazwy i mapowanie notowań"
+          description="Ticker i kategoria wpływają na wyceny oraz alokację."
+        />
+        <InstrumentsPanel
+          instruments={instruments}
+          onSave={(isin, body) => run(() => api.updateInstrument(isin, body), "Ustawienia instrumentu zostały zapisane.").catch(() => {})}
+        />
+      </section>
+
+      <section className="surface settings-split">
+        <div>
+          <SectionHeader eyebrow="Import" title="Import transakcji" description="Dotychczasowy format CSV pozostaje dostępny do czasu wdrożenia nowego brokera." />
+          <input ref={fileRef} type="file" accept=".csv" className="hidden-file" onChange={onImport} />
+          <button className="secondary" onClick={() => fileRef.current?.click()} disabled={busy}>Wybierz plik CSV</button>
+        </div>
+        <div className="settings-divider" />
+        <div>
+          <SectionHeader eyebrow="Bezpieczeństwo" title="Backup i eksport" description="Pobierz dane lub utwórz kopię na serwerze." />
+          <DataPanel
+            backups={backups}
+            busy={busy}
+            onBackup={() => run(() => api.backupNow(), "Kopia zapasowa została utworzona.").catch(() => {})}
+          />
+        </div>
+      </section>
+    </>
+  );
+
+  const pages = { overview: Overview, portfolio: Portfolio, activity: Activity, allocation: Allocation, analysis: Analysis, settings: Settings };
 
   return (
-    <div className="app">
-      <header className="top">
-        <div>
-          <h1>Portfolio Tracker</h1>
-          <div className="sub">Self-hosted · wyceny w PLN (przeliczane kursem NBP)</div>
+    <div className="app-shell">
+      <aside className="sidebar">
+        <button className="brand" onClick={() => navigate("overview")} aria-label="Przejdź do pulpitu">
+          <span className="brand-mark">P</span>
+          <span className="brand-copy"><strong>Portfolio</strong><small>personal tracker</small></span>
+        </button>
+        <nav className="side-nav" aria-label="Główna nawigacja">
+          {NAV.map(([id, label, index]) => (
+            <button key={id} className={page === id ? "active" : ""} onClick={() => navigate(id)} aria-current={page === id ? "page" : undefined}>
+              <span>{index}</span>{label}
+              {id === "activity" && transactions.length > 0 && <em>{transactions.length}</em>}
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-foot">
+          <StatusDot tone={staleCount ? "warn" : "good"}>{staleCount ? "Sprawdź wyceny" : "Dane aktualne"}</StatusDot>
+          <small>Wszystkie wartości w PLN</small>
         </div>
-        <div className="toolbar">
-          <input ref={fileRef} type="file" accept=".csv" className="hidden-file" onChange={onImport} />
-          <button onClick={() => fileRef.current?.click()} disabled={busy}>Importuj CSV</button>
-          <button onClick={() => run(() => api.refresh(), "Odświeżono ceny i kursy.")} disabled={busy}>Odśwież ceny</button>
-          <button onClick={() => run(() => api.backfill(), "Pobrano historię wycen.")} disabled={busy}>Backfill historii</button>
-          <button onClick={() => run(() => api.refreshCpi(), "Pobrano dane inflacji (HICP).")} disabled={busy}>Pobierz inflację</button>
-          <button onClick={() => setShowBackup(true)} disabled={busy}>Backup</button>
-        </div>
-      </header>
+      </aside>
 
-      {msg && <div className={`msg ${msg.ok ? "ok" : "err"}`}>{msg.text}</div>}
-      {busy && <div className="spinner">Pracuję…</div>}
+      <main className="main-content">
+        <header className="page-header">
+          <div>
+            <span className="mobile-brand">Portfolio</span>
+            <h1>{pageMeta[0]}</h1>
+            <p>{pageMeta[1]}</p>
+          </div>
+          <div className="header-meta">
+            <span>{new Intl.DateTimeFormat("pl-PL", { day: "numeric", month: "long", year: "numeric" }).format(new Date())}</span>
+            <button className="avatar" onClick={() => navigate("settings")} aria-label="Otwórz ustawienia">KP</button>
+          </div>
+        </header>
 
-      <Cards totals={portfolio?.totals} />
+        {msg && <div className={`toast ${msg.ok ? "ok" : "err"}`} role="status" aria-live="polite">{msg.text}</div>}
+        {busy && <div className="progress-line" aria-label="Trwa aktualizacja" />}
 
-      <nav className="tabs">
-        {TABS.map(([id, label]) => (
-          <button key={id} className={`tab ${tab === id ? "active" : ""}`} onClick={() => setTab(id)}>
-            {label}
-            {id === "transactions" && transactions.length ? <span className="count">{transactions.length}</span> : null}
+        <div className="page-content">{pages[page]}</div>
+      </main>
+
+      <nav className="mobile-nav" aria-label="Nawigacja mobilna">
+        {NAV.slice(0, 5).map(([id, label, index]) => (
+          <button key={id} className={page === id ? "active" : ""} onClick={() => navigate(id)}>
+            <span>{index}</span>{label}
           </button>
         ))}
       </nav>
-
-      {tab === "dashboard" && (
-        <>
-          <ReturnsStrip returns={portfolio?.totals?.returns} />
-          <div className="panel">
-            <div className="panel-head">
-              <h2>Wartość konta vs benchmark</h2>
-              <div className="bench-ctrls">
-                <label className="bench-ctrl">
-                  Stała stopa:
-                  <input
-                    type="number"
-                    step="0.5"
-                    className="cell narrow"
-                    value={benchmarkRate}
-                    onChange={(e) => setBenchmarkRate(parseFloat(e.target.value) || 0)}
-                  />
-                  % rocznie
-                </label>
-                <label className="bench-ctrl">
-                  Inflacja +
-                  <input
-                    type="number"
-                    step="0.5"
-                    className="cell narrow"
-                    value={cpiSpread}
-                    onChange={(e) => setCpiSpread(parseFloat(e.target.value) || 0)}
-                  />
-                  % rocznie
-                </label>
-              </div>
-            </div>
-            <HistoryChart data={history} benchmarkRate={benchmarkRate} cpiSpread={cpiSpread} />
-          </div>
-          <div className="panel">
-            <div className="panel-head">
-              <h2>Obsunięcie (drawdown)</h2>
-              <span className="sub">spadek od szczytu — liczony na indeksie TWR (wpłaty nie zaburzają)</span>
-            </div>
-            <DrawdownChart data={drawdown} />
-          </div>
-          <div className="panel">
-            <h2>Pozycje</h2>
-            <PositionsTable positions={portfolio?.positions} totals={portfolio?.totals || {}} onOpen={openDetail} />
-          </div>
-        </>
-      )}
-
-      {tab === "daily" && (
-        <div className="panel">
-          <div className="panel-head">
-            <h2>Zmiany dzienne (zysk/strata D/D)</h2>
-            <a className="btn" href="/api/export/daily-changes.csv">⬇ Eksport CSV</a>
-          </div>
-          <div className="sub" style={{ marginBottom: 12 }}>
-            Zmiana to wynik <strong>rynkowy</strong> dnia (sama wycena ETF) — koszt kupna/sprzedaży jest
-            odjęty, więc zakup nie liczy się jako zysk. Gotówka pominięta (nie ma stopy zwrotu).
-          </div>
-          <DailyChangesTable rows={dailyChanges} />
-        </div>
-      )}
-
-      {tab === "transactions" && (
-        <div className="panel">
-          <h2>Historia transakcji</h2>
-          <TransactionForm
-            instruments={instruments}
-            onAdd={(body) => run(async () => {
-              const r = await api.addTransaction(body);
-              flash(r.created ? "Dodano transakcję." : "Pominięto — taka transakcja już istnieje.", r.created);
-            })}
-          />
-          <TransactionsTable
-            transactions={transactions}
-            onOpen={openDetail}
-            onDelete={(id) => run(() => api.deleteTransaction(id), "Usunięto transakcję.")}
-          />
-        </div>
-      )}
-
-      {tab === "allocation" && (
-        <div className="panel">
-          <h2>Alokacja docelowa vs rzeczywista</h2>
-          <AllocationPanel
-            allocation={allocation}
-            onSave={(targets) => run(() => api.setAllocation(targets), "Zapisano model docelowy.")}
-          />
-        </div>
-      )}
-
-      {tab === "cash" && (
-        <div className="panel">
-          <h2>Konto gotówkowe</h2>
-          <CashPanel
-            cash={cash}
-            onAdd={(body) => run(() => api.addCash(body), "Dodano operację gotówkową.")}
-            onDelete={(id) => run(() => api.deleteCash(id), "Usunięto operację.")}
-          />
-        </div>
-      )}
-
-      {tab === "instruments" && (
-        <div className="panel">
-          <h2>Instrumenty (mapowanie ISIN → ticker)</h2>
-          <InstrumentsPanel
-            instruments={instruments}
-            onSave={(isin, body) => run(() => api.updateInstrument(isin, body), "Zapisano mapowanie.")}
-          />
-        </div>
-      )}
-
-      {showBackup && (
-        <BackupModal
-          backups={backups}
-          busy={busy}
-          onBackup={() => run(() => api.backupNow(), "Backup zapisany na serwerze.")}
-          onClose={() => setShowBackup(false)}
-        />
-      )}
 
       {detail && (
         <InstrumentDetail

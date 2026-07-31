@@ -4,14 +4,27 @@ __pycache__/
 backend/.venv/
 .venv/
 .pytest_cache/
+*.egg-info/
+htmlcov/
+coverage.xml
+.coverage
 
 # Node
 frontend/node_modules/
 frontend/dist/
+frontend/.vite/
 
-# Dane aplikacji (baza SQLite)
+# Dane aplikacji (lokalna baza SQLite + pliki pomocnicze SQLite)
 data/
 *.db
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+*.db-journal
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
 
 # Dane osobiste — eksporty z brokera (NIE commitować, zawierają realne transakcje)
 *.csv
@@ -21,4 +34,7 @@ data/
 # System / różne
 .DS_Store
 *.log
-.env.local
+*.tmp
+.env
+.env.*
+!.env.example

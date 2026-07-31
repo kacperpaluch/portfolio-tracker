@@ -11,10 +11,13 @@ const PERIOD_LABELS = [
 export default function ReturnsStrip({ returns }) {
   if (!returns || !Object.keys(returns).length) return null;
   return (
-    <div className="panel">
+    <section className="surface">
       <div className="panel-head">
-        <h2>Zwroty w okresach</h2>
-        <span className="sub">TWR — wynik portfela (bez wpływu timingu wpłat); pod spodem XIRR roczny</span>
+        <div>
+          <div className="eyebrow">Efektywność</div>
+          <h2>Zwroty w okresach</h2>
+          <span className="sub">Główna wartość to TWR; pod spodem pokazujemy roczny XIRR.</span>
+        </div>
       </div>
       <div className="returns-strip">
         {PERIOD_LABELS.map(([key, label]) => {
@@ -30,6 +33,6 @@ export default function ReturnsStrip({ returns }) {
           );
         })}
       </div>
-    </div>
+    </section>
   );
 }

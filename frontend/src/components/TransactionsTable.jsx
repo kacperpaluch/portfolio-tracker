@@ -15,7 +15,7 @@ export default function TransactionsTable({ transactions, onOpen, onDelete }) {
           <tr key={t.id}>
             <td>{fmtDate(t.ts)}</td>
             <td>
-              <span className="link" onClick={() => onOpen?.(t.isin)}>{t.name || t.isin}</span>
+              <button className="instrument-link" onClick={() => onOpen?.(t.isin)}>{t.name || t.isin}</button>
               <div className="tag">{t.ticker || t.isin}</div>
             </td>
             <td className={t.type === "BUY" ? "pos" : "neg"}>{t.type === "BUY" ? "Kupno" : "Sprzedaż"}</td>
