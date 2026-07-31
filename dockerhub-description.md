@@ -10,7 +10,7 @@ wyceny i pokazuje wartość, zysk/stratę oraz stopy zwrotu — **wszystko w PLN
 ## Funkcje
 
 - **Czytelny wealth cockpit** — jasna przestrzeń robocza z ciemnym sidebarem; osobne
-  sekcje Pulpit, Portfel, Aktywność, Alokacja, Analiza oraz Dane i ustawienia.
+  sekcje Pulpit, Portfel, Aktywność, Alokacja, Raporty i analiza oraz Dane i ustawienia.
 - **Struktura portfela na Pulpicie** — przełączany widok kategorii i walorów, procentowe
   udziały pozycji oraz wskaźnik koncentracji w trzech największych inwestycjach.
 - **Responsywny interfejs** — desktopowy sidebar i dolna nawigacja na telefonie.
@@ -25,6 +25,9 @@ wyceny i pokazuje wartość, zysk/stratę oraz stopy zwrotu — **wszystko w PLN
 - **Konto gotówkowe** — ręczne wpłaty/wypłaty, śledzenie niezainwestowanej gotówki.
 - **Wykres wartości w czasie** + **dwa benchmarki** (przełączane): konfigurowalna stała stopa (np. 5%/rok) oraz **inflacja + X%** (realny indeks HICP dla Polski, Eurostat). Przełącznik trybu: wartość konta (PLN) **lub** stopa zwrotu (%) vs benchmarki w %.
 - **XIRR i TWR** — roczny zwrot money-weighted (z timingiem wpłat) oraz time-weighted (wynik portfela).
+- **Raporty okresowe** — bieżący i poprzedni miesiąc/rok, ostatnie 12 miesięcy lub własny
+  zakres; wynik PLN, TWR/XIRR, benchmarki, poprzedni okres, walory, klasy, waluty, przepływy,
+  prowizje, mapa miesięcznych zwrotów oraz eksport CSV i druk/zapis PDF.
 - **Obsunięcie (drawdown)** — wykres „pod wodą" (spadek od szczytu) na indeksie TWR — flow-neutral, więc wpłaty nie maskują spadków; max + bieżące DD z datami.
 - **Alokacja docelowa** — kategorie ETF-ów, wagi modelu i plan podziału nowej wpłaty
   pomiędzy niedoważone klasy bez sugerowania sprzedaży.

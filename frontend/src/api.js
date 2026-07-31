@@ -92,5 +92,23 @@ export const api = {
       body: JSON.stringify({ amount_pln: amountPln }),
     }).then(json),
   analytics: () => fetch("/api/analytics").then(json),
+  report: (fromDate, toDate, benchmarkRate = 0.05, cpiSpread = 0, signal) => {
+    const params = new URLSearchParams({
+      from_date: fromDate,
+      to_date: toDate,
+      benchmark_rate: String(benchmarkRate),
+      cpi_spread: String(cpiSpread),
+    });
+    return fetch(`/api/reports?${params}`, { signal }).then(json);
+  },
+  reportCsvUrl: (fromDate, toDate, benchmarkRate = 0.05, cpiSpread = 0) => {
+    const params = new URLSearchParams({
+      from_date: fromDate,
+      to_date: toDate,
+      benchmark_rate: String(benchmarkRate),
+      cpi_spread: String(cpiSpread),
+    });
+    return `/api/reports.csv?${params}`;
+  },
   dataQuality: () => fetch("/api/data-quality").then(json),
 };

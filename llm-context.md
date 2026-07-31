@@ -79,6 +79,7 @@ backend/app/
   db.py          # połączenie SQLite, SCHEMA (CREATE IF NOT EXISTS), _migrate(), db_session()
   importer.py    # parse_csv, import/add/update/delete transaction + spójność cash flow
   analytics.py   # atrybucja wyniku: instrumenty, kategorie, wpłaty i aktywność
+  reports.py     # raport zakresu: TWR/XIRR/PLN, benchmarki, porównanie, atrybucja, przepływy, heatmapa i CSV
   data_quality.py # diagnostyka cen, FX, konfiguracji, alokacji i księgi gotówki
   instruments.py # ensure_instrument (+ SEED ISIN->ticker), list/update_instrument
   prices.py      # yfinance: fetch_latest/fetch_history, auto-detekcja waluty (GBx->GBP), cache; parse_price_csv/import_prices (import cen z CSV, format stooq)
@@ -97,7 +98,7 @@ frontend/src/
   components/    # jeden komponent = jeden plik: ReturnsStrip, HistoryChart, DrawdownChart,
                  #   InstrumentDetail, PositionsTable, TransactionForm, TransactionsTable, CashPanel,
                  #   InstrumentsPanel, AllocationPanel (+ AllocationDonut), DataPanel,
-                 #   DailyChangesTable
+                 #   DailyChangesTable, ReportsPanel, ReportPerformanceChart, MonthlyReturnsHeatmap
   format.js      # wspólne helpery: fmtPln, fmtPct, cls, fmtDate, daysSince
   api.js         # cienki klient REST + detail/message z błędów backendu
   styles.css     # tokeny UI, jasny motyw + ciemny sidebar, desktop/tablet/mobile
@@ -116,7 +117,7 @@ i publikuje toast. Parametry benchmarków są odświeżane osobno z debounce 350
 | `portfolio` | Portfel | KPI otwartych pozycji, `PositionsTable`, `CashPanel` |
 | `activity` | Aktywność | `TransactionForm`, filtrowanie/edycja w `TransactionsTable`, `DailyChangesTable` |
 | `allocation` | Alokacja | `AllocationPanel`, donut oraz `RebalancePlanner` dla nowej wpłaty bez sprzedaży |
-| `analysis` | Analiza | `AnalyticsBreakdown`, `ReturnsStrip`, pełny `HistoryChart`, benchmarki i `DrawdownChart` |
+| `analysis` | Raporty i analiza | wewnętrzne widoki: `ReportsPanel` (okres/porównanie/CSV/PDF), wynik i atrybucja (`AnalyticsBreakdown`, `ReturnsStrip`, `HistoryChart`) oraz ryzyko (`DrawdownChart`) |
 | `settings` | Dane i ustawienia | `DataQualityPanel`, synchronizacja, `InstrumentsPanel`, import, `DataPanel` |
 
 Wspólne elementy wizualne (`SectionHeader`, `Metric`, `StatusDot`) są lokalnymi komponentami
@@ -138,6 +139,7 @@ portfolio.py → cash, fx, prices
 history.py → cpi, fx, prices, returns
 allocation.py → cash, portfolio
 analytics.py → portfolio, history
+reports.py → history, returns, data_quality
 data_quality.py → portfolio
 summary.py → portfolio, history, allocation
 backup.py → db
@@ -192,6 +194,8 @@ odczyt
 | DELETE | `/api/transactions/{id}` | usunięcie transakcji (+ przepływ gotówki) |
 | GET | `/api/data-quality` | kontrola cen, FX, konfiguracji, kategorii, alokacji, oversell i cash reconciliation |
 | GET | `/api/analytics` | atrybucja wyniku, klasy, instrumenty, wpłaty, prowizje i aktywność |
+| GET | `/api/reports?from_date=&to_date=&benchmark_rate=&cpi_spread=` | `reports.build`: raport okresowy, poprzedni okres, TWR/XIRR/PLN, benchmarki, atrybucja, przepływy, heatmapa miesięczna i jakość |
+| GET | `/api/reports.csv?from_date=&to_date=&benchmark_rate=&cpi_spread=` | `reports.export_csv`: raport wielosekcyjny CSV UTF-8 z BOM |
 | POST | `/api/allocation/plan` | plan podziału nowej wpłaty bez sprzedaży (`amount_pln`) |
 | GET | `/api/portfolio?refresh=` | pozycje + sumy (P/L, cash, XIRR, TWR, `returns` 1M/3M/YTD/1R/all) |
 | GET | `/api/summary` | digest pod powiadomienia/n8n: konto, P/L, zmiana D/D, zwroty, alokacja vs cel (`summary.build`) |

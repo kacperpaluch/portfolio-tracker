@@ -21,6 +21,7 @@ from . import history as history_mod
 from . import instruments as instruments_mod
 from . import portfolio as portfolio_mod
 from . import prices as prices_mod
+from . import reports as reports_mod
 from . import summary as summary_mod
 from . import importer
 from .db import db_session, init_db
@@ -211,6 +212,42 @@ def get_drawdown() -> dict:
 def get_analytics() -> dict:
     with db_session() as conn:
         return analytics_mod.build(conn)
+
+
+@app.get("/api/reports")
+def get_report(
+    from_date: date,
+    to_date: date,
+    benchmark_rate: float = 0.05,
+    cpi_spread: float = 0.0,
+) -> dict:
+    """Raport okresowy: wynik, zwroty, benchmarki, przepływy i atrybucja."""
+    with db_session() as conn:
+        try:
+            return reports_mod.build(conn, from_date, to_date, benchmark_rate, cpi_spread)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/api/reports.csv")
+def export_report_csv(
+    from_date: date,
+    to_date: date,
+    benchmark_rate: float = 0.05,
+    cpi_spread: float = 0.0,
+) -> Response:
+    with db_session() as conn:
+        try:
+            report = reports_mod.build(conn, from_date, to_date, benchmark_rate, cpi_spread)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+    return Response(
+        content=reports_mod.export_csv(report),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="raport-{from_date.isoformat()}-{to_date.isoformat()}.csv"'
+        },
+    )
 
 
 @app.get("/api/data-quality")

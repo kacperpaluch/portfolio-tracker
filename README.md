@@ -47,7 +47,7 @@ Internetu bez dodatkowej warstwy dostępu (np. VPN, Tailscale lub reverse proxy 
 ## Funkcje
 
 - **Prywatny interfejs typu wealth cockpit** — jasna, czytelna przestrzeń robocza z ciemnym
-  sidebarem; osobne sekcje Pulpit, Portfel, Aktywność, Alokacja, Analiza oraz Dane i ustawienia.
+  sidebarem; osobne sekcje Pulpit, Portfel, Aktywność, Alokacja, Raporty i analiza oraz Dane i ustawienia.
   Widok mobilny korzysta z dolnej nawigacji i zachowuje pełną funkcjonalność.
 - **Import CSV** z biura maklerskiego (GPW „historia PW” oraz eMAKLER
   „Transakcje bieżące”, kodowanie CP1250) — format jest rozpoznawany automatycznie, a import
@@ -84,6 +84,13 @@ Internetu bez dodatkowej warstwy dostępu (np. VPN, Tailscale lub reverse proxy 
 - **Zwroty w okresach** — pasek 1M / 3M / YTD / 1R / od początku: TWR skumulowany (faktyczny
   wynik portfela w danym okresie, timing-neutralny) + XIRR roczny dla każdego okresu. „Ile w tym
   roku" jednym rzutem oka.
+- **Raporty okresowe** — bieżący/poprzedni miesiąc, bieżący/poprzedni rok, ostatnie 12 miesięcy
+  albo własny zakres. Raport pokazuje wynik PLN, TWR, XIRR, wartości otwarcia/zamknięcia,
+  benchmarki i automatyczne porównanie z poprzednim okresem kalendarzowym.
+- **Pełne rozliczenie okresu** — zrealizowany wynik i zmiana niezrealizowanego, najlepsi/najsłabsi
+  uczestnicy, atrybucja według walorów, klas oraz walut notowania, wpłaty, wypłaty, transakcje,
+  prowizje i gotówka. Mapa lata × miesiące prezentuje historyczne TWR; raport można pobrać jako
+  CSV albo wydrukować/zapisać jako PDF z zachowaniem wykresów i polskich znaków.
 - **Obsunięcie (drawdown)** — wykres „pod wodą" pokazujący spadek od ostatniego szczytu, liczony
   na **indeksie wzrostu TWR** (flow-neutral) — wpłaty IKE nie maskują spadków, a wypłaty nie udają
   obsunięć. Podsumowanie: max drawdown (z datami szczytu/dołka i datą odbicia) oraz bieżące
@@ -129,7 +136,7 @@ Interfejs celowo rozdziela codzienne sprawdzanie portfela od operacji administra
 | **Portfel** | pełna tabela otwartych pozycji, koszt, wartość, zysk niezrealizowany i zrealizowany oraz konto gotówkowe |
 | **Aktywność** | ręczne dodawanie i edycja transakcji, notatki, filtry, historia kupna/sprzedaży i dzienne zmiany wartości |
 | **Alokacja** | rzeczywisty i docelowy udział kategorii, odchylenie, kwota rebalansu oraz plan podziału nowej wpłaty bez sprzedaży |
-| **Analiza** | atrybucja wyniku według ETF-ów i klas, wpłaty, zgodność z planem, stopy zwrotu, benchmarki i drawdown |
+| **Raporty i analiza** | raport okresowy i porównawczy, mapa miesięcznych TWR, eksport CSV/PDF oraz osobne widoki wyniku, atrybucji, benchmarków i drawdown |
 | **Dane i ustawienia** | kontrola jakości danych, odświeżanie wycen, backfill historii, HICP, mapowanie instrumentów, import, eksport i backup |
 
 Najważniejsze operacje mają własne komunikaty postępu i błędów. Usunięcie transakcji albo
@@ -238,7 +245,7 @@ Zmienne środowiskowe (ustawiane w `docker-compose.yml`):
 6. Opcjonalnie pobierz HICP w **Dane i ustawienia**, aby uruchomić benchmark
    „inflacja + X%". Ta operacja nie dotyka tabeli cen i nie nadpisuje ręcznych importów.
 7. Na co dzień korzystaj z **Pulpitu**; szczegółowe TWR, XIRR, benchmarki i drawdown są
-   zebrane w sekcji **Analiza**.
+   zebrane w sekcji **Raporty i analiza**.
 
 ## Architektura
 
@@ -259,13 +266,14 @@ portfolio-tracker/
 │   │   ├── summary.py     # digest pod powiadomienia/n8n (wartość, P/L, zwroty, alokacja vs cel)
 │   │   ├── history.py     # backfill cen/kursów, seria wartości w czasie, benchmarki, XIRR
 │   │   ├── returns.py     # czyste XIRR (Newton + bisekcja) i TWR (łańcuch podokresów)
+│   │   ├── reports.py     # raport okresowy, porównania, atrybucja, mapa miesięczna i CSV
 │   │   ├── backup.py      # backup/restore SQLite, walidacja, retencja i eksport CSV
 │   │   └── scheduler.py   # APScheduler — odświeżanie cen/FX (~21:00) + nocny backup (~03:00)
 │   └── tests/             # pytest (+ sample_hisPW.csv — fikcyjne dane testowe)
 ├── frontend/              # Vite + React + Recharts (build serwowany przez FastAPI z /frontend/dist)
 │   └── src/
 │       ├── App.jsx        # shell, routing przez ?tab=, stan, ładowanie danych, akcje i sześć widoków aplikacji
-│       ├── components/    # tabele, formularze, wykresy, alokacja, backup i modal instrumentu
+│       ├── components/    # tabele, formularze, wykresy, raporty, alokacja, backup i modal instrumentu
 │       ├── format.js      # wspólne helpery formatujące (fmtPln, fmtPct, cls, fmtDate)
 │       ├── api.js         # cienki klient REST + czytelne błędy zwracane przez backend
 │       └── styles.css     # tokeny UI, jasny motyw + ciemny sidebar, layout i breakpointy mobilne
@@ -311,6 +319,11 @@ Pozycje nie są materializowane — liczone w locie z `transactions` (chronologi
     danych CPI w cache pola benchmarku inflacyjnego = `null` (linia się nie pokazuje).
 - **XIRR** (`returns.py`): money-weighted; przepływy zewnętrzne (wpłata −, wypłata +) +
   wartość końcowa konta. Bez wpłat — fallback na przepływy z transakcji. Newton z fallbackiem na bisekcję.
+- **Raport okresowy** (`reports.py`): otwarcie to ostatnia znana wartość przed zakresem, a wynik
+  PLN = `zamknięcie − otwarcie − kapitał zewnętrzny netto`. TWR neutralizuje przepływy po dniu
+  otwarcia; XIRR uwzględnia ich timing. Miesiące porównujemy z poprzednim miesiącem, YTD/rok
+  z analogicznym zakresem poprzedniego roku, a własny zakres z bezpośrednio poprzednim zakresem
+  tej samej długości. „Zmiana niezrealizowanego" = wynik waloru w okresie minus zysk zrealizowany.
 
 ## API
 
@@ -328,6 +341,8 @@ Pozycje nie są materializowane — liczone w locie z `transactions` (chronologi
 | `DELETE` | `/api/transactions/{id}` | usunięcie transakcji (i jej przepływu gotówki) |
 | `GET` | `/api/data-quality` | kontrola kompletności cen, FX, konfiguracji, alokacji i spójności księgi |
 | `GET` | `/api/analytics` | atrybucja wyniku, klasy aktywów, instrumenty, wpłaty i aktywność |
+| `GET` | `/api/reports?from_date=&to_date=&benchmark_rate=&cpi_spread=` | pełny raport okresowy, automatyczne porównanie, seria TWR, atrybucja, przepływy, mapa miesięczna i jakość danych |
+| `GET` | `/api/reports.csv?from_date=&to_date=&benchmark_rate=&cpi_spread=` | raport okresowy w CSV UTF-8 (sekcje podsumowania, walorów, przepływów i miesięcznych TWR) |
 | `POST` | `/api/allocation/plan` | symulacja podziału nowej wpłaty bez sprzedaży |
 | `GET` | `/api/instruments/{isin}/history` | dzienna historia waloru (cena natywna, kurs, PLN, ilość) |
 | `GET` / `PUT` | `/api/allocation` | alokacja docelowa vs rzeczywista (grupy + gotówka) |

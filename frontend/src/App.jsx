@@ -18,13 +18,14 @@ import DataPanel from "./components/DataPanel.jsx";
 import DataQualityPanel from "./components/DataQualityPanel.jsx";
 import RebalancePlanner from "./components/RebalancePlanner.jsx";
 import AnalyticsBreakdown from "./components/AnalyticsBreakdown.jsx";
+import ReportsPanel from "./components/ReportsPanel.jsx";
 
 const NAV = [
   ["overview", "Pulpit", "01"],
   ["portfolio", "Portfel", "02"],
   ["activity", "Aktywność", "03"],
   ["allocation", "Alokacja", "04"],
-  ["analysis", "Analiza", "05"],
+  ["analysis", "Raporty", "05"],
   ["settings", "Dane i ustawienia", "06"],
 ];
 
@@ -41,7 +42,7 @@ const PAGE_META = {
   portfolio: ["Portfel", "Pozycje, wyniki i niezainwestowana gotówka"],
   activity: ["Aktywność", "Transakcje i dzienne zmiany wartości"],
   allocation: ["Alokacja", "Kontroluj zgodność portfela z założonym planem"],
-  analysis: ["Analiza", "Zwroty, benchmarki i ryzyko portfela"],
+  analysis: ["Raporty i analiza", "Wyniki okresowe, benchmarki, atrybucja i ryzyko portfela"],
   settings: ["Dane i ustawienia", "Jakość danych, instrumenty, synchronizacja i kopie zapasowe"],
 };
 
@@ -109,6 +110,7 @@ export default function App() {
   const [detail, setDetail] = useState(null);
   const [page, setPage] = useState(initialPage);
   const [structureView, setStructureView] = useState("categories");
+  const [analysisView, setAnalysisView] = useState("report");
   const [benchmarkRate, setBenchmarkRate] = useState(5);
   const [cpiSpread, setCpiSpread] = useState(2);
   const [busy, setBusy] = useState(false);
@@ -462,37 +464,50 @@ export default function App() {
 
   const Analysis = (
     <>
-      <ReturnsStrip returns={totals.returns} />
-      <section className="surface">
-        <SectionHeader
-          eyebrow="Atrybucja"
-          title="Co buduje Twój wynik"
-          description="Wynik otwartych i zamkniętych pozycji, klasy aktywów, wpłaty oraz zgodność z planem."
-        />
-        <AnalyticsBreakdown analytics={analytics} allocation={allocation} onOpen={openDetail} />
-      </section>
-      <section className="surface">
-        <SectionHeader
-          eyebrow="Porównanie"
-          title="Wartość i stopa zwrotu"
-          description="Porównaj wynik portfela ze stałą stopą oraz inflacją."
-          action={(
-            <div className="benchmark-fields">
-              <label>Stała stopa <input type="number" step="0.5" value={benchmarkRate} onChange={(e) => setBenchmarkRate(parseFloat(e.target.value) || 0)} />%</label>
-              <label>Inflacja + <input type="number" step="0.5" value={cpiSpread} onChange={(e) => setCpiSpread(parseFloat(e.target.value) || 0)} />%</label>
-            </div>
-          )}
-        />
-        <HistoryChart data={history} benchmarkRate={benchmarkRate} cpiSpread={cpiSpread} />
-      </section>
-      <section className="surface">
-        <SectionHeader
-          eyebrow="Ryzyko"
-          title="Obsunięcie od szczytu"
-          description="Spadki liczone na indeksie TWR, dlatego wpłaty i wypłaty nie zniekształcają wyniku."
-        />
-        <DrawdownChart data={drawdown} />
-      </section>
+      <div className="analysis-view-nav no-print" role="tablist" aria-label="Widok raportów i analizy">
+        <button role="tab" aria-selected={analysisView === "report"} className={analysisView === "report" ? "active" : ""} onClick={() => setAnalysisView("report")}>Raport okresowy</button>
+        <button role="tab" aria-selected={analysisView === "performance"} className={analysisView === "performance" ? "active" : ""} onClick={() => setAnalysisView("performance")}>Wynik i atrybucja</button>
+        <button role="tab" aria-selected={analysisView === "risk"} className={analysisView === "risk" ? "active" : ""} onClick={() => setAnalysisView("risk")}>Ryzyko</button>
+        <div className="benchmark-fields">
+          <label>Stała stopa <input type="number" step="0.5" value={benchmarkRate} onChange={(e) => setBenchmarkRate(parseFloat(e.target.value) || 0)} />%</label>
+          <label>Inflacja + <input type="number" step="0.5" value={cpiSpread} onChange={(e) => setCpiSpread(parseFloat(e.target.value) || 0)} />%</label>
+        </div>
+      </div>
+
+      {analysisView === "report" && <ReportsPanel benchmarkRate={benchmarkRate} cpiSpread={cpiSpread} onOpen={openDetail} />}
+
+      {analysisView === "performance" && (
+        <div className="analysis-view-content">
+          <ReturnsStrip returns={totals.returns} />
+          <section className="surface">
+            <SectionHeader
+              eyebrow="Atrybucja"
+              title="Co buduje Twój wynik"
+              description="Wynik otwartych i zamkniętych pozycji, klasy aktywów, wpłaty oraz zgodność z planem."
+            />
+            <AnalyticsBreakdown analytics={analytics} allocation={allocation} onOpen={openDetail} />
+          </section>
+          <section className="surface">
+            <SectionHeader
+              eyebrow="Porównanie"
+              title="Wartość i stopa zwrotu"
+              description="Porównaj wynik portfela ze stałą stopą oraz inflacją."
+            />
+            <HistoryChart data={history} benchmarkRate={benchmarkRate} cpiSpread={cpiSpread} />
+          </section>
+        </div>
+      )}
+
+      {analysisView === "risk" && (
+        <section className="surface">
+          <SectionHeader
+            eyebrow="Ryzyko"
+            title="Obsunięcie od szczytu"
+            description="Spadki liczone na indeksie TWR, dlatego wpłaty i wypłaty nie zniekształcają wyniku."
+          />
+          <DrawdownChart data={drawdown} />
+        </section>
+      )}
     </>
   );
 
