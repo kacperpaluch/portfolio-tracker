@@ -12,7 +12,7 @@ export default function TransactionsTable({ transactions, instruments, onOpen, o
     const needle = query.trim().toLowerCase();
     return (transactions || []).filter((tx) => {
       const matchesType = type === "ALL" || tx.type === type;
-      const haystack = `${tx.name || ""} ${tx.ticker || ""} ${tx.isin || ""} ${tx.note || ""}`.toLowerCase();
+      const haystack = `${tx.name || ""} ${tx.ticker || ""} ${tx.isin || ""} ${tx.market || ""} ${tx.broker_order_id || ""} ${tx.note || ""}`.toLowerCase();
       return matchesType && (!needle || haystack.includes(needle));
     });
   }, [transactions, query, type]);
@@ -95,14 +95,27 @@ export default function TransactionsTable({ transactions, instruments, onOpen, o
             </tr>
           ) : (
             <tr key={t.id}>
-              <td>{fmtDate(t.ts)}</td>
+              <td>
+                {fmtDate(t.ts)}
+                {t.settlement_date && <div className="tag">Rozl. {t.settlement_date}</div>}
+              </td>
               <td>
                 <button className="instrument-link" onClick={() => onOpen?.(t.isin)}>{t.name || t.isin}</button>
                 <div className="tag">{t.ticker || t.isin}</div>
+                {(t.market || t.broker_order_id) && (
+                  <div className="tag">{[t.market, t.broker_order_id && `zlec. ${t.broker_order_id}`].filter(Boolean).join(" · ")}</div>
+                )}
               </td>
               <td className={t.type === "BUY" ? "pos" : "neg"}>{t.type === "BUY" ? "Kupno" : "Sprzedaż"}</td>
               <td>{t.quantity}</td>
-              <td>{fmtPln(t.price_pln)}</td>
+              <td>
+                {fmtPln(t.price_pln)}
+                {t.native_price != null && (
+                  <div className="tag">
+                    {t.native_price} {t.native_currency}{t.fx_rate != null ? ` · FX ${t.fx_rate}` : ""}
+                  </div>
+                )}
+              </td>
               <td className={t.type === "BUY" ? "neg" : "pos"}>
                 {t.type === "BUY" ? "−" : "+"}{fmtPln(t.value_pln)}
               </td>

@@ -28,6 +28,7 @@ data/
 
 # Dane osobiste — eksporty z brokera (NIE commitować, zawierają realne transakcje)
 *.csv
+*.pdf
 # ...ale przykładowy plik testowy (fikcyjne dane) trzymamy w repo:
 !backend/tests/sample_hisPW.csv
 

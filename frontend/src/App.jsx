@@ -218,10 +218,15 @@ export default function App() {
     const file = event.target.files?.[0];
     if (!file) return;
     run(
-      () => api.importCsv(file),
+      () => api.importTransactions(file),
       (r) => {
-        const format = r.format === "emakler_current" ? "eMAKLER" : "historia PW";
-        return `Format: ${format}. Zaimportowano ${r.imported} transakcji. Pominięte duplikaty: ${r.skipped_duplicates}.`;
+        const formats = {
+          emakler_current: "eMAKLER",
+          legacy_hispw: "historia PW",
+          mbank_confirmation_pdf: "potwierdzenie PDF mBank",
+        };
+        const enriched = r.enriched ? ` Uzupełniono metadane ${r.enriched} istniejących transakcji.` : "";
+        return `Format: ${formats[r.format] || r.format}. Zaimportowano ${r.imported} transakcji. Pominięte duplikaty: ${r.skipped_duplicates}.${enriched}`;
       },
     ).catch(() => {});
     event.target.value = "";
@@ -569,9 +574,9 @@ export default function App() {
 
       <section className="surface settings-split">
         <div>
-          <SectionHeader eyebrow="Import" title="Import transakcji" description="Obsługuje CSV „historia PW” oraz eMAKLER „Transakcje bieżące”. Format jest rozpoznawany automatycznie." />
-          <input ref={fileRef} type="file" accept=".csv" className="hidden-file" onChange={onImport} />
-          <button className="secondary" onClick={() => fileRef.current?.click()} disabled={busy}>Wybierz plik CSV</button>
+          <SectionHeader eyebrow="Import" title="Import transakcji" description="Obsługuje CSV „historia PW”, eMAKLER „Transakcje bieżące” oraz potwierdzenia PDF mBanku. Format jest rozpoznawany automatycznie." />
+          <input ref={fileRef} type="file" accept=".csv,.pdf,application/pdf" className="hidden-file" onChange={onImport} />
+          <button className="secondary" onClick={() => fileRef.current?.click()} disabled={busy}>Wybierz plik CSV lub PDF</button>
         </div>
         <div className="settings-divider" />
         <div>

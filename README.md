@@ -3,7 +3,7 @@
 [![Docker Hub](https://img.shields.io/docker/pulls/kpa90/portfolio-tracker?logo=docker)](https://hub.docker.com/r/kpa90/portfolio-tracker)
 
 Prywatny, self-hostowany tracker portfela ETF-ów dla jednego inwestora kupującego przez
-polskie biuro maklerskie (np. konto IKE). Importuje historię transakcji z CSV, pobiera
+polskie biuro maklerskie (np. konto IKE). Importuje historię transakcji z CSV lub PDF, pobiera
 bieżące wyceny, przelicza waluty kursem NBP i pokazuje wartość, zysk/stratę
 (zrealizowany + niezrealizowany), stopę zwrotu oraz porównanie z benchmarkiem —
 **wszystko w PLN**.
@@ -37,7 +37,7 @@ Internetu bez dodatkowej warstwy dostępu (np. VPN, Tailscale lub reverse proxy 
 - [Model danych](#model-danych)
 - [Jak działa wycena (logika finansowa)](#jak-działa-wycena-logika-finansowa)
 - [API](#api)
-- [Format pliku CSV](#format-pliku-csv)
+- [Formaty importu transakcji](#formaty-importu-transakcji)
 - [Prywatność i bezpieczeństwo danych](#prywatność-i-bezpieczeństwo-danych)
 - [Testy](#testy)
 - [Jak rozbudować](#jak-rozbudować)
@@ -49,9 +49,11 @@ Internetu bez dodatkowej warstwy dostępu (np. VPN, Tailscale lub reverse proxy 
 - **Prywatny interfejs typu wealth cockpit** — jasna, czytelna przestrzeń robocza z ciemnym
   sidebarem; osobne sekcje Pulpit, Portfel, Aktywność, Alokacja, Raporty i analiza oraz Dane i ustawienia.
   Widok mobilny korzysta z dolnej nawigacji i zachowuje pełną funkcjonalność.
-- **Import CSV** z biura maklerskiego (GPW „historia PW” oraz eMAKLER
-  „Transakcje bieżące”, kodowanie CP1250) — format jest rozpoznawany automatycznie, a import
-  jest idempotentny: CSV ze starymi + nowymi danymi importuje tylko nowe, starych nie rusza.
+- **Import CSV i PDF** z biura maklerskiego — GPW „historia PW”, eMAKLER
+  „Transakcje bieżące” oraz cyfrowe potwierdzenia wykonania zleceń mBanku. Format jest
+  rozpoznawany automatycznie, a import jest idempotentny. PDF wnosi ISIN, cenę i walutę
+  wykonania, kurs FX, prowizję, rynek, datę rozliczenia i numer zlecenia; wgrany po CSV
+  uzupełnia istniejącą transakcję zamiast tworzyć duplikat.
 - **Ręczne dodawanie/usuwanie transakcji** — formularz w UI (z dedupem jak w imporcie).
 - **Widok waloru** — klik w nazwę pokazuje wykres wartości inwestycji w czasie (rzeczywista vs
   przy stałym kursie) z **atrybucją zysku na instrument vs walutę** (ile dał ETF, a ile ruch
@@ -255,7 +257,7 @@ portfolio-tracker/
 │   ├── app/
 │   │   ├── main.py        # FastAPI: wszystkie endpointy + serwowanie frontendu, lifespan crona
 │   │   ├── db.py          # SQLite: połączenie, schemat (CREATE TABLE IF NOT EXISTS), sesje
-│   │   ├── importer.py    # parsing CSV (CP1250, ';', przecinek, K/S), dedup po import_hash
+│   │   ├── importer.py    # parsing CSV/PDF, wzbogacanie metadanych i dedup po import_hash
 │   │   ├── instruments.py # tworzenie instrumentów z importu, seed ISIN→ticker, edycja mapowań
 │   │   ├── prices.py      # provider yfinance + import cen z CSV (ratunek), auto-detekcja waluty (GBx→GBP), cache
 │   │   ├── fx.py          # klient NBP + cache fx_rates, lookback na weekendy/święta
@@ -281,7 +283,7 @@ portfolio-tracker/
 └── docker-compose.yml
 ```
 
-**Przepływ danych:** `import CSV → transactions + instruments + cash_flows` →
+**Przepływ danych:** `import CSV/PDF → transactions + instruments + cash_flows` →
 `refresh/backfill → prices + fx_rates (cache)` → `portfolio/history → wycena w PLN, P/L, XIRR, benchmark`.
 
 ## Model danych
@@ -292,7 +294,7 @@ SQLite, 7 tabel (schemat w `backend/app/db.py`):
 |---|---|---|
 | `instruments` | `isin` | nazwa, `ticker`, `currency` (EUR/USD/GBP/PLN), `source` (yfinance/csv), `category`, `needs_config` |
 | `target_allocation` | `category` | docelowy udział grupy (`weight_pct`) |
-| `transactions` | `id` | `ts`, `isin`, `type` (BUY/SELL), `quantity`, `price_pln`, `value_pln`, `commission_pln`, `note`, `import_hash` (unikalny — dedup) |
+| `transactions` | `id` | dane handlu w PLN oraz opcjonalne metadane PDF: `native_price`, `native_currency`, `fx_rate`, `settlement_date`, `market`, `broker_order_id`, `source_format`; `import_hash` jest unikalny |
 | `prices` | (`isin`,`date`) | cena dzienna w walucie natywnej (cache) |
 | `fx_rates` | (`date`,`currency`) | kurs do PLN z NBP (cache) |
 | `cpi_index` | `month` | miesięczny indeks inflacji HICP (Eurostat, baza 2015=100) — cache pod benchmark „inflacja + X%" |
@@ -329,7 +331,7 @@ Pozycje nie są materializowane — liczone w locie z `transactions` (chronologi
 
 | Metoda | Ścieżka | Opis |
 |---|---|---|
-| `POST` | `/api/import` | import CSV (multipart `file`) |
+| `POST` | `/api/import` | import CSV lub potwierdzenia PDF mBanku (multipart `file`, auto-detekcja) |
 | `POST` | `/api/prices/import` | import dziennych cen waloru z CSV (multipart `isin` + `file` + opcjonalnie `currency`, format stooq) — ratunek, gdy Yahoo nie ma historii; waluta wymagana do wyceny |
 | `GET` | `/api/portfolio?refresh=false` | pozycje + sumy (wartość, P/L zreal./niezreal., gotówka, XIRR, TWR, zwroty w okresach) |
 | `GET` | `/api/summary` | zwięzły digest (wartość, P/L, zmiana D/D, zwroty, alokacja vs cel) — pod powiadomienia/n8n |
@@ -352,7 +354,7 @@ Pozycje nie są materializowane — liczone w locie z `transactions` (chronologi
 | `POST` | `/api/refresh` | odświeżenie bieżących cen i kursów + dociągnięcie luk w historii (od ostatniego dnia w cache) |
 | `POST` | `/api/backfill` | pełna historia cen i kursów od pierwszej transakcji |
 | `POST` | `/api/cpi/refresh` | pobranie serii inflacji (Eurostat HICP) pod benchmark „inflacja + X%" — **niezależne od cen** (nie dotyka tabeli `prices`, bezpieczne dla walorów z importu CSV) |
-| `GET` | `/api/export/transactions.csv` | pobranie transakcji jako CSV |
+| `GET` | `/api/export/transactions.csv` | pobranie transakcji jako CSV, łącznie z metadanymi PDF |
 | `GET` | `/api/export/daily-changes.csv` | pobranie dziennych zmian wartości jako CSV |
 | `GET` | `/api/export/db` | pobranie całej bazy SQLite (spójna kopia) |
 | `GET` / `POST` | `/api/backups` / `/api/backup-now` | status ochrony, lista kopii / zweryfikowany backup na żądanie |
@@ -371,9 +373,9 @@ bez ręcznej aktualizacji:
 | **ReDoc** | `http://localhost:8000/redoc` | ładniejsza do czytania, też z kodu |
 | **OpenAPI JSON** | `http://localhost:8000/openapi.json` | maszynowy schemat — idealny do importu w n8n (node „HTTP Request" / Import OpenAPI) |
 
-## Format pliku CSV
+## Formaty importu transakcji
 
-Obsługiwane są dwa automatycznie rozpoznawane eksporty.
+Obsługiwane są trzy automatycznie rozpoznawane formaty.
 
 Eksport „historia PW” z biura maklerskiego:
 
@@ -390,7 +392,17 @@ Eksport eMAKLER „Transakcje bieżące”:
 - `Wartość` w PLN jest pełnym kosztem transakcji, a jednostkowe `price_pln` jest wyliczane jako
   wartość / liczba. Prowizja jest zapisywana jako zero.
 
-Przykład struktury: `backend/tests/sample_hisPW.csv` (fikcyjne dane). Prawdziwe eksporty są
+Potwierdzenie wykonania zleceń mBanku w PDF:
+
+- musi być cyfrowym PDF-em z tekstową warstwą tabel (skany wymagające OCR nie są obsługiwane);
+- parser odczytuje każdą pozycję tabeli „Transakcje do zlecenia”, również kilka wykonań
+  jednego zlecenia, i obsługuje `Kupno` oraz `Sprzedaż`;
+- zapisuje ISIN, dokładny czas, ilość, wartość i prowizję w PLN, cenę oraz walutę wykonania,
+  kurs waluty, rynek, datę rozliczenia i numer zlecenia;
+- używa tego samego `import_hash` co CSV. Jeśli transakcja już istnieje po imporcie eMAKLER,
+  PDF tylko uzupełnia jej bogatsze metadane; ponowny import PDF pozostaje idempotentny.
+
+Przykład CSV: `backend/tests/sample_hisPW.csv` (fikcyjne dane). Prawdziwe eksporty CSV i PDF są
 celowo wykluczone z repo (`.gitignore`), bo zawierają dane osobiste.
 
 ## Prywatność i bezpieczeństwo danych

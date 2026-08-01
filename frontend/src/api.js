@@ -24,7 +24,7 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }).then(json),
-  importCsv: (file) => {
+  importTransactions: (file) => {
     const fd = new FormData();
     fd.append("file", file);
     return fetch("/api/import", { method: "POST", body: fd }).then(json);

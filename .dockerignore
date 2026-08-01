@@ -21,6 +21,7 @@ data/
 *.sqlite-shm
 *.sqlite-journal
 *.csv
+*.pdf
 .env
 .env.*
 *.log

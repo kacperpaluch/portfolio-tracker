@@ -1,7 +1,7 @@
 # Portfolio Tracker
 
 Prywatny, self-hostowany tracker portfela ETF-ów dla jednego inwestora kupującego
-przez polskie biuro maklerskie. Importuje historię transakcji z CSV, pobiera bieżące
+przez polskie biuro maklerskie. Importuje historię transakcji z CSV lub PDF, pobiera bieżące
 wyceny i pokazuje wartość, zysk/stratę oraz stopy zwrotu — **wszystko w PLN**.
 
 > Aplikacja nie ma logowania. Uruchamiaj ją w zaufanej sieci lokalnej albo za
@@ -14,9 +14,10 @@ wyceny i pokazuje wartość, zysk/stratę oraz stopy zwrotu — **wszystko w PLN
 - **Struktura portfela na Pulpicie** — przełączany widok kategorii i walorów, procentowe
   udziały pozycji oraz wskaźnik koncentracji w trzech największych inwestycjach.
 - **Responsywny interfejs** — desktopowy sidebar i dolna nawigacja na telefonie.
-- **Import CSV** z biura maklerskiego (GPW „historia PW” oraz eMAKLER
-  „Transakcje bieżące”, CP1250) — format rozpoznawany automatycznie, import idempotentny
-  (CSV ze starymi + nowymi danymi importuje tylko nowe).
+- **Import CSV i PDF** z biura maklerskiego (GPW „historia PW”, eMAKLER
+  „Transakcje bieżące” oraz potwierdzenia wykonania zleceń mBanku) — format rozpoznawany
+  automatycznie, import idempotentny. PDF zapisuje dodatkowo cenę i walutę wykonania,
+  kurs FX, prowizję, rynek, datę rozliczenia oraz numer zlecenia i może wzbogacić wpis z CSV.
 - **Ręczne dodawanie/usuwanie transakcji** w UI (z tym samym dedupem co import).
 - **Wycena w PLN** — ETF-y notowane w EUR/USD/GBP przeliczane bieżącym kursem NBP;
   waluta wykrywana automatycznie (z obsługą londyńskich pensów GBx).

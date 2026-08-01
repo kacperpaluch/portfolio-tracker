@@ -1,4 +1,4 @@
-"""Testy parsowania i importu CSV (na fikcyjnym pliku przykładowym)."""
+"""Testy parsowania i importu CSV/PDF (wyłącznie fikcyjne dane)."""
 from __future__ import annotations
 
 import sqlite3
@@ -7,7 +7,15 @@ from pathlib import Path
 import pytest
 
 from app.db import SCHEMA
-from app.importer import detect_csv_format, import_transactions, parse_csv, parse_number
+from app import importer as importer_mod
+from app.importer import (
+    detect_csv_format,
+    detect_import_format,
+    import_transactions,
+    parse_csv,
+    parse_import,
+    parse_number,
+)
 
 # Fikcyjny plik przykładowy commitowany do repo (prawdziwe dane brokera są gitignorowane).
 CSV_PATH = Path(__file__).resolve().parent / "sample_hisPW.csv"
@@ -21,6 +29,23 @@ Czas transakcji;Papier;Giełda;K/S;Liczba;Kurs;Waluta;Wartość;Waluta
 31.07.2026 11:38:55;WEBN GR ETF;DEU-XETRA;K;1;12,6440;EUR;54,57;PLN
 31.07.2026 11:36:26;WEBN GR ETF;DEU-XETRA;K;8;12,6480;EUR;436,80;PLN
 """.encode("cp1250")
+
+PDF_HEADER = [
+    "RYNEK", "WALOR", "OFERTA", "LICZBA", "CENA\nREALIZACJI", "WARTOŚĆ",
+    "PROWIZJA", "KURS\nWALUTY", "CZAS ZAWARCIA\nTRANSAKCJI", "DATA\nROZLICZENIA *",
+]
+
+
+def _pdf_table(*, offer="Kupno", quantity="1", commission="0.00PLN"):
+    return [
+        PDF_HEADER,
+        [
+            "DEU-XETRA", "WEBN GR ETF –\nIE0003XJA0J9", offer, quantity,
+            "12.644EUR", "54.57PLN", commission, "4.3156",
+            "2026-07-31\n11:38:55.000", "2026-08-04",
+        ],
+        ["RAZEM", None, None, quantity, "", "54.57PLN", "", "", None, None],
+    ]
 
 
 def _csv_bytes() -> bytes:
@@ -53,6 +78,54 @@ def test_parse_csv_basic():
 def test_detects_both_csv_formats():
     assert detect_csv_format(_csv_bytes()) == "legacy_hispw"
     assert detect_csv_format(EMAKLER_CSV) == "emakler_current"
+
+
+def test_detects_and_parses_mbank_confirmation_pdf(monkeypatch):
+    monkeypatch.setattr(importer_mod, "_pdf_transaction_tables", lambda _: [(_pdf_table(), "108362525")])
+    content = b"%PDF-fake-test"
+    assert detect_import_format(content) == "mbank_confirmation_pdf"
+    rows = parse_import(content)
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["isin"] == "IE0003XJA0J9"
+    assert row["type"] == "BUY"
+    assert row["price_pln"] == pytest.approx(54.57)
+    assert row["native_price"] == pytest.approx(12.644)
+    assert row["native_currency"] == "EUR"
+    assert row["fx_rate"] == pytest.approx(4.3156)
+    assert row["settlement_date"] == "2026-08-04"
+    assert row["broker_order_id"] == "108362525"
+
+
+def test_pdf_parser_supports_sell_and_commission(monkeypatch):
+    table = _pdf_table(offer="Sprzedaż", commission="1.23PLN")
+    monkeypatch.setattr(importer_mod, "_pdf_transaction_tables", lambda _: [(table, "200")])
+    row = parse_import(b"%PDF-sell-test")[0]
+    assert row["type"] == "SELL"
+    assert row["commission_pln"] == pytest.approx(1.23)
+
+
+def test_pdf_enriches_matching_csv_transaction_without_duplicate(monkeypatch):
+    conn = _mem_db()
+    import_transactions(conn, EMAKLER_CSV)
+    monkeypatch.setattr(importer_mod, "_pdf_transaction_tables", lambda _: [(_pdf_table(), "108362525")])
+
+    result = import_transactions(conn, b"%PDF-enrichment-test")
+    assert result["imported"] == 0
+    assert result["skipped_duplicates"] == 1
+    assert result["enriched"] == 1
+    tx = conn.execute(
+        "SELECT native_price, native_currency, fx_rate, settlement_date, market, "
+        "broker_order_id, source_format FROM transactions WHERE quantity = 1"
+    ).fetchone()
+    assert tuple(tx) == (
+        12.644, "EUR", 4.3156, "2026-08-04", "DEU-XETRA", "108362525",
+        "mbank_confirmation_pdf",
+    )
+
+    repeated = import_transactions(conn, b"%PDF-enrichment-test")
+    assert repeated["imported"] == 0
+    assert repeated["enriched"] == 0
 
 
 def test_parse_emakler_current_transactions():

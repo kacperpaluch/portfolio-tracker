@@ -10,7 +10,7 @@ jest kod (`backend/app/`), nie ten dokument.
 ## 1. Czym jest projekt
 
 Self-hostowany tracker portfela ETF dla inwestora kupującego przez polskie biuro
-maklerskie (konto IKE). Importuje transakcje z CSV (lub dodaje ręcznie), pobiera wyceny,
+maklerskie (konto IKE). Importuje transakcje z CSV/PDF (lub dodaje ręcznie), pobiera wyceny,
 przelicza waluty kursem NBP i liczy wartość, P/L (zrealizowany + niezrealizowany),
 XIRR/TWR, benchmark, alokację docelową oraz atrybucję zysku (instrument vs waluta).
 **Wszystko wyrażone w PLN.** Jeden użytkownik, brak autoryzacji (self-hosted w sieci domowej).
@@ -45,6 +45,7 @@ i sześć sekcji rozdzielających codzienny podgląd portfela od konfiguracji da
 | `yfinance` | pobieranie cen instrumentów |
 | `httpx` | HTTP do NBP i Eurostat |
 | `apscheduler` | cron dziennego odświeżania |
+| `pdfplumber` | odczyt tekstowych tabel z potwierdzeń PDF mBanku |
 
 **Ciężkie zależności tranzytywne:** `yfinance` ciągnie `pandas` + `numpy` (duże). To główny
 powód rozmiaru obrazu i czasu builda. Jeśli kiedyś zależy na lekkości — yfinance można by
@@ -77,7 +78,7 @@ chunka, dzięki czemu kod własny aplikacji pozostaje mały.
 backend/app/
   main.py        # FastAPI: WSZYSTKIE endpointy, lifespan (start crona), serwowanie frontend/dist
   db.py          # połączenie SQLite, SCHEMA (CREATE IF NOT EXISTS), _migrate(), db_session()
-  importer.py    # parse_csv, import/add/update/delete transaction + spójność cash flow
+  importer.py    # parse_csv/parse_import, PDF mBank, import/add/update/delete + spójność cash flow
   analytics.py   # atrybucja wyniku: instrumenty, kategorie, wpłaty i aktywność
   reports.py     # raport zakresu: TWR/XIRR/PLN, benchmarki, porównanie, atrybucja, przepływy, heatmapa i CSV
   data_quality.py # diagnostyka cen, FX, konfiguracji, alokacji i księgi gotówki
@@ -154,7 +155,7 @@ scheduler.py → cash, instruments, prices, fx, db, backup
 | Tabela | Klucz | Kolumny | Rola |
 |---|---|---|---|
 | `instruments` | `isin` | name (edytowalna własna nazwa w UI, przetrwa import), imported_name (nazwa z importu, read-only, zapisywana tylko przy tworzeniu), ticker, currency, source, category, active, needs_config | mapowanie waloru |
-| `transactions` | `id` | ts, isin→, type(BUY/SELL), quantity, price_pln, value_pln, commission_pln, note, **import_hash UNIQUE** | handel |
+| `transactions` | `id` | ts, isin→, type, quantity, price_pln, value_pln, commission_pln; metadane PDF: native_price/currency, fx_rate, settlement_date, market, broker_order_id, source_format; note, **import_hash UNIQUE** | handel |
 | `prices` | (isin,date) | price (waluta natywna), source | cache wycen |
 | `fx_rates` | (date,currency) | rate_to_pln | cache kursów NBP |
 | `cpi_index` | `month` | idx (HICP, baza 2015=100) | cache inflacji (miesięczny, `month`='YYYY-MM-01') |
@@ -169,7 +170,7 @@ scheduler.py → cash, instruments, prices, fx, db, backup
 ## 6. Przepływ danych
 
 ```
-import CSV / ręczna transakcja
+import CSV/PDF / ręczna transakcja
    → transactions (+ instruments auto-create) (+ cash_flows buy/sell)
 refresh / backfill
    → prices (yfinance, waluta auto) + fx_rates (NBP)
@@ -187,7 +188,7 @@ odczyt
 
 | Metoda | Ścieżka | Opis |
 |---|---|---|
-| POST | `/api/import` | import CSV transakcji (multipart `file`): auto-detekcja GPW „historia PW” / eMAKLER „Transakcje bieżące” |
+| POST | `/api/import` | import CSV/PDF (multipart `file`): auto-detekcja GPW „historia PW”, eMAKLER „Transakcje bieżące” i potwierdzenia wykonania zleceń mBanku |
 | POST | `/api/prices/import` | import dziennych cen waloru z CSV (multipart `isin`+`file`+opcjonalnie `currency`, format stooq) → cache `prices` (`prices.import_prices`); waluta wymagana do wyceny |
 | GET/POST | `/api/transactions` | lista / ręczne dodanie transakcji |
 | PUT | `/api/transactions/{id}` | edycja transakcji + atomowe odtworzenie cash flow |
@@ -209,7 +210,7 @@ odczyt
 | POST | `/api/refresh` | bieżące ceny + FX + dociągnięcie luk od ostatniego dnia w cache, TYLKO trzymane walory (`history.refresh_latest`); odświeża też CPI |
 | POST | `/api/backfill` | pełna historia cen + FX od pierwszej transakcji (wszystkie walory); odświeża też CPI |
 | POST | `/api/cpi/refresh` | pobranie serii inflacji (Eurostat HICP) — **niezależne od cen**, nie dotyka `prices` (bezpieczne dla walorów z CSV) (`cpi.refresh_cpi`) |
-| GET | `/api/export/transactions.csv` | eksport transakcji (CSV) |
+| GET | `/api/export/transactions.csv` | eksport transakcji wraz z metadanymi PDF (CSV) |
 | GET | `/api/export/daily-changes.csv` | eksport dziennych zmian wartości (CSV) — `backup.daily_changes_csv` |
 | GET | `/api/export/db` | pobranie spójnej kopii bazy SQLite |
 | GET/POST | `/api/backups` / `/api/backup-now` | status/lista kopii / zweryfikowany backup na żądanie |
@@ -282,14 +283,15 @@ aktywny tylko gdy katalog istnieje). Dockerfile robi to w etapie multi-stage.
 - **Named volume vs bind mount** — po zmianie na named volume w `/ship` dane z `./data` trzeba zmigrować (`docker cp ./data/portfolio.db <kontener>:/app/data/`).
 - **Dedup** — każda nowa ścieżka tworzenia transakcji MUSI używać tego samego `import_hash` co `parse_csv`/`add_transaction`, inaczej powstaną duplikaty.
 - **eMAKLER „Transakcje bieżące”** — `importer.py` wykrywa 9-kolumnową tabelę po nagłówku mimo preambuły z danymi rachunku. Raport nie ma ISIN-u, więc `instruments.BROKER_ALIASES` mapuje zweryfikowaną parę symbol+giełda do ISIN-u; brak aliasu przerywa cały import. Kurs natywny jest tylko walidowany, `value_pln` pochodzi z pełnej wartości PLN (z prowizją), `price_pln = round(value_pln / quantity, 4)`, `commission_pln = 0`.
-- **Dane osobiste** — prawdziwe CSV (`*.csv`) są gitignorowane; w repo jest tylko `backend/tests/sample_hisPW.csv` (fikcyjny, z wyjątkiem w `.gitignore`).
+- **PDF mBanku** — obsługiwane są cyfrowe „Potwierdzenia wykonania zleceń” z tekstową warstwą tabel; bez OCR. Parser bierze ISIN i bogate metadane rozliczenia bez aliasów. Hash jest zgodny z eMAKLER CSV, a duplikat z PDF wykonuje kontrolowane wzbogacenie istniejącego wpisu. Sprzedaż jest obsługiwana symetrycznie i pokryta testem syntetycznym; parser nie ma jeszcze realnego przykładu sprzedaży.
+- **Dane osobiste** — prawdziwe CSV (`*.csv`) i PDF (`*.pdf`) są gitignorowane; w repo jest tylko `backend/tests/sample_hisPW.csv` (fikcyjny, z wyjątkiem w `.gitignore`).
 - **Lokalna baza nigdy do Git** — `.gitignore` obejmuje `data/`, `*.db`, `*.sqlite`,
   `*.sqlite3` oraz pliki SQLite `-wal`/`-shm`/`-journal`. Ignorowane są też `.env*`,
   środowiska Pythona, `node_modules` i build `frontend/dist`. Przed commitem sprawdź
-  `git ls-files 'data/**' '*.db' '*.sqlite*' '*.csv'`; jedynym oczekiwanym wynikiem CSV
+  `git ls-files 'data/**' '*.db' '*.sqlite*' '*.csv' '*.pdf'`; jedynym oczekiwanym wynikiem CSV
   jest fikcyjny fixture testowy.
 - **Lokalna baza nigdy do obrazu** — `.dockerignore` lustrzanie wyklucza bazy, `data/`,
-  CSV, `.env*`, środowiska, cache i build frontendu z kontekstu Docker BuildKit.
+  CSV/PDF, `.env*`, środowiska, cache i build frontendu z kontekstu Docker BuildKit.
 - **Screenshoty dokumentacji muszą używać danych demonstracyjnych** — nigdy nie wykonuj
   zrzutów README na prywatnej bazie. Publiczne nazwy i identyfikatory rzeczywistych ETF-ów
   są dozwolone, ale transakcje, daty, ceny, kwoty i wyniki muszą być syntetyczne. Do

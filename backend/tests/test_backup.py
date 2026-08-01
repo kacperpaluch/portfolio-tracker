@@ -23,7 +23,10 @@ def test_transactions_csv():
                     tx_type="BUY", quantity=10, price_pln=30.0)
     csv_text = backup_mod.transactions_csv(conn)
     lines = csv_text.strip().splitlines()
-    assert lines[0] == "ts,isin,name,type,quantity,price_pln,value_pln,commission_pln"
+    assert lines[0] == (
+        "ts,isin,name,type,quantity,price_pln,value_pln,commission_pln,native_price,"
+        "native_currency,fx_rate,settlement_date,market,broker_order_id,source_format"
+    )
     assert "IE000716YHJ7" in lines[1]
     assert "Invesco" in lines[1]
     assert "BUY" in lines[1]

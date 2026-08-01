@@ -198,7 +198,9 @@ def transactions_csv(conn: sqlite3.Connection) -> str:
     """Eksport transakcji do czytelnego CSV (UTF-8, przecinek)."""
     rows = conn.execute(
         """
-        SELECT t.ts, t.isin, i.name, t.type, t.quantity, t.price_pln, t.value_pln, t.commission_pln
+        SELECT t.ts, t.isin, i.name, t.type, t.quantity, t.price_pln, t.value_pln,
+               t.commission_pln, t.native_price, t.native_currency, t.fx_rate,
+               t.settlement_date, t.market, t.broker_order_id, t.source_format
           FROM transactions t
           LEFT JOIN instruments i ON i.isin = t.isin
          ORDER BY t.ts ASC
@@ -206,10 +208,18 @@ def transactions_csv(conn: sqlite3.Connection) -> str:
     ).fetchall()
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["ts", "isin", "name", "type", "quantity", "price_pln", "value_pln", "commission_pln"])
+    w.writerow([
+        "ts", "isin", "name", "type", "quantity", "price_pln", "value_pln",
+        "commission_pln", "native_price", "native_currency", "fx_rate",
+        "settlement_date", "market", "broker_order_id", "source_format",
+    ])
     for r in rows:
-        w.writerow([r["ts"], r["isin"], r["name"], r["type"], r["quantity"],
-                    r["price_pln"], r["value_pln"], r["commission_pln"]])
+        w.writerow([
+            r["ts"], r["isin"], r["name"], r["type"], r["quantity"],
+            r["price_pln"], r["value_pln"], r["commission_pln"], r["native_price"],
+            r["native_currency"], r["fx_rate"], r["settlement_date"], r["market"],
+            r["broker_order_id"], r["source_format"],
+        ])
     return buf.getvalue()
 
 

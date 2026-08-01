@@ -37,6 +37,13 @@ CREATE TABLE IF NOT EXISTS transactions (
     price_pln      REAL NOT NULL,
     value_pln      REAL NOT NULL,
     commission_pln REAL NOT NULL DEFAULT 0,
+    native_price   REAL,                    -- cena wykonania w walucie instrumentu
+    native_currency TEXT,                  -- waluta ceny wykonania, np. EUR
+    fx_rate        REAL,                    -- kurs waluty użyty przez brokera
+    settlement_date TEXT,                  -- data rozliczenia YYYY-MM-DD
+    market         TEXT,                    -- rynek/giełda, np. DEU-XETRA
+    broker_order_id TEXT,                  -- numer zlecenia u brokera
+    source_format  TEXT,                    -- format źródłowy importu
     note           TEXT,
     import_hash    TEXT NOT NULL UNIQUE
 );
@@ -95,6 +102,18 @@ def _migrate(conn: sqlite3.Connection) -> None:
     tx_cols = {r["name"] for r in conn.execute("PRAGMA table_info(transactions)")}
     if "note" not in tx_cols:
         conn.execute("ALTER TABLE transactions ADD COLUMN note TEXT")
+    transaction_columns = {
+        "native_price": "REAL",
+        "native_currency": "TEXT",
+        "fx_rate": "REAL",
+        "settlement_date": "TEXT",
+        "market": "TEXT",
+        "broker_order_id": "TEXT",
+        "source_format": "TEXT",
+    }
+    for column, column_type in transaction_columns.items():
+        if column not in tx_cols:
+            conn.execute(f"ALTER TABLE transactions ADD COLUMN {column} {column_type}")
 
 
 def init_db(conn: sqlite3.Connection | None = None) -> None:

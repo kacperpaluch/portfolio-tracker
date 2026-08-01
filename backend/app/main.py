@@ -63,10 +63,10 @@ MAX_IMPORT_BYTES = 10 * 1024 * 1024
 
 
 @app.post("/api/import")
-async def import_csv(file: UploadFile = File(...)) -> dict:
+async def import_file(file: UploadFile = File(...)) -> dict:
     content = await file.read(MAX_IMPORT_BYTES + 1)
     if len(content) > MAX_IMPORT_BYTES:
-        raise HTTPException(status_code=413, detail="Plik CSV jest większy niż 10 MB")
+        raise HTTPException(status_code=413, detail="Plik importu jest większy niż 10 MB")
     with db_session() as conn:
         try:
             return import_transactions(conn, content)
@@ -376,7 +376,9 @@ def get_transactions() -> list[dict]:
         rows = conn.execute(
             """
             SELECT t.id, t.ts, t.type, t.quantity, t.price_pln, t.value_pln,
-                   t.commission_pln, t.note, t.isin, i.name, i.ticker
+                   t.commission_pln, t.native_price, t.native_currency, t.fx_rate,
+                   t.settlement_date, t.market, t.broker_order_id, t.source_format,
+                   t.note, t.isin, i.name, i.ticker
               FROM transactions t
               LEFT JOIN instruments i ON i.isin = t.isin
              ORDER BY t.ts DESC, t.id DESC
