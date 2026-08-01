@@ -24,19 +24,24 @@ from . import prices as prices_mod
 from . import reports as reports_mod
 from . import summary as summary_mod
 from . import importer
+from .config import env_enabled
 from .db import db_session, init_db
 from .importer import import_transactions
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Start crona dopiero przy realnym uruchomieniu serwera (nie w testach/imporcie modułu).
-    from .scheduler import start_scheduler
+    # Scheduler jest opcjonalny: aktualizacje i backupy mogą być wyzwalane przez API.
+    scheduler = None
+    if env_enabled("SCHEDULER_ENABLED"):
+        from .scheduler import start_scheduler
 
-    scheduler = start_scheduler()
+        scheduler = start_scheduler()
     try:
         yield
     finally:
-        scheduler.shutdown(wait=False)
+        if scheduler is not None:
+            scheduler.shutdown(wait=False)
 
 
 app = FastAPI(title="Portfolio Tracker", lifespan=lifespan)
@@ -48,6 +53,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # Inicjalizacja schematu przy załadowaniu modułu — niezależna od cyklu lifespan,
 # więc działa też pod TestClient bez bloku `with`.

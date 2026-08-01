@@ -54,7 +54,7 @@ export default function DataPanel({ backups, onBackup, onRestore, onRestoreUploa
       </div>
 
       <div className="backup-facts">
-        <div><span>Harmonogram</span><strong>{schedule ? `${String(schedule.hour).padStart(2, "0")}:${String(schedule.minute).padStart(2, "0")}` : "03:00"}</strong><small>{schedule?.timezone || "Europe/Warsaw"}</small></div>
+        <div><span>Harmonogram</span><strong>{schedule ? `${String(schedule.hour).padStart(2, "0")}:${String(schedule.minute).padStart(2, "0")}` : "Wyłączony"}</strong><small>{schedule?.timezone || "wyzwalanie przez API"}</small></div>
         <div><span>Retencja</span><strong>{backups?.keep ?? 14} kopii</strong><small>najstarsze usuwane automatycznie</small></div>
         <div><span>Lokalizacja</span><strong>Named volume</strong><small title={backups?.dir}>{backups?.dir || "data/backup"}</small></div>
       </div>

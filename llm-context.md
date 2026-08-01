@@ -76,7 +76,7 @@ chunka, dzięki czemu kod własny aplikacji pozostaje mały.
 
 ```
 backend/app/
-  main.py        # FastAPI: WSZYSTKIE endpointy, lifespan (start crona), serwowanie frontend/dist
+  main.py        # FastAPI: WSZYSTKIE endpointy, opcjonalny scheduler w lifespan, serwowanie frontend/dist
   db.py          # połączenie SQLite, SCHEMA (CREATE IF NOT EXISTS), _migrate(), db_session()
   importer.py    # parse_csv/parse_import, PDF mBank, import/add/update/delete + spójność cash flow
   analytics.py   # atrybucja wyniku: instrumenty, kategorie, wpłaty i aktywność
@@ -296,7 +296,7 @@ aktywny tylko gdy katalog istnieje). Dockerfile robi to w etapie multi-stage.
   zrzutów README na prywatnej bazie. Publiczne nazwy i identyfikatory rzeczywistych ETF-ów
   są dozwolone, ale transakcje, daty, ceny, kwoty i wyniki muszą być syntetyczne. Do
   screenshotów uruchom osobną bazę demonstracyjną albo mock API.
-- **Cron tylko w produkcji** — scheduler startuje w `lifespan`; pod `TestClient` bez bloku `with` się nie uruchamia. `init_db()` wołane przy imporcie modułu (niezależnie od lifespan).
+- **Scheduler jest opcjonalny** — `SCHEDULER_ENABLED=false` wyłącza go w `lifespan`; domyślny Compose korzysta z ręcznych/zewnętrznych wywołań `POST /api/refresh` i `POST /api/backup-now`. `init_db()` jest wołane przy imporcie modułu.
 - **Atrybucja/positions czytają z cache** — bez `backfill`/`refresh` historia i wykresy będą puste.
 - **Backupy są w named volume** (`data/backup/` obok bazy) — czyli wewnątrz wolumenu Dockera.
   Nocny backup (~03:00, `BACKUP_HOUR`) + retencja (`BACKUP_KEEP`, domyślnie 14) i próg

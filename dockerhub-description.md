@@ -42,7 +42,7 @@ wyceny i pokazuje wartość, zysk/stratę oraz stopy zwrotu — **wszystko w PLN
   mapowanie ISIN → ticker.
 - **Eksport, backup i restore** — nocne kopie, kontrola integralności i SHA-256, ostrzeżenie
   o wieku kopii, pobieranie backupów oraz bezpieczne odtwarzanie z automatyczną kopią „przed".
-- **Codzienne odświeżanie** cen i kursów (cron ~21:00 Europe/Warsaw) + dociąganie luk w historii po awarii. Odpytuje tylko aktualnie trzymane walory — sprzedany ETF nie zaśmieca bazy.
+- **Odświeżanie przez API** (`POST /api/refresh`) + dociąganie luk w historii po awarii. Odpytuje tylko aktualnie trzymane walory — sprzedany ETF nie zaśmieca bazy.
 
 ## Źródła danych
 
@@ -63,6 +63,7 @@ Aplikacja: `http://localhost:8000`. Dane SQLite są trzymane poza obrazem, w nam
 
 | Zmienna | Domyślnie | Opis |
 |---|---|---|
+| `SCHEDULER_ENABLED` | `true` (`false` w Compose) | wewnętrzny harmonogram; wyłączony przy sterowaniu przez API |
 | `TZ` | `Europe/Warsaw` | strefa czasowa (cron) |
 | `REFRESH_HOUR` | `21` | godzina dziennego odświeżania |
 | `REFRESH_MINUTE` | `0` | minuta dziennego odświeżania |

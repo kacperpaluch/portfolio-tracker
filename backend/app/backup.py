@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 
 from . import db as db_mod
+from .config import env_enabled
 
 # Domyślnie podfolder backup obok bazy; nadpisywalne env.
 BACKUP_DIR = Path(os.environ.get("BACKUP_DIR", db_mod.DB_PATH.parent / "backup"))
@@ -20,6 +21,7 @@ BACKUP_STALE_HOURS = int(os.environ.get("BACKUP_STALE_HOURS", "36"))
 BACKUP_HOUR = int(os.environ.get("BACKUP_HOUR", "3"))
 BACKUP_MINUTE = int(os.environ.get("BACKUP_MINUTE", "0"))
 TIMEZONE = os.environ.get("TZ", "Europe/Warsaw")
+SCHEDULER_ENABLED = env_enabled("SCHEDULER_ENABLED")
 REQUIRED_TABLES = {
     "instruments", "target_allocation", "transactions", "prices",
     "fx_rates", "cpi_index", "cash_flows",
@@ -95,7 +97,7 @@ def backup_status() -> dict:
             "hour": BACKUP_HOUR,
             "minute": BACKUP_MINUTE,
             "timezone": TIMEZONE,
-        },
+        } if SCHEDULER_ENABLED else None,
         "latest": latest,
         "latest_validation": validation,
         "backups": backups,

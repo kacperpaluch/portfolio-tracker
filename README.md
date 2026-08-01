@@ -122,7 +122,7 @@ Internetu bez dodatkowej warstwy dostępu (np. VPN, Tailscale lub reverse proxy 
   integralności i schematu, SHA-256, status wieku ostatniej kopii, pobieranie konkretnych
   backupów i odtwarzanie z pliku lub kopii serwerowej. Przed każdym restore aplikacja
   automatycznie zapisuje aktualną bazę jako `portfolio-pre-restore-…`.
-- **Codzienne odświeżanie** cen i kursów (cron APScheduler, domyślnie ~21:00 Europe/Warsaw) —
+- **Odświeżanie przez API** cen i kursów (`POST /api/refresh`) —
   pobiera bieżące notowania i **dociąga ewentualne luki w historii** (np. po awarii sieci),
   zawsze od ostatniego dnia w cache, nigdy całości od początku. Odpytuje **tylko aktualnie
   trzymane** walory (saldo > 0) — sprzedany do zera ETF nie jest już pobierany ani nie zaśmieca
@@ -223,6 +223,7 @@ Zmienne środowiskowe (ustawiane w `docker-compose.yml`):
 
 | Zmienna | Domyślnie | Opis |
 |---|---|---|
+| `SCHEDULER_ENABLED` | `true` (`false` w Compose) | włącza wewnętrzny harmonogram; ustaw `false`, aby wyzwalać zadania wyłącznie przez API |
 | `TZ` | `Europe/Warsaw` | strefa czasowa (harmonogram crona) |
 | `REFRESH_HOUR` | `21` | godzina dziennego odświeżania cen/kursów |
 | `REFRESH_MINUTE` | `0` | minuta dziennego odświeżania |
@@ -231,6 +232,17 @@ Zmienne środowiskowe (ustawiane w `docker-compose.yml`):
 | `BACKUP_KEEP` | `14` | ile ostatnich kopii trzymać (retencja) |
 | `BACKUP_STALE_HOURS` | `36` | po ilu godzinach bez poprawnej kopii UI pokazuje ostrzeżenie |
 | `DB_PATH` | `/app/data/portfolio.db` | ścieżka pliku bazy SQLite |
+
+Domyślny `docker-compose.yml` wyłącza wewnętrzny scheduler. Aktualizację danych i
+backup można uruchomić lokalnymi zapytaniami (np. z n8n lub Home Assistanta):
+
+```bash
+curl --fail --request POST http://localhost:8000/api/refresh
+curl --fail --request POST http://localhost:8000/api/backup-now
+```
+
+Endpointy nie wymagają klucza API, ponieważ aplikacja jest przeznaczona do pracy lokalnej.
+Nie należy wystawiać portu `8000` bezpośrednio do Internetu.
 
 ## Sposób użycia
 
