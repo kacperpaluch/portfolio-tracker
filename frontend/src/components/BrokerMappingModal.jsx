@@ -25,6 +25,24 @@ export default function BrokerMappingModal({ instruments, filename, busy, onCanc
     )));
   };
 
+  const changeSource = (index, nextSource) => {
+    setDrafts((current) => current.map((item, itemIndex) => {
+      if (itemIndex !== index) return item;
+      const mappings = { ...(item.provider_mappings || {}) };
+      if (item.ticker) {
+        mappings[item.source] = { ticker: item.ticker, currency: item.currency };
+      }
+      const target = mappings[nextSource];
+      return {
+        ...item,
+        source: nextSource,
+        ticker: target?.ticker || "",
+        currency: target?.currency || item.currency,
+        provider_mappings: mappings,
+      };
+    }));
+  };
+
   const submit = (event) => {
     event.preventDefault();
     const mappings = drafts.map((item) => ({
@@ -87,7 +105,7 @@ export default function BrokerMappingModal({ instruments, filename, busy, onCanc
               <label>
                 <span>Źródło notowań</span>
                 <select className="cell" value={item.source}
-                  onChange={(event) => edit(index, "source", event.target.value)}>
+                  onChange={(event) => changeSource(index, event.target.value)}>
                   <option value="eodhd">EODHD</option>
                   <option value="alphavantage">Alpha Vantage</option>
                   <option value="yfinance">Yahoo Finance</option>

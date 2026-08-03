@@ -122,8 +122,10 @@ Internetu bez dodatkowej warstwy dostępu (np. VPN, Tailscale lub reverse proxy 
   kupna/sprzedaży, więc zakup nie liczy się jako zysk) z eksportem do CSV.
 - **Historia transakcji** — wyszukiwanie i filtrowanie kupna/sprzedaży, edycja zapisanej
   operacji oraz opcjonalne notatki i prowizje.
-- **Mapowanie ISIN → ticker** ręcznie w UI lub przez wyszukiwarkę providera; aplikacja nie
-  zawiera zaszytych mapowań instrumentów i nie zapisuje wyniku bez wyboru użytkownika;
+- **Mapowanie ISIN → ticker per provider** ręcznie w UI lub przez wyszukiwarkę; Yahoo,
+  EODHD i Alpha Vantage zachowują własny symbol oraz walutę, więc przełączanie źródła
+  przywraca właściwe dane. Aplikacja nie zawiera zaszytych mapowań instrumentów i nie
+  zapisuje wyniku bez wyboru użytkownika;
   edytowalna **nazwa własna** instrumentu (np. `PZU World` zamiast `ETFPZUWORLD` z importu) —
   nazwa z importu zapisana osobno (`imported_name`) i widoczna read-only obok; rename
   przetrwa każdy kolejny import (idempotentny).
@@ -326,6 +328,7 @@ SQLite, 8 tabel (schemat w `backend/app/db.py`):
 | Tabela | Klucz | Zawartość |
 |---|---|---|
 | `instruments` | `isin` | nazwa, symbol providera w `ticker`, `currency`, `source` (`yfinance`/`eodhd`/`alphavantage`), `category`, `needs_config` |
+| `instrument_provider_mappings` | `(isin, source)` | osobny `ticker` i `currency` dla każdego providera; aktywny wybór jest synchronizowany do `instruments` |
 | `broker_instrument_aliases` | (`broker`,`symbol`,`exchange`) | trwałe, tworzone przez użytkownika mapowanie symbolu z raportu bez ISIN-u do `instruments.isin` |
 | `target_allocation` | `category` | docelowy udział grupy (`weight_pct`) |
 | `transactions` | `id` | dane handlu w PLN oraz opcjonalne metadane PDF: `native_price`, `native_currency`, `fx_rate`, `settlement_date`, `market`, `broker_order_id`, `source_format`; `import_hash` jest unikalny |
@@ -341,6 +344,10 @@ Pozycje nie są materializowane — liczone w locie z `transactions` (chronologi
 - **Provider per instrument** (`prices.py`): `source` wybiera Yahoo, EODHD albo Alpha
   Vantage, a `ticker` jest interpretowany w konwencji tego źródła. EODHD udostępnia bieżącą
   cenę i historię EOD; Alpha Vantage `GLOBAL_QUOTE` oraz 100 sesji `TIME_SERIES_DAILY`.
+- **Mapowania per provider** (`instrument_provider_mappings`): każdy instrument może zachować
+  osobny ticker i walutę Yahoo/EODHD/Alpha. Zmiana źródła w UI ładuje zapisane wartości,
+  a edycja dotyczy wyłącznie aktualnie wybranego providera. Migracja ze starszej bazy zachowuje
+  aktywny ticker; symboli nadpisanych wcześniej nie da się wiarygodnie odtworzyć automatycznie.
 - **Limity i retry**: EODHD i Alpha są odpytywane kolejno z konfigurowalnym minimalnym
   odstępem. Błędy sieci, HTTP 429 i 5xx mają maksymalnie trzy próby z backoffem oraz
   obsługą `Retry-After`. Po trwałym błędzie aplikacja pozostawia ostatnią cenę w cache;

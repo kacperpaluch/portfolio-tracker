@@ -22,6 +22,16 @@ CREATE TABLE IF NOT EXISTS instruments (
     needs_config INTEGER NOT NULL DEFAULT 1
 );
 
+-- Osobny symbol i waluta dla każdego providera. Kolumny ticker/source w instruments
+-- pozostają aktywnym wyborem dla kompatybilności z resztą logiki wyceny.
+CREATE TABLE IF NOT EXISTS instrument_provider_mappings (
+    isin     TEXT NOT NULL REFERENCES instruments(isin) ON DELETE CASCADE,
+    source   TEXT NOT NULL,
+    ticker   TEXT NOT NULL,
+    currency TEXT,
+    PRIMARY KEY (isin, source)
+);
+
 -- Symbole z eksportów bez ISIN-u. Mapowania dodane w UI są trwałe i nie
 -- wymagają zmiany kodu ani przebudowania obrazu aplikacji.
 CREATE TABLE IF NOT EXISTS broker_instrument_aliases (
@@ -110,6 +120,15 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE instruments ADD COLUMN category TEXT")
     if "imported_name" not in cols:
         conn.execute("ALTER TABLE instruments ADD COLUMN imported_name TEXT")
+    # Zachowaj aktualnie wybrany symbol ze starszych wersji. Nadpisane wcześniej
+    # symbole innych providerów nie są możliwe do wiarygodnego odtworzenia.
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO instrument_provider_mappings (isin, source, ticker, currency)
+        SELECT isin, source, ticker, currency FROM instruments
+         WHERE source IS NOT NULL AND ticker IS NOT NULL AND TRIM(ticker) != ''
+        """
+    )
     tx_cols = {r["name"] for r in conn.execute("PRAGMA table_info(transactions)")}
     if "note" not in tx_cols:
         conn.execute("ALTER TABLE transactions ADD COLUMN note TEXT")

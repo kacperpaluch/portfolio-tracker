@@ -602,7 +602,7 @@ export default function App() {
         />
         <InstrumentsPanel
           instruments={instruments}
-          onSave={(isin, body) => run(() => api.updateInstrument(isin, body), "Ustawienia instrumentu zostały zapisane.").catch(() => {})}
+          onSave={(isin, body) => run(() => api.updateInstrument(isin, body), "Ustawienia instrumentu zostały zapisane.")}
         />
       </section>
 

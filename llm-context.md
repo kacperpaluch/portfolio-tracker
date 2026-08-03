@@ -162,6 +162,7 @@ scheduler.py → cash, instruments, prices, fx, db, backup
 | Tabela | Klucz | Kolumny | Rola |
 |---|---|---|---|
 | `instruments` | `isin` | name, imported_name, ticker (symbol wybranego providera), currency, source (`yfinance`/`eodhd`/`alphavantage`), category, active, needs_config | mapowanie waloru |
+| `instrument_provider_mappings` | `(isin, source)` | ticker, currency | trwałe symbole per provider; `instruments.ticker/currency/source` to aktywny wybór |
 | `broker_instrument_aliases` | `(broker, symbol, exchange)` | isin→instruments | trwałe mapowanie raportów bez ISIN-u, tworzone przez użytkownika w UI |
 | `transactions` | `id` | ts, isin→, type, quantity, price_pln, value_pln, commission_pln; metadane PDF: native_price/currency, fx_rate, settlement_date, market, broker_order_id, source_format; note, **import_hash UNIQUE** | handel |
 | `prices` | (isin,date) | price (waluta natywna), source | cache wycen |
@@ -239,6 +240,11 @@ Swagger UI `/docs` · ReDoc `/redoc` · OpenAPI JSON `/openapi.json` (do importu
 - **Dispatcher cen** (`prices.fetch_latest/fetch_history`) — wybór przez `instruments.source`:
   Yahoo (`ticker .DE/.L/.WA`), EODHD (`.XETRA`) albo Alpha Vantage (`.DEX`). Klucze wyłącznie
   z ENV, nigdy z bazy/repo. Yahoo wykrywa walutę; dla providerów REST waluta jest jawna w UI.
+- **Ticker per provider** (`instrument_provider_mappings`) — Yahoo/EODHD/Alpha zachowują osobny
+  ticker i walutę. `instruments.py` synchronizuje wybrane mapowanie do aktywnych kolumn
+  `instruments`, których używa reszta domeny. Migracja kopiuje aktualny stary ticker przez
+  `INSERT OR IGNORE`; historycznie nadpisanych symboli nie zgaduje. UI przechowuje również
+  niezapisane wartości przy przełączaniu dropdownu i przywraca mapowanie wybranego źródła.
 - **Wyszukiwarka symboli** (`GET /api/providers/search`) — wspólny format wyników EODHD/Alpha;
   backend ukrywa klucze, a UI wymaga jawnego wyboru wyniku i nie zapisuje pierwszego trafienia automatycznie.
 - **Auto-detekcja waluty Yahoo** (`prices._yf_currency`) + normalizacja **GBx/GBp → GBP** (cena/100).

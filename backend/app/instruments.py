@@ -9,6 +9,41 @@ from .prices import SUPPORTED_SOURCES
 ISIN_RE = re.compile(r"^[A-Z]{2}[A-Z0-9]{9}[0-9]$")
 
 
+def _save_provider_mapping(
+    conn: sqlite3.Connection,
+    isin: str,
+    source: str,
+    ticker: str,
+    currency: str | None,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO instrument_provider_mappings (isin, source, ticker, currency)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT (isin, source) DO UPDATE
+        SET ticker = excluded.ticker, currency = excluded.currency
+        """,
+        (isin, source, ticker, currency),
+    )
+
+
+def _provider_mappings(conn: sqlite3.Connection, isin: str) -> dict[str, dict]:
+    rows = conn.execute(
+        "SELECT source, ticker, currency FROM instrument_provider_mappings WHERE isin = ?",
+        (isin,),
+    ).fetchall()
+    return {
+        row["source"]: {"ticker": row["ticker"], "currency": row["currency"]}
+        for row in rows
+    }
+
+
+def _instrument_dict(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
+    result = dict(row)
+    result["provider_mappings"] = _provider_mappings(conn, row["isin"])
+    return result
+
+
 def resolve_broker_instrument(
     broker: str,
     symbol: str,
@@ -61,6 +96,8 @@ def save_broker_instrument(
         raise ValueError("Nieobsługiwane źródło notowań")
 
     ensure_instrument(conn, isin, name)
+    if ticker:
+        _save_provider_mapping(conn, isin, source, ticker, currency)
     conn.execute(
         """
         UPDATE instruments
@@ -109,7 +146,7 @@ def ensure_instrument(conn: sqlite3.Connection, isin: str, name: str) -> None:
 
 def list_instruments(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute("SELECT * FROM instruments ORDER BY needs_config DESC, name").fetchall()
-    return [dict(r) for r in rows]
+    return [_instrument_dict(conn, row) for row in rows]
 
 
 def update_instrument(
@@ -128,11 +165,28 @@ def update_instrument(
     if existing is None:
         return None
     name_val = (name or "").strip() or existing["name"]
+    ticker_supplied = ticker is not None
     ticker = (ticker or "").strip() or None
     currency = (currency or "").strip().upper() or None
-    source = (source or "").strip().lower() or None
+    source = (source or "").strip().lower() or existing["source"]
     if source and source not in SUPPORTED_SOURCES:
         raise ValueError("Nieobsługiwane źródło notowań")
+    if source and ticker_supplied:
+        if ticker:
+            _save_provider_mapping(conn, isin, source, ticker, currency)
+        else:
+            conn.execute(
+                "DELETE FROM instrument_provider_mappings WHERE isin = ? AND source = ?",
+                (isin, source),
+            )
+    elif source and not ticker_supplied:
+        mapping = conn.execute(
+            "SELECT ticker, currency FROM instrument_provider_mappings WHERE isin = ? AND source = ?",
+            (isin, source),
+        ).fetchone()
+        if mapping:
+            ticker = mapping["ticker"]
+            currency = mapping["currency"] or currency
     category = (category or "").strip() or None
     needs_config = 0 if (ticker and currency and source) else 1
     active_val = existing["active"] if active is None else int(active)
@@ -144,4 +198,5 @@ def update_instrument(
         """,
         (name_val, ticker, currency, source, category, active_val, needs_config, isin),
     )
-    return dict(conn.execute("SELECT * FROM instruments WHERE isin = ?", (isin,)).fetchone())
+    row = conn.execute("SELECT * FROM instruments WHERE isin = ?", (isin,)).fetchone()
+    return _instrument_dict(conn, row)

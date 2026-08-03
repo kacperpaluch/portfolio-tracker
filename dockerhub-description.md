@@ -24,7 +24,8 @@ wyceny i pokazuje wartość, zysk/stratę oraz stopy zwrotu — **wszystko w PLN
 - **Ręczne dodawanie/usuwanie transakcji** w UI (z tym samym dedupem co import).
 - **Wycena w PLN** — ETF-y notowane w EUR/USD/GBP przeliczane bieżącym kursem NBP;
   Yahoo wykrywa walutę automatycznie (z obsługą pensów GBx), dla providerów REST ustawia ją UI.
-- **Yahoo, EODHD i Alpha Vantage** — źródło oraz właściwy mu symbol wybierane per instrument;
+- **Yahoo, EODHD i Alpha Vantage** — osobny symbol i waluta zapisywane dla każdego providera;
+  przełączanie źródła przywraca jego mapowanie bez nadpisywania pozostałych;
   Xetra używa odpowiednio `.DE`, `.XETRA` albo `.DEX`.
 - **Import cen z CSV** — gdy provider nie ma poprawnej historii waloru, wgraj dzienne ceny z pliku (format stooq). Wgrane punkty są chronione przed automatycznym backfillem.
 - **Zysk całkowity** — niezrealizowany (otwarte pozycje) + zrealizowany (sprzedaże).
