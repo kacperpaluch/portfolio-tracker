@@ -15,7 +15,7 @@ import unicodedata
 from datetime import datetime
 
 from . import cash as cash_mod
-from .instruments import SEED, ensure_instrument, resolve_broker_instrument
+from .instruments import ensure_instrument, resolve_broker_instrument
 
 ENCODING = "cp1250"
 # Kolejność kolumn (po pozycji — nagłówek bywa zniekształcony przez kodowanie):
@@ -167,7 +167,7 @@ def _parse_mbank_pdf(content: bytes) -> list[dict]:
 
             raw_name = ISIN_RE.sub("", field("WALOR").replace("\n", " "))
             raw_name = re.sub(r"\s*[–—-]\s*$", "", raw_name).strip()
-            name = SEED.get(isin, {}).get("name") or raw_name or isin
+            name = raw_name or isin
             price_pln = round(value_pln / quantity, 4)
             rows.append({
                 "ts": ts.isoformat(),
@@ -298,10 +298,7 @@ def _parse_emakler(text: str, conn: sqlite3.Connection | None = None) -> list[di
             instrument = conn.execute(
                 "SELECT name, currency FROM instruments WHERE isin = ?", (isin,)
             ).fetchone()
-        expected_currency = (
-            (instrument["currency"] if instrument else None)
-            or SEED.get(isin, {}).get("currency")
-        )
+        expected_currency = instrument["currency"] if instrument else None
         if expected_currency and parts[6].upper() != expected_currency:
             raise ValueError(
                 f"Waluta kursu w wierszu eMAKLER nr {line_number} to {parts[6]}, "
@@ -313,10 +310,7 @@ def _parse_emakler(text: str, conn: sqlite3.Connection | None = None) -> list[di
             {
                 "ts": ts.isoformat(),
                 "isin": isin,
-                "name": (
-                    (instrument["name"] if instrument else None)
-                    or SEED.get(isin, {}).get("name", symbol)
-                ),
+                "name": (instrument["name"] if instrument else None) or symbol,
                 "type": tx_type,
                 "quantity": quantity,
                 "price_pln": price_pln,

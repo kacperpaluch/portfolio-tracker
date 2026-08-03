@@ -63,16 +63,20 @@ Internetu bez dodatkowej warstwy dostępu (np. VPN, Tailscale lub reverse proxy 
   przy stałym kursie) z **atrybucją zysku na instrument vs walutę** (ile dał ETF, a ile ruch
   EUR/PLN w widoku tego waloru) oraz tabelę dzień po dniu (cena giełdowa, kurs NBP, cena PLN, szt., wartość).
 - **Wycena w PLN** — instrumenty notowane w EUR/USD/GBP przeliczane bieżącym kursem NBP;
-  **waluta wykrywana automatycznie** z notowania (z obsługą londyńskich pensów GBx → GBP).
-- **Import cen z CSV (ratunek dla danych Yahoo)** — gdy Yahoo nie oddaje poprawnej historii
+  Yahoo wykrywa walutę automatycznie (z obsługą pensów GBx → GBP), a dla providerów REST
+  walutę można jawnie edytować w UI.
+- **Trzy automatyczne źródła notowań** — Yahoo Finance, EODHD i Alpha Vantage wybierane
+  osobno dla każdego instrumentu. UI obsługuje symbole właściwe dla providera, np.
+  `WEBN.DE`, `WEBN.XETRA` lub `WEBN.DEX`, oraz ostrzega, gdy brakuje klucza API.
+- **Import cen z CSV (ratunek dla danych providera)** — gdy automatyczne źródła nie oddają historii
   dla mało płynnego waloru (np. ETN na GPW), wgraj dzienne ceny z pliku CSV (format stooq:
   `Data,…,Zamkniecie`) wprost na widoku waloru. Nadpisuje błędne punkty w cache i naprawia
   wykres wartości w czasie, zmiany dzienne oraz atrybucję. Waluta jest wymagana do wyceny
   (CSV jej nie niesie) — jeśli instrument jej nie ma, aplikacja o nią zapyta przy imporcie.
-  **Punkty z CSV są chronione** — automatyczny backfill/refresh (yfinance) ich nie nadpisze,
+  **Punkty z CSV są chronione** — automatyczny backfill/refresh ich nie nadpisze,
   więc nie trzeba ich wgrywać ponownie po każdym odświeżeniu (re-import nadpisuje, gdy chcesz).
 - **Świeżość cen** — przy każdej pozycji znacznik „kiedy ostatnia cena" (dziś / wczoraj /
-  N dni temu); gdy notowanie się starzeje (np. yfinance milczy dla danego waloru) — ⚠️
+  N dni temu); gdy wybrany provider milczy dla danego waloru — ⚠️
   ostrzeżenie sygnalizujące, że czas na ręczny import CSV.
 - **Zysk całkowity** = niezrealizowany (otwarte pozycje) **+** zrealizowany (ze sprzedaży).
 - **Konto gotówkowe** — ręczne wpłaty/wypłaty; saldo nettowane przepływami z transakcji
@@ -118,7 +122,8 @@ Internetu bez dodatkowej warstwy dostępu (np. VPN, Tailscale lub reverse proxy 
   kupna/sprzedaży, więc zakup nie liczy się jako zysk) z eksportem do CSV.
 - **Historia transakcji** — wyszukiwanie i filtrowanie kupna/sprzedaży, edycja zapisanej
   operacji oraz opcjonalne notatki i prowizje.
-- **Mapowanie ISIN → ticker** ręcznie w UI (z wstępnym seedem dla znanych instrumentów);
+- **Mapowanie ISIN → ticker** ręcznie w UI lub przez wyszukiwarkę providera; aplikacja nie
+  zawiera zaszytych mapowań instrumentów i nie zapisuje wyniku bez wyboru użytkownika;
   edytowalna **nazwa własna** instrumentu (np. `PZU World` zamiast `ETFPZUWORLD` z importu) —
   nazwa z importu zapisana osobno (`imported_name`) i widoczna read-only obok; rename
   przetrwa każdy kolejny import (idempotentny).
@@ -175,11 +180,11 @@ Zrozumienie tych założeń wyjaśnia, dlaczego liczby wychodzą tak, a nie inac
 |---|---|---|
 | Backend | **FastAPI** + Uvicorn | REST API + serwowanie frontendu |
 | Baza | **SQLite** (wbudowany `sqlite3`, bez ORM) | trwałość, zero zależności (ważne na Python 3.14) |
-| Wyceny | **yfinance** (Yahoo Finance) | ceny ETF-ów; pokrywa Xetra `.DE`, LSE `.L`, GPW `.WA` |
-| Wyceny (ratunek) | **import CSV** | dla papierów bez pokrycia w yfinance (niszowy GPW) — stooq jako live-source jest martwy (antybot PoW) |
+| Wyceny | **yfinance**, **EODHD**, **Alpha Vantage** | provider wybierany per instrument; Xetra odpowiednio `.DE`, `.XETRA`, `.DEX` |
+| Wyceny (ratunek) | **import CSV** | dla papierów bez pokrycia automatycznych providerów (np. niszowy GPW) |
 | Kursy walut | **NBP API** (tabela A) | darmowe, oficjalne, bez klucza |
 | Harmonogram | **APScheduler** | dzienne odświeżanie w tle |
-| HTTP klient | **httpx** | zapytania do NBP |
+| HTTP klient | **httpx** | zapytania do EODHD, Alpha Vantage, NBP i Eurostat |
 | Frontend | **React** + **Vite** + **Recharts** | jasny wealth cockpit, wykresy, responsywny desktop/mobile |
 | Konteneryzacja | **Docker** (multi-stage, multi-arch arm64+amd64) | self-hosting |
 
@@ -187,7 +192,7 @@ Zrozumienie tych założeń wyjaśnia, dlaczego liczby wychodzą tak, a nie inac
 
 | Dane | Źródło |
 |---|---|
-| Wyceny instrumentów | [yfinance](https://github.com/ranaroussi/yfinance); ratunek dla papierów spoza pokrycia Yahoo: import CSV (format stooq) |
+| Wyceny instrumentów | [yfinance](https://github.com/ranaroussi/yfinance), [EODHD](https://eodhd.com/financial-apis/) albo [Alpha Vantage](https://www.alphavantage.co/documentation/), wybierane per instrument; ręczny import CSV jako fallback |
 | Kursy walut | [NBP API](https://api.nbp.pl) (tabela A, darmowe, bez klucza) |
 | Inflacja (benchmark) | [Eurostat HICP](https://ec.europa.eu/eurostat) (`prc_hicp_midx`, miesięczny, PL, darmowe, bez klucza) — GUS BDL ma CPI tylko rocznie/kwartalnie, więc dla rozdzielczości miesięcznej używamy HICP |
 
@@ -202,6 +207,8 @@ docker compose up -d
 ```
 
 Aplikacja: <http://localhost:8000>. Baza SQLite trwała w named volume `portfolio_tracker_data`.
+Klucze providerów ustaw w Portainerze albo skopiuj `.env.example` do `.env` i uzupełnij
+lokalnie; `.env` jest ignorowany przez Git i nie trafia do obrazu.
 
 ### Lokalnie (dev)
 
@@ -228,6 +235,10 @@ Zmienne środowiskowe (ustawiane w `docker-compose.yml`):
 | Zmienna | Domyślnie | Opis |
 |---|---|---|
 | `SCHEDULER_ENABLED` | `true` (`false` w Compose) | włącza wewnętrzny harmonogram; ustaw `false`, aby wyzwalać zadania wyłącznie przez API |
+| `EODHD_API_KEY` | brak | klucz EODHD; darmowy plan: 20 wywołań/dzień i do roku historii EOD |
+| `ALPHA_VANTAGE_API_KEY` | brak | klucz Alpha Vantage; darmowy plan: 25 wywołań/dzień i 100 ostatnich sesji |
+| `EODHD_MIN_INTERVAL_SECONDS` | `1` | minimalny odstęp między rozpoczęciem zapytań EODHD w jednym procesie |
+| `ALPHAVANTAGE_MIN_INTERVAL_SECONDS` | `12` | minimalny odstęp między rozpoczęciem zapytań Alpha Vantage w jednym procesie |
 | `TZ` | `Europe/Warsaw` | strefa czasowa (harmonogram crona) |
 | `REFRESH_HOUR` | `21` | godzina dziennego odświeżania cen/kursów |
 | `REFRESH_MINUTE` | `0` | minuta dziennego odświeżania |
@@ -251,13 +262,17 @@ Nie należy wystawiać portu `8000` bezpośrednio do Internetu.
 ## Sposób użycia
 
 1. Otwórz **Dane i ustawienia → Import transakcji** i wgraj eksport historii rachunku.
-   Powstaną transakcje oraz instrumenty; znane ISIN-y dostaną ticker automatycznie. Jeśli
+   Powstaną transakcje oraz instrumenty wymagające konfiguracji użytkownika. Jeśli
    eksport eMAKLER zawiera nowy symbol bez ISIN-u, uzupełnij wyświetlony formularz — po
    zapisaniu mapowania aplikacja sama ponowi import pliku.
-2. W **Dane i ustawienia → Instrumenty** uzupełnij ticker lub kategorię pozycji oznaczonych
-   jako wymagające konfiguracji. Waluta zostanie wykryta przy pobieraniu ceny.
-3. W **Dane i ustawienia → Źródła danych** wybierz **Odśwież**, aby pobrać bieżące wyceny
-   z Yahoo Finance i kursy NBP.
+2. W **Dane i ustawienia → Instrumenty** wybierz provider i wpisz jego symbol: Yahoo
+   (`WEBN.DE`), EODHD (`WEBN.XETRA`) albo Alpha Vantage (`WEBN.DEX`). Uzupełnij również
+   walutę i kategorię. Yahoo może wykryć walutę automatycznie, pozostałe źródła używają
+   wartości zapisanej w UI. Dla EODHD i Alpha Vantage możesz użyć przycisku **Wyszukaj**:
+   EODHD najlepiej rozpoznaje ISIN, a Alpha Vantage nazwę lub ticker. Wynik jest tylko
+   propozycją — użytkownik wybiera właściwy instrument przed zapisem.
+3. W **Dane i ustawienia → Źródła danych** wybierz **Odśwież**, aby pobrać wyceny
+   z providerów przypisanych do instrumentów oraz kursy NBP.
 4. Przy pierwszym uruchomieniu wybierz **Uzupełnij** przy pełnej historii. Backfill pobierze
    dzienne ceny i kursy od pierwszej transakcji, zasilając wykresy i miary ryzyka.
 5. W sekcji **Portfel → Konto gotówkowe** dodaj wpłaty i wypłaty. Dzięki temu wartość konta,
@@ -277,7 +292,7 @@ portfolio-tracker/
 │   │   ├── db.py          # SQLite: połączenie, schemat (CREATE TABLE IF NOT EXISTS), sesje
 │   │   ├── importer.py    # parsing CSV/PDF, wzbogacanie metadanych i dedup po import_hash
 │   │   ├── instruments.py # instrumenty, seed ISIN→ticker i trwałe aliasy brokera z UI
-│   │   ├── prices.py      # provider yfinance + import cen z CSV (ratunek), auto-detekcja waluty (GBx→GBP), cache
+│   │   ├── prices.py      # dispatcher Yahoo/EODHD/Alpha + import CSV, ochrona ręcznych danych i cache
 │   │   ├── fx.py          # klient NBP + cache fx_rates, lookback na weekendy/święta
 │   │   ├── cpi.py         # klient Eurostat HICP + cache cpi_index (inflacja pod benchmark)
 │   │   ├── portfolio.py   # agregacja pozycji (średni koszt), wycena, P/L (zreal. + niezreal.)
@@ -310,7 +325,7 @@ SQLite, 8 tabel (schemat w `backend/app/db.py`):
 
 | Tabela | Klucz | Zawartość |
 |---|---|---|
-| `instruments` | `isin` | nazwa, `ticker`, `currency` (EUR/USD/GBP/PLN), `source` (yfinance/csv), `category`, `needs_config` |
+| `instruments` | `isin` | nazwa, symbol providera w `ticker`, `currency`, `source` (`yfinance`/`eodhd`/`alphavantage`), `category`, `needs_config` |
 | `broker_instrument_aliases` | (`broker`,`symbol`,`exchange`) | trwałe, tworzone przez użytkownika mapowanie symbolu z raportu bez ISIN-u do `instruments.isin` |
 | `target_allocation` | `category` | docelowy udział grupy (`weight_pct`) |
 | `transactions` | `id` | dane handlu w PLN oraz opcjonalne metadane PDF: `native_price`, `native_currency`, `fx_rate`, `settlement_date`, `market`, `broker_order_id`, `source_format`; `import_hash` jest unikalny |
@@ -323,9 +338,18 @@ Pozycje nie są materializowane — liczone w locie z `transactions` (chronologi
 
 ## Jak działa wycena (logika finansowa)
 
-- **Auto-detekcja waluty** (`prices.py`): przy pobraniu ceny z yfinance czytamy `fast_info.currency`
+- **Provider per instrument** (`prices.py`): `source` wybiera Yahoo, EODHD albo Alpha
+  Vantage, a `ticker` jest interpretowany w konwencji tego źródła. EODHD udostępnia bieżącą
+  cenę i historię EOD; Alpha Vantage `GLOBAL_QUOTE` oraz 100 sesji `TIME_SERIES_DAILY`.
+- **Limity i retry**: EODHD i Alpha są odpytywane kolejno z konfigurowalnym minimalnym
+  odstępem. Błędy sieci, HTTP 429 i 5xx mają maksymalnie trzy próby z backoffem oraz
+  obsługą `Retry-After`. Po trwałym błędzie aplikacja pozostawia ostatnią cenę w cache;
+  nie przełącza providera automatycznie, ponieważ symbole różnych źródeł nie są równoważne.
+- **Wyszukiwanie symboli**: backend pośredniczy w zapytaniach EODHD i Alpha Vantage,
+  dzięki czemu klucze nie trafiają do przeglądarki. Użytkownik jawnie wybiera wynik.
+- **Auto-detekcja waluty Yahoo**: przy pobraniu ceny z yfinance czytamy `fast_info.currency`
   i synchronizujemy `instruments.currency`. Londyńskie pensy (`GBp`/`GBx`) normalizujemy do GBP
-  (cena / 100). Dzięki temu wystarczy zmapować ticker — waluta i kurs dobiorą się same.
+  (cena / 100). Dla EODHD i Alpha Vantage waluta jest ustawiana jawnie w UI.
 - **Kurs NBP** (`fx.py`): tabela A, z lookbackiem (NBP nie publikuje kursów w weekendy/święta →
   bierzemy ostatni dostępny). Wyniki cache'owane w `fx_rates`. PLN → kurs 1.0.
 - **Pozycje i P/L** (`portfolio.py`): średni koszt; `wartość = cena × ilość × kurs`;
@@ -351,7 +375,8 @@ Pozycje nie są materializowane — liczone w locie z `transactions` (chronologi
 | Metoda | Ścieżka | Opis |
 |---|---|---|
 | `POST` | `/api/import` | import CSV lub potwierdzenia PDF mBanku (multipart `file`, auto-detekcja) |
-| `POST` | `/api/prices/import` | import dziennych cen waloru z CSV (multipart `isin` + `file` + opcjonalnie `currency`, format stooq) — ratunek, gdy Yahoo nie ma historii; waluta wymagana do wyceny |
+| `POST` | `/api/prices/import` | import dziennych cen waloru z CSV (multipart `isin` + `file` + opcjonalnie `currency`, format stooq) — fallback dla providerów; waluta wymagana do wyceny |
+| `GET` | `/api/providers/search?source=…&query=…` | wyszukiwanie symboli EODHD/Alpha Vantage; klucz pozostaje w backendzie |
 | `GET` | `/api/portfolio?refresh=false` | pozycje + sumy (wartość, P/L zreal./niezreal., gotówka, XIRR, TWR, zwroty w okresach) |
 | `GET` | `/api/summary` | zwięzły digest (wartość, P/L, zmiana D/D, zwroty, alokacja vs cel) — pod powiadomienia/n8n |
 | `GET` | `/api/history?benchmark_rate=0.05&cpi_spread=0.02` | dzienna seria `value_pln` + dwa benchmarki: `benchmark_pln` (stała stopa) i `benchmark_cpi_pln` (inflacja HICP + `cpi_spread`); + warianty `_pct` |
@@ -493,10 +518,10 @@ Najczęstsze kierunki rozwoju i gdzie ich szukać:
   oraz w `cash.balance`; uwzględnij w XIRR jako przepływy.
 - **Nowy format importu** (inny broker) — dodaj parser w `importer.py` z auto-detekcją po nagłówku;
   mapuj do tego samego modelu (`transactions` + `instruments` + `cash_flows`).
-- **Kolejne źródło cen** — dodaj funkcje `_xxx_last` / `_xxx_hist` w `prices.py` i obsłuż nową
-  wartość `source`; reszta (cache, wycena) bez zmian.
+- **Kolejne źródło cen** — dodaj funkcje `_xxx_last` / `_xxx_hist` w `prices.py` i wartość
+  do `SUPPORTED_SOURCES`; dispatcher, cache i wycena pozostają wspólne.
 - **Powiadomienia / eksport** — dorzuć endpoint w `main.py` i zadanie w `scheduler.py`.
 
 ---
 
-Stack: FastAPI + SQLite + yfinance · frontend React/Recharts · Docker multi-arch (arm64 + amd64).
+Stack: FastAPI + SQLite + Yahoo/EODHD/Alpha Vantage · frontend React/Recharts · Docker multi-arch (arm64 + amd64).

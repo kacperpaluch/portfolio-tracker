@@ -1,22 +1,112 @@
-"""Pobieranie wycen instrumentów (yfinance — rynki zagraniczne i GPW przez .WA) + cache.
-Waluta wykrywana automatycznie.
+"""Pobieranie wycen instrumentów (Yahoo, EODHD, Alpha Vantage) + cache.
+
+Provider jest wybierany per instrument przez `instruments.source`, a `ticker` zawiera
+symbol w konwencji wybranego źródła (np. WEBN.DE / WEBN.XETRA / WEBN.DEX).
+Klucze API są czytane wyłącznie z EODHD_API_KEY i ALPHA_VANTAGE_API_KEY.
 
 Yahoo dla giełdy londyńskiej zwraca ceny w pensach (GBx) — normalizujemy do GBP
 (dzielenie przez 100), żeby przeliczenie kursem NBP było poprawne.
 
-Gdy Yahoo nie ma poprawnej historii dla danego ISIN, ratunkiem jest import
+Gdy automatyczny provider nie ma poprawnej historii dla danego ISIN, ratunkiem jest import
 dziennych cen z CSV (format stooq) — patrz `import_prices`.
 """
 from __future__ import annotations
 
+import os
 import sqlite3
-from datetime import datetime
+import threading
+import time
+from datetime import datetime, timezone
+from typing import Callable
+from urllib.parse import quote
+
+import httpx
+
+SUPPORTED_SOURCES = {"yfinance", "eodhd", "alphavantage", "csv"}
+PROVIDER_KEY_ENV = {
+    "eodhd": "EODHD_API_KEY",
+    "alphavantage": "ALPHA_VANTAGE_API_KEY",
+}
+
+# Limity działają per proces aplikacji. Wartości domyślne są zachowawcze dla
+# darmowych planów; można je dostroić zmiennymi środowiskowymi bez zmiany kodu.
+_DEFAULT_INTERVALS = {"eodhd": 1.0, "alphavantage": 12.0}
+_RATE_LOCKS = {provider: threading.Lock() for provider in _DEFAULT_INTERVALS}
+_LAST_REQUEST = {provider: 0.0 for provider in _DEFAULT_INTERVALS}
+
+
+def _provider_interval(provider: str) -> float:
+    env_name = f"{provider.upper()}_MIN_INTERVAL_SECONDS"
+    try:
+        return max(0.0, float(os.environ.get(env_name, _DEFAULT_INTERVALS[provider])))
+    except (TypeError, ValueError):
+        return _DEFAULT_INTERVALS[provider]
+
+
+def _wait_for_provider(provider: str) -> None:
+    """Serializuje zapytania i zachowuje minimalny odstęp per provider/proces."""
+    with _RATE_LOCKS[provider]:
+        delay = _provider_interval(provider) - (time.monotonic() - _LAST_REQUEST[provider])
+        if delay > 0:
+            time.sleep(delay)
+        _LAST_REQUEST[provider] = time.monotonic()
+
+
+def _retry_delay(response, attempt: int) -> float:
+    retry_after = getattr(response, "headers", {}).get("Retry-After") if response is not None else None
+    try:
+        return max(0.0, float(retry_after))
+    except (TypeError, ValueError):
+        return float(2 ** attempt)
+
+
+def _get_json(
+    provider: str,
+    url: str,
+    params: dict,
+    payload_retryable: Callable[[object], bool] | None = None,
+):
+    """GET z limitem, maks. 3 próbami i backoffem dla 429/5xx/błędów sieci."""
+    for attempt in range(3):
+        response = None
+        try:
+            _wait_for_provider(provider)
+            response = httpx.get(url, params=params, timeout=20.0)
+            status = getattr(response, "status_code", 200)
+            if status == 429 or status >= 500:
+                if attempt < 2:
+                    time.sleep(_retry_delay(response, attempt))
+                    continue
+                return None
+            response.raise_for_status()
+            data = response.json()
+            if payload_retryable and payload_retryable(data):
+                if attempt < 2:
+                    time.sleep(_retry_delay(response, attempt))
+                    continue
+                return None
+            return data
+        except (httpx.TimeoutException, httpx.TransportError, ValueError):
+            if attempt < 2:
+                time.sleep(_retry_delay(response, attempt))
+                continue
+            return None
+        except httpx.HTTPError:
+            return None
+    return None
+
+
+def provider_configured(source: str | None) -> bool:
+    """Czy provider może działać w bieżącym środowisku."""
+    source = (source or "").strip().lower()
+    env_name = PROVIDER_KEY_ENV.get(source)
+    return bool(os.environ.get(env_name, "").strip()) if env_name else source in {"yfinance", "csv"}
 
 
 def _cache_put(conn: sqlite3.Connection, isin: str, day: str, price: float, source: str) -> None:
     """Zapis ceny do cache. Ręczny import z CSV (`source='csv'`) jest „święty":
-    automatyczny provider (yfinance) go NIE nadpisuje — inaczej backfill/refresh skasowałby
-    dane wgrane dla papierów, których Yahoo nie obsługuje. Re-import CSV nadpisuje wszystko.
+    automatyczny provider go NIE nadpisuje — inaczej backfill/refresh skasowałby
+    dane wgrane dla papierów bez poprawnych danych providera. Re-import CSV nadpisuje wszystko.
     """
     if source == "csv":
         conn.execute(
@@ -24,7 +114,7 @@ def _cache_put(conn: sqlite3.Connection, isin: str, day: str, price: float, sour
             (isin, day, price, source),
         )
     else:
-        # UPSERT: wypełnij brakujący dzień / zaktualizuj punkt z yfinance, ale NIE ruszaj
+        # UPSERT: wypełnij brakujący dzień / zaktualizuj punkt providera, ale NIE ruszaj
         # istniejącego wiersza pochodzącego z importu CSV.
         conn.execute(
             "INSERT INTO prices (isin, date, price, source) VALUES (?, ?, ?, ?) "
@@ -83,6 +173,133 @@ def _yf_hist(ticker: str, start: str, end: str) -> tuple[list[tuple[str, float]]
         return [], None
 
 
+# ---------------------------------------------------------------- EODHD
+
+def _eodhd_get(path: str, params: dict | None = None):
+    api_key = os.environ.get("EODHD_API_KEY", "").strip()
+    if not api_key:
+        return None
+    data = _get_json(
+        "eodhd",
+        f"https://eodhd.com/api/{path.lstrip('/')}",
+        {**(params or {}), "api_token": api_key, "fmt": "json"},
+    )
+    if isinstance(data, dict) and (data.get("errors") or data.get("message")):
+        return None
+    return data
+
+
+def _eodhd_last(ticker: str) -> tuple[str, float, str | None] | None:
+    data = _eodhd_get(f"real-time/{ticker}")
+    if not isinstance(data, dict) or data.get("close") is None:
+        return None
+    timestamp = data.get("timestamp")
+    day = (
+        datetime.fromtimestamp(timestamp, timezone.utc).date().isoformat()
+        if isinstance(timestamp, (int, float))
+        else datetime.now(timezone.utc).date().isoformat()
+    )
+    return day, float(data["close"]), None
+
+
+def _eodhd_hist(ticker: str, start: str, end: str) -> tuple[list[tuple[str, float]], str | None]:
+    data = _eodhd_get(f"eod/{ticker}", {"from": start, "to": end, "order": "a"})
+    if not isinstance(data, list):
+        return [], None
+    series = [
+        (str(row["date"]), float(row["close"]))
+        for row in data
+        if row.get("date") and row.get("close") is not None
+    ]
+    return series, None
+
+
+# ---------------------------------------------------------------- Alpha Vantage
+
+def _alpha_get(params: dict):
+    api_key = os.environ.get("ALPHA_VANTAGE_API_KEY", "").strip()
+    if not api_key:
+        return None
+    def throttled(payload: object) -> bool:
+        return isinstance(payload, dict) and any(key in payload for key in ("Information", "Note"))
+
+    data = _get_json(
+        "alphavantage",
+        "https://www.alphavantage.co/query",
+        {**params, "apikey": api_key},
+        payload_retryable=throttled,
+    )
+    if not isinstance(data, dict) or "Error Message" in data:
+        return None
+    return data
+
+
+def _alpha_last(ticker: str) -> tuple[str, float, str | None] | None:
+    data = _alpha_get({"function": "GLOBAL_QUOTE", "symbol": ticker})
+    quote = data.get("Global Quote", {}) if data else {}
+    day, price = quote.get("07. latest trading day"), quote.get("05. price")
+    if not day or price is None:
+        return None
+    return str(day), float(price), None
+
+
+def _alpha_hist(ticker: str, start: str, end: str) -> tuple[list[tuple[str, float]], str | None]:
+    data = _alpha_get({
+        "function": "TIME_SERIES_DAILY",
+        "symbol": ticker,
+        "outputsize": "compact",
+    })
+    raw = data.get("Time Series (Daily)", {}) if data else {}
+    series = sorted(
+        (day, float(values["4. close"]))
+        for day, values in raw.items()
+        if start <= day <= end and values.get("4. close") is not None
+    )
+    return series, None
+
+
+def search_symbols(source: str, query: str) -> list[dict]:
+    """Wyszukuje symbole providera i zwraca wspólny, bezpieczny format dla UI."""
+    source = source.strip().lower()
+    query = query.strip()
+    if not query:
+        return []
+    if source == "eodhd":
+        data = _eodhd_get(f"search/{quote(query, safe='')}")
+        if not isinstance(data, list):
+            return []
+        return [
+            {
+                "symbol": ".".join(filter(None, (row.get("Code"), row.get("Exchange")))),
+                "name": row.get("Name") or row.get("Code") or "",
+                "exchange": row.get("Exchange") or "",
+                "region": row.get("Country") or "",
+                "currency": row.get("Currency") or "",
+                "isin": row.get("ISIN") or "",
+                "type": row.get("Type") or "",
+            }
+            for row in data[:20]
+            if row.get("Code")
+        ]
+    if source == "alphavantage":
+        data = _alpha_get({"function": "SYMBOL_SEARCH", "keywords": query})
+        matches = data.get("bestMatches", []) if isinstance(data, dict) else []
+        return [
+            {
+                "symbol": row.get("1. symbol") or "",
+                "name": row.get("2. name") or row.get("1. symbol") or "",
+                "exchange": "",
+                "region": row.get("4. region") or "",
+                "currency": row.get("8. currency") or "",
+                "isin": "",
+                "type": row.get("3. type") or "",
+            }
+            for row in matches[:20]
+            if row.get("1. symbol")
+        ]
+    raise ValueError("Wyszukiwanie symboli obsługuje EODHD i Alpha Vantage")
+
+
 # ---------------------------------------------------------------- API publiczne
 
 def _sync_currency(conn: sqlite3.Connection, isin: str, currency: str | None) -> None:
@@ -96,7 +313,14 @@ def fetch_latest(conn: sqlite3.Connection, instrument: dict) -> tuple[str, float
     ticker, source = instrument.get("ticker"), instrument.get("source")
     if not ticker or not source:
         return None
-    result = _yf_last(ticker)
+    if source == "yfinance":
+        result = _yf_last(ticker)
+    elif source == "eodhd":
+        result = _eodhd_last(ticker)
+    elif source == "alphavantage":
+        result = _alpha_last(ticker)
+    else:
+        return None
     if result is None:
         return None
     day, price, ccy = result
@@ -111,7 +335,14 @@ def fetch_history(conn: sqlite3.Connection, instrument: dict, start: str, end: s
     ticker, source = instrument.get("ticker"), instrument.get("source")
     if not ticker or not source:
         return 0
-    series, ccy = _yf_hist(ticker, start, end)
+    if source == "yfinance":
+        series, ccy = _yf_hist(ticker, start, end)
+    elif source == "eodhd":
+        series, ccy = _eodhd_hist(ticker, start, end)
+    elif source == "alphavantage":
+        series, ccy = _alpha_hist(ticker, start, end)
+    else:
+        return 0
     for day, price in series:
         _cache_put(conn, instrument["isin"], day, price, source)
     _sync_currency(conn, instrument["isin"], ccy)
@@ -198,7 +429,7 @@ def import_prices(
 ) -> dict:
     """Wgrywa dzienne ceny (w walucie natywnej instrumentu) z CSV do cache `prices`.
 
-    Ratunek, gdy provider (np. Yahoo) nie oddaje poprawnej historii dla danego ISIN.
+    Ratunek, gdy automatyczny provider nie oddaje poprawnej historii dla danego ISIN.
     Nadpisuje pokrywające się punkty (INSERT OR REPLACE); cena trafia wprost do kolumny
     `price` (przeliczenie kursem NBP dzieje się dalej w wycenie, dla PLN kurs = 1.0).
 

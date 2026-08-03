@@ -23,8 +23,10 @@ wyceny i pokazuje wartość, zysk/stratę oraz stopy zwrotu — **wszystko w PLN
   zaszytych aliasów i bez zgadywania instrumentów.
 - **Ręczne dodawanie/usuwanie transakcji** w UI (z tym samym dedupem co import).
 - **Wycena w PLN** — ETF-y notowane w EUR/USD/GBP przeliczane bieżącym kursem NBP;
-  waluta wykrywana automatycznie (z obsługą londyńskich pensów GBx).
-- **Import cen z CSV** — gdy Yahoo nie ma poprawnej historii waloru, wgraj dzienne ceny z pliku (format stooq) wprost na widoku waloru. Wgrane punkty są chronione — automatyczny backfill ich nie nadpisuje.
+  Yahoo wykrywa walutę automatycznie (z obsługą pensów GBx), dla providerów REST ustawia ją UI.
+- **Yahoo, EODHD i Alpha Vantage** — źródło oraz właściwy mu symbol wybierane per instrument;
+  Xetra używa odpowiednio `.DE`, `.XETRA` albo `.DEX`.
+- **Import cen z CSV** — gdy provider nie ma poprawnej historii waloru, wgraj dzienne ceny z pliku (format stooq). Wgrane punkty są chronione przed automatycznym backfillem.
 - **Zysk całkowity** — niezrealizowany (otwarte pozycje) + zrealizowany (sprzedaże).
 - **Konto gotówkowe** — ręczne wpłaty/wypłaty, śledzenie niezainwestowanej gotówki.
 - **Wykres wartości w czasie** + **dwa benchmarki** (przełączane): konfigurowalna stała stopa (np. 5%/rok) oraz **inflacja + X%** (realny indeks HICP dla Polski, Eurostat). Przełącznik trybu: wartość konta (PLN) **lub** stopa zwrotu (%) vs benchmarki w %.
@@ -49,7 +51,7 @@ wyceny i pokazuje wartość, zysk/stratę oraz stopy zwrotu — **wszystko w PLN
 
 ## Źródła danych
 
-- Wyceny: Yahoo Finance (yfinance); ratunek dla papierów spoza pokrycia Yahoo — import cen z CSV.
+- Wyceny: Yahoo Finance, EODHD lub Alpha Vantage per instrument; ręczny CSV jako fallback.
 - Kursy walut: [NBP API](https://api.nbp.pl) (tabela A, darmowe).
 - Inflacja (benchmark): [Eurostat HICP](https://ec.europa.eu/eurostat) (miesięczny, PL, darmowe).
 
@@ -67,6 +69,10 @@ Aplikacja: `http://localhost:8000`. Dane SQLite są trzymane poza obrazem, w nam
 | Zmienna | Domyślnie | Opis |
 |---|---|---|
 | `SCHEDULER_ENABLED` | `true` (`false` w Compose) | wewnętrzny harmonogram; wyłączony przy sterowaniu przez API |
+| `EODHD_API_KEY` | brak | klucz EODHD dla instrumentów ze źródłem `eodhd` |
+| `ALPHA_VANTAGE_API_KEY` | brak | klucz Alpha Vantage dla źródła `alphavantage` |
+| `EODHD_MIN_INTERVAL_SECONDS` | `1` | minimalny odstęp zapytań EODHD |
+| `ALPHAVANTAGE_MIN_INTERVAL_SECONDS` | `12` | minimalny odstęp zapytań Alpha Vantage |
 | `TZ` | `Europe/Warsaw` | strefa czasowa (cron) |
 | `REFRESH_HOUR` | `21` | godzina dziennego odświeżania |
 | `REFRESH_MINUTE` | `0` | minuta dziennego odświeżania |
@@ -75,4 +81,8 @@ Aplikacja: `http://localhost:8000`. Dane SQLite są trzymane poza obrazem, w nam
 | `BACKUP_STALE_HOURS` | `36` | próg ostrzeżenia o wieku ostatniej poprawnej kopii |
 | `DB_PATH` | `/app/data/portfolio.db` | ścieżka bazy SQLite |
 
-Stack: FastAPI + SQLite + yfinance · frontend React/Recharts · obraz multi-arch (arm64 + amd64).
+Stack: FastAPI + SQLite + Yahoo/EODHD/Alpha Vantage · frontend React/Recharts · obraz multi-arch (arm64 + amd64).
+
+W interfejsie można wyszukać symbol EODHD po ISIN-ie/nazwie albo symbol Alpha Vantage
+po nazwie/tickerze. Zapytania REST mają limiter i trzy próby z backoffem; klucze pozostają
+wyłącznie po stronie backendu.

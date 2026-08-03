@@ -58,3 +58,24 @@ def test_quality_detects_missing_configuration_and_price():
     codes = {issue["code"] for issue in result["issues"]}
     assert result["status"] == "error"
     assert {"instrument_config", "missing_category", "missing_price"} <= codes
+
+
+def test_quality_detects_missing_provider_key(monkeypatch):
+    monkeypatch.delenv("EODHD_API_KEY", raising=False)
+    conn = _db()
+    conn.execute(
+        "INSERT INTO instruments "
+        "(isin, name, ticker, currency, source, category, active, needs_config) "
+        "VALUES ('A', 'ETF A', 'A.XETRA', 'EUR', 'eodhd', 'Akcje', 1, 0)"
+    )
+    conn.execute(
+        "INSERT INTO transactions "
+        "(ts, isin, type, quantity, price_pln, value_pln, commission_pln, import_hash) "
+        "VALUES ('2026-01-01T10:00:00', 'A', 'BUY', 1, 100, 100, 0, 'h1')"
+    )
+    cash_mod.record_trade_cash(conn, "2026-01-01T10:00:00", "BUY", 100, "h1")
+    conn.commit()
+
+    result = inspect(conn)
+
+    assert "provider_config" in {issue["code"] for issue in result["issues"]}

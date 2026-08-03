@@ -42,7 +42,7 @@ export default function InstrumentDetail({ data, onClose, onImportPrices, busy }
           <div className="modal-actions">
             <input ref={priceFileRef} type="file" accept=".csv" className="hidden-file" onChange={onPickPrices} />
             <button onClick={() => priceFileRef.current?.click()} disabled={busy}
-              title="Wgraj dzienne ceny z CSV (format stooq) — gdy Yahoo nie ma poprawnej historii">
+              title="Wgraj dzienne ceny z CSV (format stooq) — gdy provider nie ma poprawnej historii">
               Importuj ceny (CSV)
             </button>
             <button onClick={onClose}>Zamknij ✕</button>

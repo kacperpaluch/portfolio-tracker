@@ -7,6 +7,11 @@ services:
       - "8000:8000"
     environment:
       - TZ=Europe/Warsaw
+      # Klucze zdefiniuj w Portainerze lub pliku .env — nigdy nie wpisuj ich do repozytorium:
+      - EODHD_API_KEY=${EODHD_API_KEY:-}
+      - ALPHA_VANTAGE_API_KEY=${ALPHA_VANTAGE_API_KEY:-}
+      - EODHD_MIN_INTERVAL_SECONDS=${EODHD_MIN_INTERVAL_SECONDS:-1}
+      - ALPHAVANTAGE_MIN_INTERVAL_SECONDS=${ALPHAVANTAGE_MIN_INTERVAL_SECONDS:-12}
       # Wyłącz wewnętrzny harmonogram, gdy refresh i backup wywołuje zewnętrzna automatyzacja:
       - SCHEDULER_ENABLED=false
       # Godzina codziennego odświeżania cen/kursów (czas TZ):

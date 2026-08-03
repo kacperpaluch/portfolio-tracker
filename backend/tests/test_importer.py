@@ -232,34 +232,17 @@ def test_import_idempotent():
     assert total == 5
 
 
-def test_instruments_created_with_seed():
+def test_imported_instruments_require_user_configuration():
     conn = _mem_db()
     import_transactions(conn, _csv_bytes())
-    # ETF PZU: zweryfikowany ticker GPW (.WA), PLN, gotowy do wyceny.
-    pzu = conn.execute(
-        "SELECT ticker, currency, source, needs_config FROM instruments WHERE isin = ?",
-        ("PLPZUMW00018",),
-    ).fetchone()
-    assert pzu["ticker"] == "ETFPZUWORLD.WA"
-    assert pzu["currency"] == "PLN"
-    assert pzu["source"] == "yfinance"
-    assert pzu["needs_config"] == 0
-
-    # ETF w EUR (Invesco FTSE All-World na Xetrze).
-    inv = conn.execute(
-        "SELECT ticker, currency, needs_config FROM instruments WHERE isin = ?",
-        ("IE000716YHJ7",),
-    ).fetchone()
-    assert inv["ticker"] == "FWIA.DE"
-    assert inv["currency"] == "EUR"
-    assert inv["needs_config"] == 0
-
-    # Nieznany ISIN -> brak tickera, wymaga konfiguracji.
-    unknown = conn.execute(
-        "SELECT ticker, needs_config FROM instruments WHERE isin = ?", ("XX0000000000",)
-    ).fetchone()
-    assert unknown["ticker"] is None
-    assert unknown["needs_config"] == 1
+    rows = conn.execute(
+        "SELECT ticker, currency, source, needs_config FROM instruments"
+    ).fetchall()
+    assert rows
+    assert all(row["ticker"] is None for row in rows)
+    assert all(row["currency"] is None for row in rows)
+    assert all(row["source"] is None for row in rows)
+    assert all(row["needs_config"] == 1 for row in rows)
 
 
 def test_position_quantities():

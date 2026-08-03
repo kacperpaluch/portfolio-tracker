@@ -6,6 +6,7 @@ import sqlite3
 from datetime import date
 
 from . import portfolio as portfolio_mod
+from . import prices as prices_mod
 
 
 def _age(iso_date: str | None) -> int | None:
@@ -47,6 +48,13 @@ def inspect(conn: sqlite3.Connection, stale_after_days: int = 4) -> dict:
                 "Instrument wymaga konfiguracji",
                 f"{inst['name']} nie ma kompletnego tickera lub waluty.",
                 entity=isin, action="Uzupełnij instrument w sekcji mapowania notowań.",
+            )
+        elif not prices_mod.provider_configured(inst["source"]):
+            add(
+                "provider_config", "error" if position else "warning",
+                "Brak klucza źródła notowań",
+                f"{inst['name']} używa {inst['source']}, ale odpowiedni klucz API nie jest ustawiony.",
+                entity=isin, action="Ustaw klucz API w zmiennych środowiskowych i uruchom kontener ponownie.",
             )
         if not (inst.get("category") or "").strip():
             add(

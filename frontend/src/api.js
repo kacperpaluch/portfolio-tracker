@@ -23,6 +23,10 @@ export const api = {
   history: (benchmarkRate = 0.05, cpiSpread = 0) =>
     fetch(`/api/history?benchmark_rate=${benchmarkRate}&cpi_spread=${cpiSpread}`).then(json),
   instruments: () => fetch("/api/instruments").then(json),
+  searchProviderSymbols: (source, query) => {
+    const params = new URLSearchParams({ source, query });
+    return fetch(`/api/providers/search?${params}`).then(json);
+  },
   updateInstrument: (isin, body) =>
     fetch(`/api/instruments/${isin}`, {
       method: "PUT",

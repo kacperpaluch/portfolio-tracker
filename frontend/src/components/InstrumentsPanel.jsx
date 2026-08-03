@@ -1,9 +1,15 @@
 import { useState } from "react";
+import ProviderSymbolSearch from "./ProviderSymbolSearch.jsx";
 
 export default function InstrumentsPanel({ instruments, onSave }) {
   const [draft, setDraft] = useState({});
   const edit = (isin, field, val) => setDraft((d) => ({ ...d, [isin]: { ...d[isin], [field]: val } }));
   const valueOf = (inst, field) => draft[inst.isin]?.[field] ?? inst[field] ?? "";
+  const tickerPlaceholder = (inst) => ({
+    eodhd: "np. WEBN.XETRA",
+    alphavantage: "np. WEBN.DEX",
+    yfinance: "np. WEBN.DE",
+  }[valueOf(inst, "source") || "yfinance"] || "symbol źródła");
   return (
     <table>
       <thead>
@@ -18,27 +24,40 @@ export default function InstrumentsPanel({ instruments, onSave }) {
                 onChange={(e) => edit(inst.isin, "name", e.target.value)} />
             </td>
             <td>
-              <input className="cell" value={valueOf(inst, "ticker")} placeholder="np. FWIA.DE"
+              <input className="cell" value={valueOf(inst, "ticker")} placeholder={tickerPlaceholder(inst)}
                 onChange={(e) => edit(inst.isin, "ticker", e.target.value)} />
+              <ProviderSymbolSearch
+                source={valueOf(inst, "source") || "yfinance"}
+                defaultQuery={(valueOf(inst, "source") === "eodhd" ? inst.isin : valueOf(inst, "name"))}
+                onSelect={(result) => {
+                  edit(inst.isin, "ticker", result.symbol);
+                  if (result.currency) edit(inst.isin, "currency", result.currency.toUpperCase());
+                }}
+              />
             </td>
             <td>
               <select className="cell narrow" value={valueOf(inst, "source") || "yfinance"}
                 onChange={(e) => edit(inst.isin, "source", e.target.value)}>
                 <option value="yfinance">yfinance</option>
+                <option value="eodhd">EODHD</option>
+                <option value="alphavantage">Alpha Vantage</option>
               </select>
             </td>
             <td>
               <input className="cell" list="cat-list" value={valueOf(inst, "category")} placeholder="np. Akcje"
                 onChange={(e) => edit(inst.isin, "category", e.target.value)} />
             </td>
-            <td className="muted">{inst.currency || "auto"}</td>
+            <td>
+              <input className="cell narrow" maxLength="3" value={valueOf(inst, "currency")} placeholder="EUR"
+                onChange={(e) => edit(inst.isin, "currency", e.target.value.toUpperCase())} />
+            </td>
             <td>{inst.needs_config ? <span className="badge">do uzupełnienia</span> : <span className="pos">OK</span>}</td>
             <td>
               <button onClick={() => onSave(inst.isin, {
                 name: valueOf(inst, "name"),
                 ticker: valueOf(inst, "ticker"),
                 source: valueOf(inst, "source") || "yfinance",
-                currency: inst.currency,
+                currency: valueOf(inst, "currency"),
                 category: valueOf(inst, "category"),
               })}>Zapisz</button>
             </td>

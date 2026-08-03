@@ -571,7 +571,7 @@ export default function App() {
             <div>
               <span className="sync-kicker">Wyceny i kursy NBP</span>
               <strong>{latestPriceDate ? `Ostatnie dane: ${latestPriceDate}` : "Brak danych"}</strong>
-              <p>Aktualizuje bieżące ceny i uzupełnia krótkie luki.</p>
+              <p>Aktualizuje ceny z Yahoo, EODHD lub Alpha Vantage i uzupełnia krótkie luki.</p>
             </div>
             <button className="secondary" disabled={busy} onClick={() => run(() => api.refresh(), "Wyceny zostały odświeżone.").catch(() => {})}>Odśwież</button>
           </div>

@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
@@ -94,7 +94,7 @@ async def import_prices_csv(
 ) -> dict:
     """Wgrywa dzienne ceny waloru z CSV (format stooq: Data,…,Zamkniecie) do cache.
 
-    Ratunek, gdy provider (Yahoo) nie oddaje poprawnej historii dla danego ISIN —
+    Ratunek, gdy automatyczny provider nie oddaje poprawnej historii dla danego ISIN —
     np. mało płynny ETN na GPW. `currency` jest wymagana do wyceny (CSV jej nie niesie):
     przekaż ją, albo ustaw wcześniej na instrumencie. Po imporcie „Backfill" nie jest potrzebny.
     """
@@ -113,6 +113,24 @@ async def import_prices_csv(
 def get_instruments() -> list[dict]:
     with db_session() as conn:
         return instruments_mod.list_instruments(conn)
+
+
+@app.get("/api/providers/search")
+def search_provider_symbols(
+    source: str = Query(..., min_length=1, max_length=32),
+    query: str = Query(..., min_length=1, max_length=120),
+) -> dict:
+    """Proxy wyszukiwarki symboli; klucze providerów nigdy nie trafiają do przeglądarki."""
+    source = source.strip().lower()
+    if source not in {"eodhd", "alphavantage"}:
+        raise HTTPException(status_code=400, detail="Wybierz EODHD albo Alpha Vantage")
+    if not prices_mod.provider_configured(source):
+        env_name = prices_mod.PROVIDER_KEY_ENV[source]
+        raise HTTPException(status_code=503, detail=f"Brak konfiguracji {env_name}")
+    try:
+        return {"source": source, "results": prices_mod.search_symbols(source, query)}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 class InstrumentUpdate(BaseModel):
@@ -165,16 +183,19 @@ def post_broker_instrument_mappings(payload: BrokerInstrumentMappings) -> dict:
 @app.put("/api/instruments/{isin}")
 def put_instrument(isin: str, payload: InstrumentUpdate) -> dict:
     with db_session() as conn:
-        updated = instruments_mod.update_instrument(
-            conn,
-            isin,
-            name=payload.name,
-            ticker=payload.ticker,
-            currency=payload.currency,
-            source=payload.source,
-            category=payload.category,
-            active=payload.active,
-        )
+        try:
+            updated = instruments_mod.update_instrument(
+                conn,
+                isin,
+                name=payload.name,
+                ticker=payload.ticker,
+                currency=payload.currency,
+                source=payload.source,
+                category=payload.category,
+                active=payload.active,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
     if updated is None:
         raise HTTPException(status_code=404, detail="Instrument not found")
     return updated
