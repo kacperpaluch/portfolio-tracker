@@ -76,6 +76,12 @@ async def import_file(file: UploadFile = File(...)) -> dict:
     with db_session() as conn:
         try:
             return import_transactions(conn, content)
+        except importer.BrokerMappingRequired as e:
+            raise HTTPException(status_code=422, detail={
+                "code": "broker_mapping_required",
+                "message": str(e),
+                "instruments": e.instruments,
+            })
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
@@ -116,6 +122,44 @@ class InstrumentUpdate(BaseModel):
     source: str | None = None
     category: str | None = None
     active: bool | None = None
+
+
+class BrokerInstrumentMapping(BaseModel):
+    broker: str
+    symbol: str
+    exchange: str
+    isin: str
+    name: str
+    ticker: str | None = None
+    currency: str
+    source: str = "yfinance"
+
+
+class BrokerInstrumentMappings(BaseModel):
+    mappings: list[BrokerInstrumentMapping]
+
+
+@app.post("/api/broker-instrument-mappings")
+def post_broker_instrument_mappings(payload: BrokerInstrumentMappings) -> dict:
+    if not payload.mappings:
+        raise HTTPException(status_code=400, detail="Brak mapowań do zapisania")
+    with db_session() as conn:
+        conn.execute("SAVEPOINT broker_instrument_mappings")
+        try:
+            saved = [
+                instruments_mod.save_broker_instrument(conn, **mapping.model_dump())
+                for mapping in payload.mappings
+            ]
+        except ValueError as e:
+            conn.execute("ROLLBACK TO broker_instrument_mappings")
+            conn.execute("RELEASE broker_instrument_mappings")
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception:
+            conn.execute("ROLLBACK TO broker_instrument_mappings")
+            conn.execute("RELEASE broker_instrument_mappings")
+            raise
+        conn.execute("RELEASE broker_instrument_mappings")
+    return {"saved": saved}
 
 
 @app.put("/api/instruments/{isin}")

@@ -54,6 +54,10 @@ Internetu bez dodatkowej warstwy dostępu (np. VPN, Tailscale lub reverse proxy 
   rozpoznawany automatycznie, a import jest idempotentny. PDF wnosi ISIN, cenę i walutę
   wykonania, kurs FX, prowizję, rynek, datę rozliczenia i numer zlecenia; wgrany po CSV
   uzupełnia istniejącą transakcję zamiast tworzyć duplikat.
+- **Konfiguracja nowych instrumentów podczas importu eMAKLER** — raport bez ISIN-u otwiera
+  formularz z wykrytym symbolem, giełdą i walutą. Użytkownik podaje ISIN, nazwę oraz ticker,
+  mapowanie zapisuje się w SQLite, a aplikacja automatycznie ponawia import. W kodzie nie ma
+  zaszytych aliasów symboli brokera ani automatycznego zgadywania instrumentów.
 - **Ręczne dodawanie/usuwanie transakcji** — formularz w UI (z dedupem jak w imporcie).
 - **Widok waloru** — klik w nazwę pokazuje wykres wartości inwestycji w czasie (rzeczywista vs
   przy stałym kursie) z **atrybucją zysku na instrument vs walutę** (ile dał ETF, a ile ruch
@@ -247,7 +251,9 @@ Nie należy wystawiać portu `8000` bezpośrednio do Internetu.
 ## Sposób użycia
 
 1. Otwórz **Dane i ustawienia → Import transakcji** i wgraj eksport historii rachunku.
-   Powstaną transakcje oraz instrumenty; znane ISIN-y dostaną ticker automatycznie.
+   Powstaną transakcje oraz instrumenty; znane ISIN-y dostaną ticker automatycznie. Jeśli
+   eksport eMAKLER zawiera nowy symbol bez ISIN-u, uzupełnij wyświetlony formularz — po
+   zapisaniu mapowania aplikacja sama ponowi import pliku.
 2. W **Dane i ustawienia → Instrumenty** uzupełnij ticker lub kategorię pozycji oznaczonych
    jako wymagające konfiguracji. Waluta zostanie wykryta przy pobieraniu ceny.
 3. W **Dane i ustawienia → Źródła danych** wybierz **Odśwież**, aby pobrać bieżące wyceny
@@ -270,7 +276,7 @@ portfolio-tracker/
 │   │   ├── main.py        # FastAPI: wszystkie endpointy + serwowanie frontendu, lifespan crona
 │   │   ├── db.py          # SQLite: połączenie, schemat (CREATE TABLE IF NOT EXISTS), sesje
 │   │   ├── importer.py    # parsing CSV/PDF, wzbogacanie metadanych i dedup po import_hash
-│   │   ├── instruments.py # tworzenie instrumentów z importu, seed ISIN→ticker, edycja mapowań
+│   │   ├── instruments.py # instrumenty, seed ISIN→ticker i trwałe aliasy brokera z UI
 │   │   ├── prices.py      # provider yfinance + import cen z CSV (ratunek), auto-detekcja waluty (GBx→GBP), cache
 │   │   ├── fx.py          # klient NBP + cache fx_rates, lookback na weekendy/święta
 │   │   ├── cpi.py         # klient Eurostat HICP + cache cpi_index (inflacja pod benchmark)
@@ -295,16 +301,17 @@ portfolio-tracker/
 └── docker-compose.yml
 ```
 
-**Przepływ danych:** `import CSV/PDF → transactions + instruments + cash_flows` →
+**Przepływ danych:** `import CSV/PDF → (opcjonalny formularz aliasu brokera) → transactions + instruments + cash_flows` →
 `refresh/backfill → prices + fx_rates (cache)` → `portfolio/history → wycena w PLN, P/L, XIRR, benchmark`.
 
 ## Model danych
 
-SQLite, 7 tabel (schemat w `backend/app/db.py`):
+SQLite, 8 tabel (schemat w `backend/app/db.py`):
 
 | Tabela | Klucz | Zawartość |
 |---|---|---|
 | `instruments` | `isin` | nazwa, `ticker`, `currency` (EUR/USD/GBP/PLN), `source` (yfinance/csv), `category`, `needs_config` |
+| `broker_instrument_aliases` | (`broker`,`symbol`,`exchange`) | trwałe, tworzone przez użytkownika mapowanie symbolu z raportu bez ISIN-u do `instruments.isin` |
 | `target_allocation` | `category` | docelowy udział grupy (`weight_pct`) |
 | `transactions` | `id` | dane handlu w PLN oraz opcjonalne metadane PDF: `native_price`, `native_currency`, `fx_rate`, `settlement_date`, `market`, `broker_order_id`, `source_format`; `import_hash` jest unikalny |
 | `prices` | (`isin`,`date`) | cena dzienna w walucie natywnej (cache) |
@@ -361,6 +368,7 @@ Pozycje nie są materializowane — liczone w locie z `transactions` (chronologi
 | `GET` | `/api/instruments/{isin}/history` | dzienna historia waloru (cena natywna, kurs, PLN, ilość) |
 | `GET` / `PUT` | `/api/allocation` | alokacja docelowa vs rzeczywista (grupy + gotówka) |
 | `GET` / `PUT` | `/api/instruments[/{isin}]` | podgląd / edycja mapowań ISIN→ticker + nazwa własna + kategoria |
+| `POST` | `/api/broker-instrument-mappings` | zapis mapowań broker + symbol + giełda → ISIN wraz z konfiguracją instrumentów |
 | `GET` | `/api/cash` | saldo gotówki + lista wpłat/wypłat |
 | `POST` / `DELETE` | `/api/cash[/{id}]` | dodaj / usuń wpłatę-wypłatę |
 | `POST` | `/api/refresh` | odświeżenie bieżących cen i kursów + dociągnięcie luk w historii (od ostatniego dnia w cache) |
@@ -399,8 +407,11 @@ Eksport eMAKLER „Transakcje bieżące”:
 
 - parser pomija preambułę zawierającą dane rachunku i odnajduje tabelę po nagłówku;
 - kolumny tabeli: `Czas transakcji;Papier;Giełda;K/S;Liczba;Kurs;Waluta;Wartość;Waluta`;
-- raport nie zawiera ISIN-u, dlatego para papier + giełda jest mapowana jawnie do zweryfikowanego
-  instrumentu; nierozpoznany papier przerywa cały import z czytelnym błędem;
+- raport nie zawiera ISIN-u, dlatego przy pierwszym wystąpieniu pary papier + giełda aplikacja
+  prosi użytkownika o ISIN, nazwę, ticker i walutę. Mapowanie jest zapisywane wyłącznie w bazie
+  użytkownika, po czym ten sam plik importuje się automatycznie; kolejne importy używają zapisu;
+- aplikacja nie ma zaszytych aliasów i nie zgaduje ISIN-u ani tickera — należy zweryfikować je
+  na stronie emitenta lub giełdy. Kilka nowych papierów można uzupełnić w jednym formularzu;
 - `Wartość` w PLN jest pełnym kosztem transakcji, a jednostkowe `price_pln` jest wyliczane jako
   wartość / liczba. Prowizja jest zapisywana jako zero.
 

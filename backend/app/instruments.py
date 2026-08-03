@@ -1,6 +1,7 @@
 """Obsługa instrumentów: tworzenie z importu, znany seed walut/źródeł, edycja mapowań."""
 from __future__ import annotations
 
+import re
 import sqlite3
 
 # Seed znanych instrumentów z portfela: ticker (zweryfikowany w yfinance), waluta
@@ -18,18 +19,88 @@ SEED: dict[str, dict[str, str]] = {
     "SE0024738389": {"ticker": "ETNVCOIN50.WA", "currency": "PLN", "source": "yfinance"},  # ETNVCOIN50 (GPW)
 }
 
-# Eksport „Transakcje bieżące” eMAKLER nie zawiera ISIN-u. Brokerowy symbol
-# i giełdę mapujemy jawnie, zamiast zgadywać po samej nazwie papieru. Kolejne
-# instrumenty z tego raportu należy dopisać tutaj po zweryfikowaniu ISIN-u.
-BROKER_ALIASES: dict[tuple[str, str, str], str] = {
-    ("emakler", "WEBN GR ETF", "DEU-XETRA"): "IE0003XJA0J9",
-}
+ISIN_RE = re.compile(r"^[A-Z]{2}[A-Z0-9]{9}[0-9]$")
 
 
-def resolve_broker_instrument(broker: str, symbol: str, exchange: str) -> str | None:
+def resolve_broker_instrument(
+    broker: str,
+    symbol: str,
+    exchange: str,
+    conn: sqlite3.Connection | None = None,
+) -> str | None:
     """Zwraca ISIN dla identyfikatora używanego w eksporcie brokera."""
     key = (broker.strip().lower(), symbol.strip().upper(), exchange.strip().upper())
-    return BROKER_ALIASES.get(key)
+    if conn is not None:
+        row = conn.execute(
+            "SELECT isin FROM broker_instrument_aliases WHERE broker = ? AND symbol = ? AND exchange = ?",
+            key,
+        ).fetchone()
+        if row is not None:
+            return row["isin"]
+    return None
+
+
+def save_broker_instrument(
+    conn: sqlite3.Connection,
+    *,
+    broker: str,
+    symbol: str,
+    exchange: str,
+    isin: str,
+    name: str,
+    ticker: str | None,
+    currency: str,
+    source: str = "yfinance",
+) -> dict:
+    """Tworzy/aktualizuje instrument i zapisuje trwały alias używany przy imporcie."""
+    broker = broker.strip().lower()
+    symbol = symbol.strip().upper()
+    exchange = exchange.strip().upper()
+    isin = isin.strip().upper()
+    name = name.strip()
+    ticker = (ticker or "").strip() or None
+    currency = currency.strip().upper()
+    source = source.strip().lower()
+
+    if not broker or not symbol or not exchange:
+        raise ValueError("Broker, symbol i giełda są wymagane")
+    if not ISIN_RE.fullmatch(isin):
+        raise ValueError("ISIN musi mieć 12 znaków i poprawny format")
+    if not name:
+        raise ValueError("Nazwa instrumentu jest wymagana")
+    if not re.fullmatch(r"[A-Z]{3}", currency):
+        raise ValueError("Waluta musi być trzyznakowym kodem, np. EUR")
+    if source not in {"yfinance", "csv"}:
+        raise ValueError("Nieobsługiwane źródło notowań")
+
+    ensure_instrument(conn, isin, name)
+    conn.execute(
+        """
+        UPDATE instruments
+           SET name = ?, imported_name = COALESCE(imported_name, ?), ticker = ?,
+               currency = ?, source = ?, needs_config = ?
+         WHERE isin = ?
+        """,
+        (name, name, ticker, currency, source, 0 if ticker else 1, isin),
+    )
+    conn.execute(
+        """
+        INSERT INTO broker_instrument_aliases (broker, symbol, exchange, isin)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT (broker, symbol, exchange) DO UPDATE SET isin = excluded.isin
+        """,
+        (broker, symbol, exchange, isin),
+    )
+    return {
+        "broker": broker,
+        "symbol": symbol,
+        "exchange": exchange,
+        "isin": isin,
+        "name": name,
+        "ticker": ticker,
+        "currency": currency,
+        "source": source,
+    }
 
 
 def ensure_instrument(conn: sqlite3.Connection, isin: str, name: str) -> None:

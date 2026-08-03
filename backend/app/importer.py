@@ -30,6 +30,17 @@ PDF_REQUIRED_HEADERS = {
 ISIN_RE = re.compile(r"\b[A-Z]{2}[A-Z0-9]{9}[0-9]\b")
 
 
+class BrokerMappingRequired(ValueError):
+    """Import zawiera symbole brokera, których nie da się jeszcze przypisać do ISIN-u."""
+
+    def __init__(self, instruments: list[dict]):
+        self.instruments = instruments
+        details = ", ".join(
+            f"{item['symbol']} ({item['exchange']})" for item in instruments
+        )
+        super().__init__(f"Brak mapowania ISIN dla: {details}")
+
+
 def parse_number(raw: str) -> float:
     """'34,3375' / '1 234,56' -> float."""
     return float(raw.replace("\xa0", "").replace(" ", "").replace(",", "."))
@@ -232,7 +243,7 @@ def _find_emakler_header(lines: list[str]) -> int | None:
     return None
 
 
-def _parse_emakler(text: str) -> list[dict]:
+def _parse_emakler(text: str, conn: sqlite3.Connection | None = None) -> list[dict]:
     """Parser eMAKLER „Transakcje bieżące”.
 
     Raport podaje kurs w walucie notowania, ale pełną wartość rozliczenia w PLN.
@@ -245,7 +256,7 @@ def _parse_emakler(text: str) -> list[dict]:
         raise ValueError("Nie znaleziono tabeli transakcji eMAKLER")
 
     rows: list[dict] = []
-    unresolved: set[tuple[str, str]] = set()
+    unresolved: dict[tuple[str, str], dict] = {}
     for line_number, line in enumerate(lines[header_index + 1 :], header_index + 2):
         if not line.strip():
             continue
@@ -272,11 +283,25 @@ def _parse_emakler(text: str) -> list[dict]:
             raise ValueError(f"Wartość transakcji w wierszu eMAKLER nr {line_number} nie jest w PLN")
 
         symbol, exchange = parts[1], parts[2]
-        isin = resolve_broker_instrument("emakler", symbol, exchange)
+        isin = resolve_broker_instrument("emakler", symbol, exchange, conn)
         if isin is None:
-            unresolved.add((symbol, exchange))
+            key = (symbol.strip().upper(), exchange.strip().upper())
+            unresolved[key] = {
+                "broker": "emakler",
+                "symbol": symbol,
+                "exchange": exchange,
+                "currency": parts[6].upper(),
+            }
             continue
-        expected_currency = SEED.get(isin, {}).get("currency")
+        instrument = None
+        if conn is not None:
+            instrument = conn.execute(
+                "SELECT name, currency FROM instruments WHERE isin = ?", (isin,)
+            ).fetchone()
+        expected_currency = (
+            (instrument["currency"] if instrument else None)
+            or SEED.get(isin, {}).get("currency")
+        )
         if expected_currency and parts[6].upper() != expected_currency:
             raise ValueError(
                 f"Waluta kursu w wierszu eMAKLER nr {line_number} to {parts[6]}, "
@@ -288,7 +313,10 @@ def _parse_emakler(text: str) -> list[dict]:
             {
                 "ts": ts.isoformat(),
                 "isin": isin,
-                "name": SEED.get(isin, {}).get("name", symbol),
+                "name": (
+                    (instrument["name"] if instrument else None)
+                    or SEED.get(isin, {}).get("name", symbol)
+                ),
                 "type": tx_type,
                 "quantity": quantity,
                 "price_pln": price_pln,
@@ -299,8 +327,7 @@ def _parse_emakler(text: str) -> list[dict]:
         )
 
     if unresolved:
-        details = ", ".join(f"{symbol} ({exchange})" for symbol, exchange in sorted(unresolved))
-        raise ValueError(f"Brak mapowania ISIN dla: {details}")
+        raise BrokerMappingRequired([unresolved[key] for key in sorted(unresolved)])
     return rows
 
 
@@ -346,7 +373,12 @@ def parse_import(content: bytes) -> list[dict]:
 def import_transactions(conn: sqlite3.Connection, content: bytes) -> dict:
     """Importuje transakcje do bazy. Idempotentny — duplikaty (import_hash) pomijane."""
     import_format = detect_import_format(content)
-    rows = _parse_mbank_pdf(content) if import_format == PDF_FORMAT else parse_csv(content)
+    if import_format == PDF_FORMAT:
+        rows = _parse_mbank_pdf(content)
+    elif import_format == "emakler_current":
+        rows = _parse_emakler(_decode(content), conn)
+    else:
+        rows = _parse_legacy(_decode(content))
     imported = 0
     skipped = 0
     enriched = 0

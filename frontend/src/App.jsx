@@ -19,6 +19,7 @@ import DataQualityPanel from "./components/DataQualityPanel.jsx";
 import RebalancePlanner from "./components/RebalancePlanner.jsx";
 import AnalyticsBreakdown from "./components/AnalyticsBreakdown.jsx";
 import ReportsPanel from "./components/ReportsPanel.jsx";
+import BrokerMappingModal from "./components/BrokerMappingModal.jsx";
 
 const NAV = [
   ["overview", "Pulpit", "01"],
@@ -116,6 +117,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState(null);
+  const [pendingImport, setPendingImport] = useState(null);
   const fileRef = useRef();
   const flashTimer = useRef();
 
@@ -214,21 +216,53 @@ export default function App() {
     ).then(() => api.instrumentHistory(isin).then(setDetail)).catch(() => {});
   };
 
+  const importSuccessMessage = (result) => {
+    const formats = {
+      emakler_current: "eMAKLER",
+      legacy_hispw: "historia PW",
+      mbank_confirmation_pdf: "potwierdzenie PDF mBank",
+    };
+    const enriched = result.enriched ? ` Uzupełniono metadane ${result.enriched} istniejących transakcji.` : "";
+    return `Format: ${formats[result.format] || result.format}. Zaimportowano ${result.imported} transakcji. Pominięte duplikaty: ${result.skipped_duplicates}.${enriched}`;
+  };
+
+  const importFile = async (file) => {
+    setBusy(true);
+    try {
+      const result = await api.importTransactions(file);
+      await loadAll();
+      flash(importSuccessMessage(result));
+    } catch (error) {
+      if (error.detail?.code === "broker_mapping_required") {
+        setPendingImport({ file, instruments: error.detail.instruments });
+      } else {
+        flash(`Nie udało się wykonać operacji: ${error.message}`, false);
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveMappingsAndImport = async (mappings) => {
+    if (!pendingImport) return;
+    setBusy(true);
+    try {
+      await api.saveBrokerInstrumentMappings(mappings);
+      const result = await api.importTransactions(pendingImport.file);
+      setPendingImport(null);
+      await loadAll();
+      flash(importSuccessMessage(result));
+    } catch (error) {
+      flash(`Nie udało się zapisać mapowania: ${error.message}`, false);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const onImport = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    run(
-      () => api.importTransactions(file),
-      (r) => {
-        const formats = {
-          emakler_current: "eMAKLER",
-          legacy_hispw: "historia PW",
-          mbank_confirmation_pdf: "potwierdzenie PDF mBank",
-        };
-        const enriched = r.enriched ? ` Uzupełniono metadane ${r.enriched} istniejących transakcji.` : "";
-        return `Format: ${formats[r.format] || r.format}. Zaimportowano ${r.imported} transakcji. Pominięte duplikaty: ${r.skipped_duplicates}.${enriched}`;
-      },
-    ).catch(() => {});
+    importFile(file);
     event.target.value = "";
   };
 
@@ -657,6 +691,15 @@ export default function App() {
           busy={busy}
           onImportPrices={onImportPrices}
           onClose={() => setDetail(null)}
+        />
+      )}
+      {pendingImport && (
+        <BrokerMappingModal
+          instruments={pendingImport.instruments}
+          filename={pendingImport.file.name}
+          busy={busy}
+          onCancel={() => setPendingImport(null)}
+          onSave={saveMappingsAndImport}
         />
       )}
     </div>

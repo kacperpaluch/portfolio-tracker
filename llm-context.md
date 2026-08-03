@@ -82,7 +82,7 @@ backend/app/
   analytics.py   # atrybucja wyniku: instrumenty, kategorie, wpłaty i aktywność
   reports.py     # raport zakresu: TWR/XIRR/PLN, benchmarki, porównanie, atrybucja, przepływy, heatmapa i CSV
   data_quality.py # diagnostyka cen, FX, konfiguracji, alokacji i księgi gotówki
-  instruments.py # ensure_instrument (+ SEED ISIN->ticker), list/update_instrument
+  instruments.py # instrument CRUD, SEED ISIN->ticker, trwałe aliasy brokera zapisywane z UI
   prices.py      # yfinance: fetch_latest/fetch_history, auto-detekcja waluty (GBx->GBP), cache; parse_price_csv/import_prices (import cen z CSV, format stooq)
   fx.py          # NBP: get_rate (lookback), backfill_range, cache w fx_rates
   cpi.py         # Eurostat HICP: refresh_cpi (cache cpi_index), load_points, index_at (interpolacja) — pod benchmark inflacyjny
@@ -99,7 +99,8 @@ frontend/src/
   components/    # jeden komponent = jeden plik: ReturnsStrip, HistoryChart, DrawdownChart,
                  #   InstrumentDetail, PositionsTable, TransactionForm, TransactionsTable, CashPanel,
                  #   InstrumentsPanel, AllocationPanel (+ AllocationDonut), DataPanel,
-                 #   DailyChangesTable, ReportsPanel, ReportPerformanceChart, MonthlyReturnsHeatmap
+                 #   DailyChangesTable, ReportsPanel, ReportPerformanceChart, MonthlyReturnsHeatmap,
+                 #   BrokerMappingModal (konfiguracja nierozpoznanych symboli i retry importu)
   format.js      # wspólne helpery: fmtPln, fmtPct, cls, fmtDate, daysSince
   api.js         # cienki klient REST + detail/message z błędów backendu
   styles.css     # tokeny UI, jasny motyw + ciemny sidebar, desktop/tablet/mobile
@@ -155,6 +156,7 @@ scheduler.py → cash, instruments, prices, fx, db, backup
 | Tabela | Klucz | Kolumny | Rola |
 |---|---|---|---|
 | `instruments` | `isin` | name (edytowalna własna nazwa w UI, przetrwa import), imported_name (nazwa z importu, read-only, zapisywana tylko przy tworzeniu), ticker, currency, source, category, active, needs_config | mapowanie waloru |
+| `broker_instrument_aliases` | `(broker, symbol, exchange)` | isin→instruments | trwałe mapowanie raportów bez ISIN-u, tworzone przez użytkownika w UI |
 | `transactions` | `id` | ts, isin→, type, quantity, price_pln, value_pln, commission_pln; metadane PDF: native_price/currency, fx_rate, settlement_date, market, broker_order_id, source_format; note, **import_hash UNIQUE** | handel |
 | `prices` | (isin,date) | price (waluta natywna), source | cache wycen |
 | `fx_rates` | (date,currency) | rate_to_pln | cache kursów NBP |
@@ -189,6 +191,7 @@ odczyt
 | Metoda | Ścieżka | Opis |
 |---|---|---|
 | POST | `/api/import` | import CSV/PDF (multipart `file`): auto-detekcja GPW „historia PW”, eMAKLER „Transakcje bieżące” i potwierdzenia wykonania zleceń mBanku |
+| POST | `/api/broker-instrument-mappings` | atomowy zapis listy aliasów broker/symbol/giełda → ISIN oraz konfiguracji instrumentów; frontend ponawia potem zachowany import |
 | POST | `/api/prices/import` | import dziennych cen waloru z CSV (multipart `isin`+`file`+opcjonalnie `currency`, format stooq) → cache `prices` (`prices.import_prices`); waluta wymagana do wyceny |
 | GET/POST | `/api/transactions` | lista / ręczne dodanie transakcji |
 | PUT | `/api/transactions/{id}` | edycja transakcji + atomowe odtworzenie cash flow |
@@ -282,7 +285,7 @@ aktywny tylko gdy katalog istnieje). Dockerfile robi to w etapie multi-stage.
 - **GBx (pensy LSE)** — Yahoo zwraca pensy; ZAWSZE normalizuj `/100` + waluta `GBP`.
 - **Named volume vs bind mount** — po zmianie na named volume w `/ship` dane z `./data` trzeba zmigrować (`docker cp ./data/portfolio.db <kontener>:/app/data/`).
 - **Dedup** — każda nowa ścieżka tworzenia transakcji MUSI używać tego samego `import_hash` co `parse_csv`/`add_transaction`, inaczej powstaną duplikaty.
-- **eMAKLER „Transakcje bieżące”** — `importer.py` wykrywa 9-kolumnową tabelę po nagłówku mimo preambuły z danymi rachunku. Raport nie ma ISIN-u, więc `instruments.BROKER_ALIASES` mapuje zweryfikowaną parę symbol+giełda do ISIN-u; brak aliasu przerywa cały import. Kurs natywny jest tylko walidowany, `value_pln` pochodzi z pełnej wartości PLN (z prowizją), `price_pln = round(value_pln / quantity, 4)`, `commission_pln = 0`.
+- **eMAKLER „Transakcje bieżące”** — `importer.py` wykrywa 9-kolumnową tabelę po nagłówku mimo preambuły z danymi rachunku. Raport nie ma ISIN-u. Resolver czyta wyłącznie `broker_instrument_aliases` z bazy (brak hardcoded aliasów); brak wpisu zgłasza `BrokerMappingRequired` z listą symbol/giełda/waluta, frontend otwiera `BrokerMappingModal`, zapisuje zweryfikowane przez użytkownika ISIN/nazwę/ticker/walutę i automatycznie ponawia zachowany plik. Import nie zapisuje częściowych danych. Kurs natywny jest tylko walidowany, `value_pln` pochodzi z pełnej wartości PLN (z prowizją), `price_pln = round(value_pln / quantity, 4)`, `commission_pln = 0`.
 - **PDF mBanku** — obsługiwane są cyfrowe „Potwierdzenia wykonania zleceń” z tekstową warstwą tabel; bez OCR. Parser bierze ISIN i bogate metadane rozliczenia bez aliasów. Hash jest zgodny z eMAKLER CSV, a duplikat z PDF wykonuje kontrolowane wzbogacenie istniejącego wpisu. Sprzedaż jest obsługiwana symetrycznie i pokryta testem syntetycznym; parser nie ma jeszcze realnego przykładu sprzedaży.
 - **Dane osobiste** — prawdziwe CSV (`*.csv`) i PDF (`*.pdf`) są gitignorowane; w repo jest tylko `backend/tests/sample_hisPW.csv` (fikcyjny, z wyjątkiem w `.gitignore`).
 - **Lokalna baza nigdy do Git** — `.gitignore` obejmuje `data/`, `*.db`, `*.sqlite`,

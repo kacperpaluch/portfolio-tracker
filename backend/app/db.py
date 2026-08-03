@@ -22,6 +22,17 @@ CREATE TABLE IF NOT EXISTS instruments (
     needs_config INTEGER NOT NULL DEFAULT 1
 );
 
+-- Symbole z eksportów bez ISIN-u. Mapowania dodane w UI są trwałe i nie
+-- wymagają zmiany kodu ani przebudowania obrazu aplikacji.
+CREATE TABLE IF NOT EXISTS broker_instrument_aliases (
+    broker   TEXT NOT NULL,
+    symbol   TEXT NOT NULL,
+    exchange TEXT NOT NULL,
+    isin     TEXT NOT NULL REFERENCES instruments(isin),
+    PRIMARY KEY (broker, symbol, exchange)
+);
+CREATE INDEX IF NOT EXISTS idx_broker_alias_isin ON broker_instrument_aliases(isin);
+
 -- Model docelowy alokacji: kategoria -> docelowy udział %.
 CREATE TABLE IF NOT EXISTS target_allocation (
     category   TEXT PRIMARY KEY,

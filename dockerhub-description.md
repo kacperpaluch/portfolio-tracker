@@ -18,6 +18,9 @@ wyceny i pokazuje wartość, zysk/stratę oraz stopy zwrotu — **wszystko w PLN
   „Transakcje bieżące” oraz potwierdzenia wykonania zleceń mBanku) — format rozpoznawany
   automatycznie, import idempotentny. PDF zapisuje dodatkowo cenę i walutę wykonania,
   kurs FX, prowizję, rynek, datę rozliczenia oraz numer zlecenia i może wzbogacić wpis z CSV.
+- **Nowe symbole eMAKLER konfigurowane w UI** — użytkownik podaje ISIN, nazwę, ticker i
+  walutę, mapowanie zapisuje się w SQLite, a import jest automatycznie ponawiany. Bez
+  zaszytych aliasów i bez zgadywania instrumentów.
 - **Ręczne dodawanie/usuwanie transakcji** w UI (z tym samym dedupem co import).
 - **Wycena w PLN** — ETF-y notowane w EUR/USD/GBP przeliczane bieżącym kursem NBP;
   waluta wykrywana automatycznie (z obsługą londyńskich pensów GBx).

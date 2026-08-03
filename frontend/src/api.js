@@ -2,13 +2,18 @@
 const json = async (r) => {
   if (!r.ok) {
     let message = `HTTP ${r.status}`;
+    let detail;
     try {
       const body = await r.json();
-      message = body.detail || body.message || message;
+      detail = body.detail;
+      message = (typeof detail === "string" ? detail : detail?.message) || body.message || message;
     } catch {
       // Odpowiedź bez JSON — pozostaw czytelny kod HTTP.
     }
-    throw new Error(message);
+    const error = new Error(message);
+    error.status = r.status;
+    error.detail = detail;
+    throw error;
   }
   return r.json();
 };
@@ -23,6 +28,12 @@ export const api = {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+    }).then(json),
+  saveBrokerInstrumentMappings: (mappings) =>
+    fetch("/api/broker-instrument-mappings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mappings }),
     }).then(json),
   importTransactions: (file) => {
     const fd = new FormData();

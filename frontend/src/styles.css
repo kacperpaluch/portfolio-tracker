@@ -753,6 +753,17 @@ button.holding-bar-row:hover .holding-bar-label strong { color: var(--accent); }
 .modal-actions button { min-height: 35px; padding: 0 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-raised); color: var(--text-soft); font-size: 11px; font-weight: 700; }
 .modal-scroll { max-height: 330px; overflow-y: auto; margin-top: 18px; }
 .modal-scroll thead th { position: sticky; top: 0; background: var(--surface); }
+.broker-mapping-modal { max-width: 760px; }
+.mapping-intro { max-width: 560px; margin: 8px 0 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+.mapping-list { display: grid; gap: 14px; }
+.mapping-card { display: grid; grid-template-columns: 1fr 1.5fr 1fr 90px; gap: 12px; margin: 0; padding: 17px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-raised); }
+.mapping-card legend { padding: 0 7px; color: var(--text); font-weight: 750; }
+.mapping-card label { display: grid; gap: 6px; color: var(--muted); font-size: 10px; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
+.mapping-card label input { width: 100%; text-transform: none; }
+.mapping-origin { grid-column: 1 / -1; display: flex; gap: 7px; margin-top: -5px; }
+.mapping-origin span { padding: 3px 6px; border-radius: 5px; background: var(--surface-soft); color: var(--muted); font-size: 9px; font-weight: 750; text-transform: uppercase; }
+.mapping-error { margin: 12px 0 0; color: var(--red); font-size: 11px; font-weight: 650; }
+.mapping-help { margin: 12px 2px 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
 .attrib { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
 .attrib-item { min-width: 155px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-raised); }
 .attrib-item .label { margin-bottom: 6px; color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
@@ -867,6 +878,7 @@ button.holding-bar-row:hover .holding-bar-label strong { color: var(--accent); }
   .modal-head { flex-direction: column; }
   .modal-actions { width: 100%; }
   .modal-actions button { flex: 1; }
+  .mapping-card { grid-template-columns: 1fr; }
   .toast { top: 12px; right: 12px; }
 }
 

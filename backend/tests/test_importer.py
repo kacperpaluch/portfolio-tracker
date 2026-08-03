@@ -9,6 +9,7 @@ import pytest
 from app.db import SCHEMA
 from app import importer as importer_mod
 from app.importer import (
+    BrokerMappingRequired,
     detect_csv_format,
     detect_import_format,
     import_transactions,
@@ -16,6 +17,7 @@ from app.importer import (
     parse_import,
     parse_number,
 )
+from app.instruments import save_broker_instrument
 
 # Fikcyjny plik przykładowy commitowany do repo (prawdziwe dane brokera są gitignorowane).
 CSV_PATH = Path(__file__).resolve().parent / "sample_hisPW.csv"
@@ -57,6 +59,19 @@ def _mem_db() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
     return conn
+
+
+def _save_webn_mapping(conn: sqlite3.Connection) -> None:
+    save_broker_instrument(
+        conn,
+        broker="emakler",
+        symbol="WEBN GR ETF",
+        exchange="DEU-XETRA",
+        isin="IE0003XJA0J9",
+        name="Amundi Prime All Country World UCITS ETF Acc",
+        ticker="WEBN.DE",
+        currency="EUR",
+    )
 
 
 def test_parse_number():
@@ -107,6 +122,7 @@ def test_pdf_parser_supports_sell_and_commission(monkeypatch):
 
 def test_pdf_enriches_matching_csv_transaction_without_duplicate(monkeypatch):
     conn = _mem_db()
+    _save_webn_mapping(conn)
     import_transactions(conn, EMAKLER_CSV)
     monkeypatch.setattr(importer_mod, "_pdf_transaction_tables", lambda _: [(_pdf_table(), "108362525")])
 
@@ -129,7 +145,9 @@ def test_pdf_enriches_matching_csv_transaction_without_duplicate(monkeypatch):
 
 
 def test_parse_emakler_current_transactions():
-    rows = parse_csv(EMAKLER_CSV)
+    conn = _mem_db()
+    _save_webn_mapping(conn)
+    rows = importer_mod._parse_emakler(EMAKLER_CSV.decode("cp1250"), conn)
     assert len(rows) == 2
     assert rows[0]["isin"] == "IE0003XJA0J9"
     assert rows[0]["type"] == "BUY"
@@ -142,6 +160,7 @@ def test_parse_emakler_current_transactions():
 
 def test_emakler_import_is_idempotent():
     conn = _mem_db()
+    _save_webn_mapping(conn)
     first = import_transactions(conn, EMAKLER_CSV)
     second = import_transactions(conn, EMAKLER_CSV)
     assert first["format"] == "emakler_current"
@@ -151,11 +170,44 @@ def test_emakler_import_is_idempotent():
 
 
 def test_emakler_rejects_unknown_instrument_without_partial_import():
-    content = EMAKLER_CSV.replace(b"WEBN GR ETF", b"UNKNOWN ETF", 1)
     conn = _mem_db()
-    with pytest.raises(ValueError, match="Brak mapowania ISIN"):
-        import_transactions(conn, content)
+    with pytest.raises(BrokerMappingRequired, match="Brak mapowania ISIN") as exc_info:
+        import_transactions(conn, EMAKLER_CSV)
+    assert exc_info.value.instruments == [{
+        "broker": "emakler",
+        "symbol": "WEBN GR ETF",
+        "exchange": "DEU-XETRA",
+        "currency": "EUR",
+    }]
     assert conn.execute("SELECT COUNT(*) FROM transactions").fetchone()[0] == 0
+
+
+def test_emakler_uses_user_mapping_from_database():
+    conn = _mem_db()
+    save_broker_instrument(
+        conn,
+        broker="emakler",
+        symbol="TSWE GR ETF",
+        exchange="DEU-XETRA",
+        isin="NL0010408704",
+        name="Użytkownika ETF",
+        ticker="TSWE.DE",
+        currency="EUR",
+    )
+    content = EMAKLER_CSV.replace(b"WEBN GR ETF", b"TSWE GR ETF")
+
+    result = import_transactions(conn, content)
+
+    assert result["imported"] == 2
+    instrument = conn.execute(
+        "SELECT name, ticker, currency FROM instruments WHERE isin = ?", ("NL0010408704",)
+    ).fetchone()
+    assert tuple(instrument) == ("Użytkownika ETF", "TSWE.DE", "EUR")
+    alias = conn.execute(
+        "SELECT isin FROM broker_instrument_aliases WHERE broker = ? AND symbol = ? AND exchange = ?",
+        ("emakler", "TSWE GR ETF", "DEU-XETRA"),
+    ).fetchone()
+    assert alias["isin"] == "NL0010408704"
 
 
 def test_parse_handles_sells():
