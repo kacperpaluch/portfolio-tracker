@@ -9,10 +9,12 @@ import {
   YAxis,
 } from "recharts";
 import { fmtPct, fmtDate } from "../format.js";
+import { TOOLTIP_STYLE, axisProps, gridProps, useChartColors } from "../chartTheme.js";
 
 // Obsunięcie portfela (drawdown) — krzywa „pod wodą" liczona na indeksie TWR
 // (flow-neutral, więc wpłaty nie maskują spadków). Wartości ≤ 0.
 export default function DrawdownChart({ data }) {
+  const colors = useChartColors();
   if (!data || !data.series || data.series.length === 0)
     return <div className="spinner">Brak danych historycznych — uzupełnij historię w sekcji „Dane i ustawienia".</div>;
 
@@ -43,29 +45,28 @@ export default function DrawdownChart({ data }) {
         <ComposedChart data={series} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
           <defs>
             <linearGradient id="dd" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#c44c46" stopOpacity={0.03} />
-              <stop offset="100%" stopColor="#c44c46" stopOpacity={0.22} />
+              <stop offset="0%" stopColor={colors.loss} stopOpacity={0.03} />
+              <stop offset="100%" stopColor={colors.loss} stopOpacity={0.22} />
             </linearGradient>
           </defs>
-          <CartesianGrid stroke="#dce3dc" strokeDasharray="3 3" vertical={false} />
-          <XAxis dataKey="date" tick={{ fill: "#68766d", fontSize: 11 }} minTickGap={40} stroke="#dce3dc" />
+          <CartesianGrid {...gridProps(colors)} />
+          <XAxis dataKey="date" {...axisProps(colors)} minTickGap={40} />
           <YAxis
-            tick={{ fill: "#68766d", fontSize: 11 }}
-            stroke="#dce3dc"
+            {...axisProps(colors)}
             width={50}
             domain={[Math.floor(minVal), 0]}
             tickFormatter={(v) => `${v}%`}
           />
           <Tooltip
-            contentStyle={{ background: "#ffffff", border: "1px solid #c8d3ca", borderRadius: 10, color: "#19231d", fontSize: 12 }}
+            contentStyle={TOOLTIP_STYLE}
             formatter={(v) => [fmtPct(v), "Obsunięcie"]}
           />
-          <ReferenceLine y={0} stroke="#c8d3ca" />
+          <ReferenceLine y={0} stroke={colors.grid} />
           <Area
             type="monotone"
             isAnimationActive={false}
             dataKey="drawdown_pct"
-            stroke="#c44c46"
+            stroke={colors.loss}
             strokeWidth={2}
             fill="url(#dd)"
           />

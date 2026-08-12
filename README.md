@@ -46,9 +46,14 @@ Internetu bez dodatkowej warstwy dostępu (np. VPN, Tailscale lub reverse proxy 
 
 ## Funkcje
 
-- **Prywatny interfejs typu wealth cockpit** — jasna, czytelna przestrzeń robocza z ciemnym
+- **Prywatny interfejs typu wealth cockpit** — czytelna przestrzeń robocza z ciemnym
   sidebarem; osobne sekcje Pulpit, Portfel, Aktywność, Alokacja, Raporty i analiza oraz Dane i ustawienia.
-  Widok mobilny korzysta z dolnej nawigacji i zachowuje pełną funkcjonalność.
+  Motyw jasny i ciemny przełączają się automatycznie za ustawieniem systemu (wykresy również);
+  wydruk raportu zawsze wychodzi w wersji jasnej. Widok mobilny korzysta z dolnej nawigacji
+  i zachowuje pełną funkcjonalność.
+- **Kolor niesie jedno znaczenie** — zieleń i czerwień zarezerwowane są dla zysku i straty.
+  Typ operacji (kupno/sprzedaż, wpłata/wypłata) jest neutralnym znacznikiem, kwoty przepływów
+  i rebalansu pokazują kierunek znakiem, a zero jest szare, nie zielone.
 - **Import CSV i PDF** z biura maklerskiego — GPW „historia PW”, eMAKLER
   „Transakcje bieżące” oraz cyfrowe potwierdzenia wykonania zleceń mBanku. Format jest
   rozpoznawany automatycznie, a import jest idempotentny. PDF wnosi ISIN, cenę i walutę
@@ -76,8 +81,9 @@ Internetu bez dodatkowej warstwy dostępu (np. VPN, Tailscale lub reverse proxy 
   **Punkty z CSV są chronione** — automatyczny backfill/refresh ich nie nadpisze,
   więc nie trzeba ich wgrywać ponownie po każdym odświeżeniu (re-import nadpisuje, gdy chcesz).
 - **Świeżość cen** — przy każdej pozycji znacznik „kiedy ostatnia cena" (dziś / wczoraj /
-  N dni temu); gdy wybrany provider milczy dla danego waloru — ⚠️
-  ostrzeżenie sygnalizujące, że czas na ręczny import CSV.
+  N dni temu); gdy wybrany provider milczy dla danego waloru, znacznik robi się bursztynowy,
+  a łączna liczba nieaktualnych wycen trafia na kartę wartości portfela — sygnał, że czas
+  na ręczny import CSV.
 - **Zysk całkowity** = niezrealizowany (otwarte pozycje) **+** zrealizowany (ze sprzedaży).
 - **Konto gotówkowe** — ręczne wpłaty/wypłaty; saldo nettowane przepływami z transakcji
   (kupno −, sprzedaż +). Wartość konta = wycena ETF + gotówka.
@@ -187,7 +193,7 @@ Zrozumienie tych założeń wyjaśnia, dlaczego liczby wychodzą tak, a nie inac
 | Kursy walut | **NBP API** (tabela A) | darmowe, oficjalne, bez klucza |
 | Harmonogram | **APScheduler** | dzienne odświeżanie w tle |
 | HTTP klient | **httpx** | zapytania do EODHD, Alpha Vantage, NBP i Eurostat |
-| Frontend | **React** + **Vite** + **Recharts** | jasny wealth cockpit, wykresy, responsywny desktop/mobile |
+| Frontend | **React** + **Vite** + **Recharts** | wealth cockpit, motyw jasny/ciemny za systemem, wykresy, responsywny desktop/mobile |
 | Konteneryzacja | **Docker** (multi-stage, multi-arch arm64+amd64) | self-hosting |
 
 Źródła danych:
@@ -312,8 +318,9 @@ portfolio-tracker/
 │       ├── App.jsx        # shell, routing przez ?tab=, stan, ładowanie danych, akcje i sześć widoków aplikacji
 │       ├── components/    # tabele, formularze, wykresy, raporty, alokacja, backup i modal instrumentu
 │       ├── format.js      # wspólne helpery formatujące (fmtPln, fmtPct, cls, fmtDate)
+│       ├── chartTheme.js  # wspólny motyw Recharts — kolory czytane ze zmiennych CSS, reagują na zmianę motywu
 │       ├── api.js         # cienki klient REST + czytelne błędy zwracane przez backend
-│       └── styles.css     # tokeny UI, jasny motyw + ciemny sidebar, layout i breakpointy mobilne
+│       └── styles.css     # tokeny UI, motyw jasny/ciemny + ciemny sidebar, layout, breakpointy mobilne i arkusz wydruku
 ├── Dockerfile            # multi-stage: build frontendu (node) → obraz Pythona z backendem
 └── docker-compose.yml
 ```
@@ -504,6 +511,7 @@ regularnie pobierana poza serwer.
 
 ```bash
 cd backend && .venv/bin/python -m pytest
+cd frontend && node --test src/format.test.mjs   # czyste helpery UI, bez dodatkowych zależności
 ```
 
 Testy są deterministyczne i nie wymagają sieci (ceny/kursy wstrzykiwane ręcznie, import na

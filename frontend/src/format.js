@@ -3,7 +3,8 @@ const plnFmt = new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PL
 
 export const fmtPln = (v) => (v == null ? "—" : plnFmt.format(v));
 export const fmtPct = (v) => (v == null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(2)}%`);
-export const cls = (v) => (v == null ? "muted" : v >= 0 ? "pos" : "neg");
+// Zero nie jest zyskiem — zostaje neutralne, żeby „0,00 zł" nie świeciło na zielono.
+export const cls = (v) => (v == null || v === 0 ? "muted" : v > 0 ? "pos" : "neg");
 export const fmtDate = (ts) => (ts ? ts.slice(0, 16).replace("T", " ") : "—");
 
 // Liczba dni kalendarzowych od daty (YYYY-MM-DD) do dziś. Liczone na datach w UTC,

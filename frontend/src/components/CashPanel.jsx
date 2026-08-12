@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { fmtPln, cls } from "../format.js";
+import { fmtPln } from "../format.js";
 
 export default function CashPanel({ cash, onAdd, onDelete }) {
   const today = new Date().toISOString().slice(0, 10);
@@ -48,14 +48,19 @@ export default function CashPanel({ cash, onAdd, onDelete }) {
       ) : (
         <table>
           <thead>
-            <tr><th>Data</th><th>Typ</th><th>Kwota</th><th></th></tr>
+            <tr><th>Data</th><th className="txt">Typ</th><th>Kwota</th><th></th></tr>
           </thead>
           <tbody>
             {flows.map((f) => (
               <tr key={f.id}>
                 <td>{(f.ts || "").slice(0, 10)}</td>
-                <td>{f.kind === "deposit" ? "Wpłata" : "Wypłata"}</td>
-                <td className={cls(f.amount_pln)}>{fmtPln(f.amount_pln)}</td>
+                <td className="txt">
+                  <span className={`op-chip ${f.kind === "deposit" ? "buy" : "sell"}`}>
+                    {f.kind === "deposit" ? "Wpłata" : "Wypłata"}
+                  </span>
+                </td>
+                {/* Wpłata to przepływ, nie zysk — bez zieleni. */}
+                <td className="flow">{fmtPln(f.amount_pln)}</td>
                 <td><button onClick={() => onDelete(f.id)}>Usuń</button></td>
               </tr>
             ))}

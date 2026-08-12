@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api.js";
 import { cls, daysSince, fmtPct, fmtPln } from "./format.js";
 import HistoryChart from "./components/HistoryChart.jsx";
+import HeroSparkline from "./components/HeroSparkline.jsx";
 import DrawdownChart from "./components/DrawdownChart.jsx";
 import InstrumentDetail from "./components/InstrumentDetail.jsx";
 import PositionsTable from "./components/PositionsTable.jsx";
@@ -267,7 +268,11 @@ export default function App() {
   };
 
   const totals = portfolio?.totals || {};
-  const positions = portfolio?.positions || [];
+  // Jedna kolejność pozycji w całej aplikacji: od największej wartości.
+  const positions = useMemo(
+    () => [...(portfolio?.positions || [])].sort((a, b) => (b.value_pln || 0) - (a.value_pln || 0)),
+    [portfolio],
+  );
   const accountValue = totals.portfolio_value_pln ?? totals.value_pln ?? totals.value_pln_partial;
   const latestDaily = dailyChanges.length ? dailyChanges[dailyChanges.length - 1] : null;
   const latestPriceDate = useMemo(
@@ -297,6 +302,7 @@ export default function App() {
     <>
       <section className="hero-grid">
         <div className="hero-card">
+          <HeroSparkline data={history} />
           <div className="hero-topline">
             <span>Łączna wartość</span>
             <StatusDot tone={staleCount ? "warn" : "good"}>
@@ -394,7 +400,7 @@ export default function App() {
           action={<button className="text-button" onClick={() => navigate("portfolio")}>Zobacz cały portfel</button>}
         />
         <PositionsTable
-          positions={[...positions].sort((a, b) => (b.value_pln || 0) - (a.value_pln || 0)).slice(0, 5)}
+          positions={positions.slice(0, 5)}
           allPositions={positions}
           totals={totals}
           onOpen={openDetail}

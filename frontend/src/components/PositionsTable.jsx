@@ -1,16 +1,17 @@
 import { fmtPln, fmtPct, cls, daysSince } from "../format.js";
 import { portfolioStructureTotal, positionStructureValue } from "../portfolioStructure.js";
 
-// Znacznik świeżości ceny. Pokazuje „kiedy ostatnia cena"; gdy nieświeża (> weekend +
-// ewentualne święto) — ostrzeżenie, że czas ręcznie zaimportować CSV.
-function PriceAge({ date }) {
+// Znacznik świeżości ceny (opcjonalnie z kursem FX w tej samej linii). Gdy cena jest
+// nieświeża (> weekend + ewentualne święto) — bursztynowy kolor niesie ostrzeżenie sam,
+// bez ikony powtarzanej w każdym wierszu; łączne ostrzeżenie jest w nagłówku strony.
+function PriceMeta({ date, fxRate }) {
   const d = daysSince(date);
-  if (d == null) return null;
-  const stale = d > 4;
+  const fx = fxRate && fxRate !== 1 ? `×${fxRate}` : null;
+  if (d == null) return fx ? <div className="tag">{fx}</div> : null;
   const label = d <= 0 ? "dziś" : d === 1 ? "wczoraj" : `${d} dni temu`;
   return (
-    <div className={`tag ${stale ? "stale" : ""}`} title={`Ostatnia cena z ${date}`}>
-      {stale ? "⚠️ " : ""}{label}
+    <div className={`tag ${d > 4 ? "stale" : ""}`} title={`Ostatnia cena z ${date}`}>
+      {[fx, label].filter(Boolean).join(" · ")}
     </div>
   );
 }
@@ -50,8 +51,7 @@ export default function PositionsTable({ positions, allPositions = positions, to
             <td>{fmtPln(p.cost_pln)}</td>
             <td>
               {p.price == null ? "—" : p.price}
-              {p.fx_rate && p.fx_rate !== 1 ? <div className="tag">×{p.fx_rate}</div> : null}
-              <PriceAge date={p.price_date} />
+              <PriceMeta date={p.price_date} fxRate={p.fx_rate} />
             </td>
             <td>{fmtPln(p.value_pln)}</td>
             <td>{structureTotal ? `${(positionStructureValue(p) / structureTotal * 100).toFixed(1)}%` : "—"}</td>

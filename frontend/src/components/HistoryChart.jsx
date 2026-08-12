@@ -11,8 +11,10 @@ import {
   YAxis,
 } from "recharts";
 import { fmtPln, fmtPct } from "../format.js";
+import { LEGEND_STYLE, TOOLTIP_STYLE, axisProps, gridProps, useChartColors } from "../chartTheme.js";
 
 export default function HistoryChart({ data, benchmarkRate = 5, cpiSpread = 2, compact = false }) {
+  const colors = useChartColors();
   const [mode, setMode] = useState("pln"); // "pln" | "pct"
   const [showBench, setShowBench] = useState(true);
   const [showCpi, setShowCpi] = useState(true);
@@ -55,28 +57,27 @@ export default function HistoryChart({ data, benchmarkRate = 5, cpiSpread = 2, c
         <ComposedChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
           <defs>
             <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#347a50" stopOpacity={0.20} />
-              <stop offset="100%" stopColor="#347a50" stopOpacity={0} />
+              <stop offset="0%" stopColor={colors.portfolio} stopOpacity={0.20} />
+              <stop offset="100%" stopColor={colors.portfolio} stopOpacity={0} />
             </linearGradient>
           </defs>
-          <CartesianGrid stroke="#dce3dc" strokeDasharray="3 3" vertical={false} />
-          <XAxis dataKey="date" tick={{ fill: "#68766d", fontSize: 11 }} minTickGap={40} stroke="#dce3dc" />
+          <CartesianGrid {...gridProps(colors)} />
+          <XAxis dataKey="date" {...axisProps(colors)} minTickGap={40} />
           <YAxis
-            tick={{ fill: "#68766d", fontSize: 11 }}
-            stroke="#dce3dc"
+            {...axisProps(colors)}
             width={70}
             tickFormatter={yFmt}
           />
           <Tooltip
-            contentStyle={{ background: "#ffffff", border: "1px solid #c8d3ca", borderRadius: 10, color: "#19231d", fontSize: 12 }}
+            contentStyle={TOOLTIP_STYLE}
             formatter={(v, name) => [tipFmt(v), labels[name] || name]}
           />
-          {!compact && <Legend formatter={(name) => labels[name] || name} wrapperStyle={{ fontSize: 10 }} />}
+          {!compact && <Legend formatter={(name) => labels[name] || name} wrapperStyle={LEGEND_STYLE} />}
           <Area
             type="monotone"
             isAnimationActive={false}
             dataKey={valueKey}
-            stroke="#347a50"
+            stroke={colors.portfolio}
             strokeWidth={2}
             fill="url(#g)"
             connectNulls={!isPct}
@@ -86,7 +87,7 @@ export default function HistoryChart({ data, benchmarkRate = 5, cpiSpread = 2, c
               type="monotone"
               isAnimationActive={false}
               dataKey={benchKey}
-              stroke="#a06d13"
+              stroke={colors.benchmark}
               strokeWidth={2}
               strokeDasharray="5 4"
               dot={false}
@@ -98,7 +99,7 @@ export default function HistoryChart({ data, benchmarkRate = 5, cpiSpread = 2, c
               type="monotone"
               isAnimationActive={false}
               dataKey={cpiKey}
-              stroke="#7059a5"
+              stroke={colors.cpi}
               strokeWidth={2}
               strokeDasharray="2 3"
               dot={false}

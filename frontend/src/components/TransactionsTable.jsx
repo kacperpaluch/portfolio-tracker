@@ -65,7 +65,7 @@ export default function TransactionsTable({ transactions, instruments, onOpen, o
       <table>
         <thead>
           <tr>
-            <th>Data</th><th>Instrument</th><th>Typ</th><th>Szt.</th><th>Cena</th><th>Wartość</th><th>Notatka</th><th></th>
+            <th>Data</th><th className="txt">Instrument</th><th className="txt">Typ</th><th>Szt.</th><th>Cena</th><th>Wartość</th><th className="txt">Notatka</th><th></th>
           </tr>
         </thead>
         <tbody>
@@ -99,14 +99,19 @@ export default function TransactionsTable({ transactions, instruments, onOpen, o
                 {fmtDate(t.ts)}
                 {t.settlement_date && <div className="tag">Rozl. {t.settlement_date}</div>}
               </td>
-              <td>
+              <td className="txt">
                 <button className="instrument-link" onClick={() => onOpen?.(t.isin)}>{t.name || t.isin}</button>
                 <div className="tag">{t.ticker || t.isin}</div>
                 {(t.market || t.broker_order_id) && (
                   <div className="tag">{[t.market, t.broker_order_id && `zlec. ${t.broker_order_id}`].filter(Boolean).join(" · ")}</div>
                 )}
               </td>
-              <td className={t.type === "BUY" ? "pos" : "neg"}>{t.type === "BUY" ? "Kupno" : "Sprzedaż"}</td>
+              {/* Typ operacji to nie wynik — zieleń i czerwień zostają zarezerwowane dla zysku/straty. */}
+              <td className="txt">
+                <span className={`op-chip ${t.type === "BUY" ? "buy" : "sell"}`}>
+                  {t.type === "BUY" ? "Kupno" : "Sprzedaż"}
+                </span>
+              </td>
               <td>{t.quantity}</td>
               <td>
                 {fmtPln(t.price_pln)}
@@ -116,10 +121,10 @@ export default function TransactionsTable({ transactions, instruments, onOpen, o
                   </div>
                 )}
               </td>
-              <td className={t.type === "BUY" ? "neg" : "pos"}>
+              <td className="flow">
                 {t.type === "BUY" ? "−" : "+"}{fmtPln(t.value_pln)}
               </td>
-              <td className="tx-note-cell">{t.note || "—"}</td>
+              <td className="txt tx-note-cell">{t.note || "—"}</td>
               <td>
                 <div className="row-actions">
                   <button onClick={() => beginEdit(t)}>Edytuj</button>

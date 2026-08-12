@@ -14,8 +14,9 @@ maklerskie (konto IKE). Importuje transakcje z CSV/PDF (lub dodaje ręcznie), po
 przelicza waluty kursem NBP i liczy wartość, P/L (zrealizowany + niezrealizowany),
 XIRR/TWR, benchmark, alokację docelową oraz atrybucję zysku (instrument vs waluta).
 **Wszystko wyrażone w PLN.** Jeden użytkownik, brak autoryzacji (self-hosted w sieci domowej).
-Frontend ma formę prywatnego „wealth cockpit": jasna przestrzeń robocza, ciemny sidebar
-i sześć sekcji rozdzielających codzienny podgląd portfela od konfiguracji danych.
+Frontend ma formę prywatnego „wealth cockpit": spokojna przestrzeń robocza, ciemny sidebar
+i sześć sekcji rozdzielających codzienny podgląd portfela od konfiguracji danych. Motyw jasny
+i ciemny idą za `prefers-color-scheme`; wydruk raportu wymusza wariant jasny.
 
 ## 2. Stack i technologie
 
@@ -30,7 +31,7 @@ i sześć sekcji rozdzielających codzienny podgląd portfela od konfiguracji da
 | Inflacja (benchmark) | **Eurostat HICP** (`prc_hicp_midx`, PL, miesięczny) | darmowe, bez klucza; GUS BDL ma CPI tylko rocznie/kwartalnie |
 | Harmonogram | **APScheduler** (BackgroundScheduler) | dzienne odświeżanie ~21:00 |
 | Klient HTTP | **httpx** | zapytania do NBP/Eurostat |
-| Frontend | **React 18** + **Vite 5** + **Recharts 2** | responsywne SPA, jasny wealth cockpit z ciemnym sidebarem |
+| Frontend | **React 18** + **Vite 5** + **Recharts 2** | responsywne SPA, wealth cockpit z ciemnym sidebarem, motyw jasny/ciemny za systemem |
 | Konteneryzacja | **Docker** multi-stage, multi-arch (arm64+amd64) | obraz `kpa90/portfolio-tracker` |
 
 ## 3. Zależności
@@ -106,10 +107,13 @@ frontend/src/
                  #   InstrumentDetail, PositionsTable, TransactionForm, TransactionsTable, CashPanel,
                  #   InstrumentsPanel, AllocationPanel (+ AllocationDonut), DataPanel,
                  #   DailyChangesTable, ReportsPanel, ReportPerformanceChart, MonthlyReturnsHeatmap,
-                 #   BrokerMappingModal (konfiguracja nierozpoznanych symboli i retry importu)
-  format.js      # wspólne helpery: fmtPln, fmtPct, cls, fmtDate, daysSince
+                 #   BrokerMappingModal (konfiguracja nierozpoznanych symboli i retry importu),
+                 #   HeroSparkline (przebieg wartości w tle karty na Pulpicie)
+  format.js      # wspólne helpery: fmtPln, fmtPct, cls (0 => neutralne), fmtDate, daysSince
+  chartTheme.js  # wspólny motyw Recharts: useChartColors() czyta zmienne CSS i reaguje na zmianę
+                 #   motywu, paddedDomain() ratuje oś przed powtórzoną etykietą na płaskiej serii
   api.js         # cienki klient REST + detail/message z błędów backendu
-  styles.css     # tokeny UI, jasny motyw + ciemny sidebar, desktop/tablet/mobile
+  styles.css     # tokeny UI, motyw jasny/ciemny + ciemny sidebar, desktop/tablet/mobile, wydruk
 ```
 
 ### Architektura interfejsu
@@ -121,17 +125,25 @@ i publikuje toast. Parametry benchmarków są odświeżane osobno z debounce 350
 
 | `tab` | Ekran | Główne komponenty / odpowiedzialność |
 |---|---|---|
-| `overview` | Pulpit | hero wartości, TWR/XIRR/gotówka, kompaktowy `HistoryChart`, przełącznik `AllocationDonut` / `HoldingsStructureChart`, największe pozycje z udziałem w portfelu |
+| `overview` | Pulpit | hero wartości z `HeroSparkline` w tle, TWR/XIRR/gotówka, kompaktowy `HistoryChart`, przełącznik `AllocationDonut` / `HoldingsStructureChart`, największe pozycje (wszędzie sortowane malejąco po wartości) |
 | `portfolio` | Portfel | KPI otwartych pozycji, `PositionsTable`, `CashPanel` |
 | `activity` | Aktywność | `TransactionForm`, filtrowanie/edycja w `TransactionsTable`, `DailyChangesTable` |
 | `allocation` | Alokacja | `AllocationPanel`, donut oraz `RebalancePlanner` dla nowej wpłaty bez sprzedaży |
 | `analysis` | Raporty i analiza | wewnętrzne widoki: `ReportsPanel` (okres/porównanie/CSV/PDF), wynik i atrybucja (`AnalyticsBreakdown`, `ReturnsStrip`, `HistoryChart`) oraz ryzyko (`DrawdownChart`) |
-| `settings` | Dane i ustawienia | `DataQualityPanel`, synchronizacja, `InstrumentsPanel`, import, `DataPanel` |
+| `settings` | Dane i ustawienia | `DataQualityPanel` (problemy tego samego `code` zwinięte w `<details>`), synchronizacja, `InstrumentsPanel`, import, `DataPanel` |
 
 Wspólne elementy wizualne (`SectionHeader`, `Metric`, `StatusDot`) są lokalnymi komponentami
 `App.jsx`. Desktop używa stałego sidebara; poniżej 820 px sidebar zastępuje dolna nawigacja.
-Tabele pozostają poziomo przewijalne na małych ekranach. Kolory i typografia są definiowane
-tokenami CSS w `:root`; wykresy mają odpowiadające im jawne kolory Recharts.
+Tabele pozostają poziomo przewijalne na małych ekranach, do prawej wyrównane są wyłącznie
+kolumny liczbowe (tekstowe dostają `.txt`). Kolory i typografia są definiowane tokenami CSS
+w `:root` i nadpisywane w bloku `prefers-color-scheme: dark`; Recharts nie przyjmuje `var()`
+w atrybutach SVG, więc `useChartColors()` odczytuje te same zmienne z DOM i przelicza je po
+zmianie motywu.
+
+**Semantyka koloru**: zieleń i czerwień oznaczają wyłącznie zysk i stratę. Typ operacji
+(kupno/sprzedaż, wpłata/wypłata) to neutralny `.op-chip`, kwoty przepływów i rebalansu
+mają klasę `.flow` (kierunek niesie znak), odchylenie alokacji czerwienieje dopiero od 1 pp,
+a `cls(0)` zwraca `muted` — zero nie jest wynikiem dodatnim.
 `portfolioStructure.js` współdzieli regułę wartości struktury między wykresem walorów i tabelą:
 bieżąca wycena, a przy jej braku koszt; mianownik obejmuje wszystkie pozycje oraz dodatnią gotówkę.
 
@@ -278,6 +290,7 @@ cd frontend && npm install && npm run dev
 
 # Testy (deterministyczne, bez sieci)
 cd backend && .venv/bin/python -m pytest
+cd frontend && node --test src/format.test.mjs
 ```
 
 Frontend w produkcji: `npm run build` → `frontend/dist`, serwowany przez FastAPI (mount w `main.py`,

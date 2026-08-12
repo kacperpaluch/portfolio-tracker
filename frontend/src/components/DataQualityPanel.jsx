@@ -1,7 +1,29 @@
+// Problemy tego samego typu (np. „brak klasy aktywów" dla 9 ETF-ów) zwijamy w jeden
+// wiersz — inaczej lista rozpycha stronę o kilkanaście identycznie brzmiących kart.
+function groupIssues(issues) {
+  const byCode = new Map();
+  for (const issue of issues) {
+    const group = byCode.get(issue.code);
+    if (group) group.items.push(issue);
+    else byCode.set(issue.code, { ...issue, items: [issue] });
+  }
+  return [...byCode.values()];
+}
+
+function IssueBody({ issue }) {
+  return (
+    <>
+      <p>{issue.detail}</p>
+      {issue.action && <small>{issue.action}</small>}
+    </>
+  );
+}
+
 export default function DataQualityPanel({ quality, busy, onRefresh }) {
   if (!quality) return <div className="spinner">Trwa sprawdzanie jakości danych…</div>;
   const { status, summary, stats, issues } = quality;
   const label = status === "good" ? "Dane są spójne" : status === "error" ? "Wymagają uwagi" : "Drobne braki";
+  const groups = groupIssues(issues);
 
   return (
     <div>
@@ -20,15 +42,29 @@ export default function DataQualityPanel({ quality, busy, onRefresh }) {
         <div className="quality-empty">Ceny, kursy, konfiguracja, alokacja i księga gotówki są spójne.</div>
       ) : (
         <div className="quality-list">
-          {issues.map((issue, index) => (
-            <div className={`quality-issue ${issue.severity}`} key={`${issue.code}-${issue.entity || index}`}>
+          {groups.map((group) => group.items.length === 1 ? (
+            <div className={`quality-issue ${group.severity}`} key={group.code}>
               <span className="quality-indicator" />
               <div>
-                <strong>{issue.title}</strong>
-                <p>{issue.detail}</p>
-                {issue.action && <small>{issue.action}</small>}
+                <strong>{group.title}</strong>
+                <IssueBody issue={group} />
               </div>
             </div>
+          ) : (
+            <details className={`quality-issue grouped ${group.severity}`} key={group.code}>
+              <summary>
+                <span className="quality-indicator" />
+                <strong>{group.title}</strong>
+                <em>{group.items.length}</em>
+              </summary>
+              <div className="quality-sublist">
+                {group.items.map((issue, index) => (
+                  <div key={issue.entity || index}>
+                    <IssueBody issue={issue} />
+                  </div>
+                ))}
+              </div>
+            </details>
           ))}
         </div>
       )}

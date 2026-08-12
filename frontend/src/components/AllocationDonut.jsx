@@ -1,7 +1,8 @@
-import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { Cell, Label, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { fmtPln } from "../format.js";
+import { CATEGORY_COLORS, LEGEND_STYLE, TOOLTIP_STYLE } from "../chartTheme.js";
 
-const COLORS = ["#347a50", "#4d78ad", "#b27a1c", "#7863a4", "#c45b55", "#5c946a", "#5b9189", "#b87958", "#7b8580", "#899447"];
+const plural = (n) => (n === 1 ? "kategoria" : n < 5 ? "kategorie" : "kategorii");
 
 export default function AllocationDonut({ groups, total, compact = false }) {
   const data = (groups || []).filter((g) => (g.actual_pln ?? 0) > 0);
@@ -22,14 +23,28 @@ export default function AllocationDonut({ groups, total, compact = false }) {
             isAnimationActive={false}
           >
             {data.map((g, i) => (
-              <Cell key={g.category} fill={COLORS[i % COLORS.length]} />
+              <Cell key={g.category} fill={CATEGORY_COLORS[i % CATEGORY_COLORS.length]} />
             ))}
+            {/* Dziura donuta niesie sumę — inaczej środek wykresu to sama pustka. */}
+            <Label
+              position="center"
+              content={({ viewBox }) => (
+                <g className="donut-center">
+                  <text x={viewBox.cx} y={viewBox.cy - 3} textAnchor="middle" className="donut-total">
+                    {fmtPln(total)}
+                  </text>
+                  <text x={viewBox.cx} y={viewBox.cy + 15} textAnchor="middle" className="donut-sub">
+                    {data.length} {plural(data.length)}
+                  </text>
+                </g>
+              )}
+            />
           </Pie>
           <Tooltip
-            contentStyle={{ background: "#ffffff", border: "1px solid #c8d3ca", borderRadius: 10, color: "#19231d", fontSize: 12 }}
+            contentStyle={TOOLTIP_STYLE}
             formatter={(v, name) => [`${fmtPln(v)} (${((v / total) * 100).toFixed(1)}%)`, name]}
           />
-          {!compact && <Legend wrapperStyle={{ fontSize: 10 }} />}
+          {!compact && <Legend wrapperStyle={LEGEND_STYLE} />}
         </PieChart>
       </ResponsiveContainer>
     </div>

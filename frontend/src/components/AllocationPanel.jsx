@@ -1,6 +1,9 @@
 import { useState } from "react";
-import { fmtPln, cls } from "../format.js";
+import { fmtPln } from "../format.js";
 import AllocationDonut from "./AllocationDonut.jsx";
+
+// Próg, od którego odchylenie od modelu wymaga reakcji.
+const DRIFT_ALERT_PP = 1;
 
 export default function AllocationPanel({ allocation, onSave }) {
   const [draft, setDraft] = useState({});
@@ -57,10 +60,12 @@ export default function AllocationPanel({ allocation, onSave }) {
               </td>
               <td>{g.actual_pct == null ? "—" : `${g.actual_pct.toFixed(1)}%`}</td>
               <td>{fmtPln(g.actual_pln)}</td>
-              <td className={cls(g.drift_pp == null ? null : -Math.abs(g.drift_pp))}>
+              {/* Czerwień dopiero przy realnym odchyleniu — 0,3 pp to szum, nie problem. */}
+              <td className={g.drift_pp != null && Math.abs(g.drift_pp) >= DRIFT_ALERT_PP ? "neg" : "muted"}>
                 {g.drift_pp == null ? "—" : `${g.drift_pp > 0 ? "+" : ""}${g.drift_pp.toFixed(1)} pp`}
               </td>
-              <td className={cls(g.rebalance_pln)}>
+              {/* Dokupienie/sprzedaż to zlecenie do wykonania, nie zysk ani strata. */}
+              <td className="flow">
                 {g.rebalance_pln == null ? "—" : `${g.rebalance_pln > 0 ? "+" : ""}${fmtPln(g.rebalance_pln)}`}
               </td>
             </tr>

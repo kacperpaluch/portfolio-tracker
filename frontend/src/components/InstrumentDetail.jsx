@@ -11,6 +11,7 @@ import {
   YAxis,
 } from "recharts";
 import { fmtPln, cls } from "../format.js";
+import { TOOLTIP_STYLE, axisProps, gridProps, useChartColors } from "../chartTheme.js";
 
 const DETAIL_LABELS = {
   value_pln: "Wartość (rzeczywista)",
@@ -19,6 +20,7 @@ const DETAIL_LABELS = {
 };
 
 export default function InstrumentDetail({ data, onClose, onImportPrices, busy }) {
+  const colors = useChartColors();
   const priceFileRef = useRef(null);
   if (!data) return null;
   const rows = data.rows || [];
@@ -80,24 +82,24 @@ export default function InstrumentDetail({ data, onClose, onImportPrices, busy }
               <ComposedChart data={rows} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
                 <defs>
                   <linearGradient id="gd" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#347a50" stopOpacity={0.20} />
-                    <stop offset="100%" stopColor="#347a50" stopOpacity={0} />
+                    <stop offset="0%" stopColor={colors.portfolio} stopOpacity={0.20} />
+                    <stop offset="100%" stopColor={colors.portfolio} stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid stroke="#dce3dc" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="date" tick={{ fill: "#68766d", fontSize: 11 }} minTickGap={40} stroke="#dce3dc" />
-                <YAxis tick={{ fill: "#68766d", fontSize: 11 }} stroke="#dce3dc" width={64}
+                <CartesianGrid {...gridProps(colors)} />
+                <XAxis dataKey="date" {...axisProps(colors)} minTickGap={40} />
+                <YAxis {...axisProps(colors)} width={64}
                   tickFormatter={(v) => `${Math.round(v)}`} />
                 <Tooltip
-                  contentStyle={{ background: "#ffffff", border: "1px solid #c8d3ca", borderRadius: 10, color: "#19231d", fontSize: 12 }}
+                  contentStyle={TOOLTIP_STYLE}
                   formatter={(v, name) => [fmtPln(v), DETAIL_LABELS[name] || name]}
                 />
                 <Legend formatter={(name) => DETAIL_LABELS[name] || name} wrapperStyle={{ fontSize: 12 }} />
-                <Area type="monotone" isAnimationActive={false} dataKey="value_pln" stroke="#347a50" strokeWidth={2} fill="url(#gd)" />
+                <Area type="monotone" isAnimationActive={false} dataKey="value_pln" stroke={colors.portfolio} strokeWidth={2} fill="url(#gd)" />
                 {!isPln && (
-                  <Line type="monotone" isAnimationActive={false} dataKey="value_const_fx" stroke="#a06d13" strokeWidth={1.8} strokeDasharray="5 4" dot={false} />
+                  <Line type="monotone" isAnimationActive={false} dataKey="value_const_fx" stroke={colors.benchmark} strokeWidth={1.8} strokeDasharray="5 4" dot={false} />
                 )}
-                <Line type="monotone" isAnimationActive={false} dataKey="cost_pln" stroke="#68766d" strokeWidth={1.2} dot={false} />
+                <Line type="monotone" isAnimationActive={false} dataKey="cost_pln" stroke={colors.cost} strokeWidth={1.2} dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
 
