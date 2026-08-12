@@ -333,10 +333,10 @@ aktywny tylko gdy katalog istnieje). Dockerfile robi to w etapie multi-stage.
   jest fikcyjny fixture testowy.
 - **Lokalna baza nigdy do obrazu** — `.dockerignore` lustrzanie wyklucza bazy, `data/`,
   CSV/PDF, `.env*`, środowiska, cache i build frontendu z kontekstu Docker BuildKit.
-- **Screenshoty dokumentacji muszą używać danych demonstracyjnych** — nigdy nie wykonuj
-  zrzutów README na prywatnej bazie. Publiczne nazwy i identyfikatory rzeczywistych ETF-ów
-  są dozwolone, ale transakcje, daty, ceny, kwoty i wyniki muszą być syntetyczne. Do
-  screenshotów uruchom osobną bazę demonstracyjną albo mock API.
+- **README nie ma zrzutów ekranu** (usunięte — pokazywały nieaktualny interfejs). Gdyby
+  miały wrócić: nigdy z prywatnej bazy. Publiczne nazwy i identyfikatory rzeczywistych
+  ETF-ów są dozwolone, ale transakcje, daty, ceny, kwoty i wyniki muszą być syntetyczne —
+  uruchom osobną bazę demonstracyjną albo mock API.
 - **Scheduler jest opcjonalny** — `SCHEDULER_ENABLED=false` wyłącza go w `lifespan`; domyślny Compose korzysta z ręcznych/zewnętrznych wywołań `POST /api/refresh` i `POST /api/backup-now`. `init_db()` jest wołane przy imporcie modułu.
 - **Atrybucja/positions czytają z cache** — bez `backfill`/`refresh` historia i wykresy będą puste.
 - **Backupy są w named volume** (`data/backup/` obok bazy) — czyli wewnątrz wolumenu Dockera.

@@ -12,18 +12,6 @@ Projekt jest przeznaczony do uruchomienia we własnym środowisku. Nie ma kont u
 rejestracji ani autoryzacji, dlatego nie należy wystawiać go bezpośrednio do publicznego
 Internetu bez dodatkowej warstwy dostępu (np. VPN, Tailscale lub reverse proxy z logowaniem).
 
-## Zrzuty ekranu
-
-> Nazwy i identyfikatory ETF-ów są publiczne i rzeczywiste, ale wszystkie transakcje,
-> liczby, daty, ceny oraz wyniki są syntetycznymi danymi demonstracyjnymi. Zrzuty nie
-> korzystają z prywatnej bazy właściciela aplikacji.
-
-| Pulpit | Alokacja | Aktywność |
-|---|---|---|
-| ![Pulpit](docs/screenshots/dashboard.png) | ![Alokacja](docs/screenshots/allocation.png) | ![Aktywność](docs/screenshots/transactions.png) |
-
----
-
 ## Spis treści
 
 - [Funkcje](#funkcje)
@@ -480,10 +468,10 @@ celowo wykluczone z repo (`.gitignore`), bo zawierają dane osobiste.
   lokalna baza, eksporty brokera i pliki środowiskowe nie są wysyłane do buildera Dockera.
 - Jedynym śledzonym CSV jest `backend/tests/sample_hisPW.csv`; zawiera wyłącznie fikcyjne
   dane testowe i jest jawnie dopuszczony wyjątkiem w `.gitignore`.
-- Zrzuty ekranu w dokumentacji korzystają z odseparowanej bazy demonstracyjnej. Mogą
-  prezentować publiczne nazwy i identyfikatory prawdziwych ETF-ów, ale transakcje, ceny,
-  daty, kwoty i wyniki muszą pozostać syntetyczne. Nie należy commitować screenshotów
-  wykonanych na prywatnej bazie.
+- Dokumentacja nie zawiera zrzutów ekranu. Jeśli kiedyś mają wrócić — wyłącznie
+  z odseparowanej bazy demonstracyjnej: publiczne nazwy i identyfikatory prawdziwych
+  ETF-ów są dozwolone, ale transakcje, ceny, daty, kwoty i wyniki muszą być syntetyczne.
+  Screenshotów z prywatnej bazy nie commitujemy.
 - Backup w aplikacji tworzy spójną kopię SQLite wewnątrz wolumenu. Kopię poza serwer można
   pobrać przez **Dane i ustawienia → Backup i eksport → Pobierz całą bazę**.
 - Każdy backup jest sprawdzany przez `PRAGMA integrity_check`, obecność wymaganych tabel
