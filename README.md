@@ -38,7 +38,9 @@ Internetu bez dodatkowej warstwy dostępu (np. VPN, Tailscale lub reverse proxy 
   sidebarem; osobne sekcje Pulpit, Portfel, Aktywność, Alokacja, Raporty i analiza oraz Dane i ustawienia.
   Motyw jasny i ciemny przełączają się automatycznie za ustawieniem systemu (wykresy również);
   wydruk raportu zawsze wychodzi w wersji jasnej. Widok mobilny korzysta z dolnej nawigacji
-  i zachowuje pełną funkcjonalność.
+  (wszystkie sześć sekcji) i zachowuje pełną funkcjonalność: tabele przewijają się w poziomie
+  z przyklejoną pierwszą kolumną, pola formularzy nie wywołują zoomu w Safari na iOS,
+  a cele dotykowe mają co najmniej 44 px.
 - **Kolor niesie jedno znaczenie** — zieleń i czerwień zarezerwowane są dla zysku i straty.
   Typ operacji (kupno/sprzedaż, wpłata/wypłata) jest neutralnym znacznikiem, kwoty przepływów
   i rebalansu pokazują kierunek znakiem, a zero jest szare, nie zielone.

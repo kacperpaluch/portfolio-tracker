@@ -49,6 +49,7 @@ export default function InstrumentsPanel({ instruments, onSave }) {
     yfinance: "np. WEBN.DE",
   }[valueOf(inst, "source") || "yfinance"] || "symbol źródła");
   return (
+    <>
     <table>
       <thead>
         <tr><th>Nazwa z importu</th><th>Nazwa własna</th><th>Ticker</th><th>Źródło</th><th>Kategoria</th><th>Waluta</th><th>Status</th><th></th></tr>
@@ -96,10 +97,12 @@ export default function InstrumentsPanel({ instruments, onSave }) {
           </tr>
         ))}
       </tbody>
-      <datalist id="cat-list">
-        <option value="Akcje" /><option value="Obligacje" /><option value="Surowce" />
-        <option value="Nieruchomości" /><option value="Gotówka" />
-      </datalist>
     </table>
+    {/* Poza tabelą — <datalist> nie jest dozwolonym dzieckiem <table>. */}
+    <datalist id="cat-list">
+      <option value="Akcje" /><option value="Obligacje" /><option value="Surowce" />
+      <option value="Nieruchomości" /><option value="Gotówka" />
+    </datalist>
+    </>
   );
 }

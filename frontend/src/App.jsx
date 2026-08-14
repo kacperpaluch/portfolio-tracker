@@ -22,13 +22,14 @@ import AnalyticsBreakdown from "./components/AnalyticsBreakdown.jsx";
 import ReportsPanel from "./components/ReportsPanel.jsx";
 import BrokerMappingModal from "./components/BrokerMappingModal.jsx";
 
+// Czwarty element to skrót etykiety dla paska mobilnego, gdzie na kafelek przypada ~50 px.
 const NAV = [
   ["overview", "Pulpit", "01"],
   ["portfolio", "Portfel", "02"],
   ["activity", "Aktywność", "03"],
   ["allocation", "Alokacja", "04"],
   ["analysis", "Raporty", "05"],
-  ["settings", "Dane i ustawienia", "06"],
+  ["settings", "Dane i ustawienia", "06", "Dane"],
 ];
 
 const LEGACY_TABS = {
@@ -174,6 +175,12 @@ export default function App() {
     }, 350);
     return () => window.clearTimeout(timer);
   }, [benchmarkRate, cpiSpread]);
+
+  // Otwarty modal ma własny scroll — bez tego tło przewija się pod nim na dotyku.
+  useEffect(() => {
+    document.body.style.overflow = detail || pendingImport ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [detail, pendingImport]);
 
   const navigate = (next) => {
     setPage(next);
@@ -684,9 +691,9 @@ export default function App() {
       </main>
 
       <nav className="mobile-nav" aria-label="Nawigacja mobilna">
-        {NAV.slice(0, 5).map(([id, label, index]) => (
+        {NAV.map(([id, label, index, short]) => (
           <button key={id} className={page === id ? "active" : ""} onClick={() => navigate(id)}>
-            <span>{index}</span>{label}
+            <span>{index}</span>{short || label}
           </button>
         ))}
       </nav>
