@@ -195,3 +195,12 @@ def test_searches_alpha_by_name(monkeypatch):
         "symbol": "TSWE.DEX", "name": "VanEck World Equal Weight", "exchange": "",
         "region": "Frankfurt", "currency": "EUR", "isin": "", "type": "ETF",
     }]
+
+
+def test_nan_price_is_skipped_instead_of_breaking_refresh():
+    """yfinance zwraca świeży dzień z Close=NaN; sqlite3 binduje NaN jako NULL."""
+    conn = _db("yfinance", "WEBN.DE")
+
+    prices._cache_put(conn, "IE0003XJA0J9", "2026-08-14", float("nan"), "yfinance")
+
+    assert conn.execute("SELECT count(*) FROM prices").fetchone()[0] == 0

@@ -12,6 +12,7 @@ dziennych cen z CSV (format stooq) — patrz `import_prices`.
 """
 from __future__ import annotations
 
+import math
 import os
 import sqlite3
 import threading
@@ -107,7 +108,12 @@ def _cache_put(conn: sqlite3.Connection, isin: str, day: str, price: float, sour
     """Zapis ceny do cache. Ręczny import z CSV (`source='csv'`) jest „święty":
     automatyczny provider go NIE nadpisuje — inaczej backfill/refresh skasowałby
     dane wgrane dla papierów bez poprawnych danych providera. Re-import CSV nadpisuje wszystko.
+
+    NaN/inf są pomijane: sqlite3 binduje NaN jako NULL, co wywala NOT NULL na prices.price
+    (yfinance zwraca świeży dzień z Close=NaN, zanim giełda poda kurs).
     """
+    if price is None or not math.isfinite(price):
+        return
     if source == "csv":
         conn.execute(
             "INSERT OR REPLACE INTO prices (isin, date, price, source) VALUES (?, ?, ?, ?)",
@@ -146,7 +152,7 @@ def _yf_last(ticker: str) -> tuple[str, float, str | None] | None:
     try:
         import yfinance as yf
 
-        hist = yf.Ticker(ticker).history(period="5d", auto_adjust=False)
+        hist = yf.Ticker(ticker).history(period="5d", auto_adjust=False).dropna(subset=["Close"])
         if hist.empty:
             return None
         day = hist.index[-1].date().isoformat()
