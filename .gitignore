@@ -39,3 +39,10 @@ data/
 .env
 .env.*
 !.env.example
+
+# Agentbox — pliki generowane lokalnie
+.claude/
+.codex/
+.opencode/
+.skillbox/
+.mcp.json
