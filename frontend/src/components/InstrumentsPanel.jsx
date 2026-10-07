@@ -80,6 +80,7 @@ export default function InstrumentsPanel({ instruments, onSave }) {
                 <option value="yfinance">yfinance</option>
                 <option value="eodhd">EODHD</option>
                 <option value="alphavantage">Alpha Vantage</option>
+                {inst.source === "obligacje" && <option value="obligacje">Tabele MF</option>}
               </select>
             </td>
             <td>

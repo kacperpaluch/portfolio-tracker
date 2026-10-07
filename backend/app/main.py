@@ -11,9 +11,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
+from . import accounts as accounts_mod
 from . import allocation as allocation_mod
 from . import analytics as analytics_mod
 from . import backup as backup_mod
+from . import bonds as bonds_mod
 from . import cash as cash_mod
 from . import cpi as cpi_mod
 from . import data_quality as data_quality_mod
@@ -25,7 +27,7 @@ from . import reports as reports_mod
 from . import summary as summary_mod
 from . import importer
 from .config import env_enabled
-from .db import db_session, init_db
+from .db import db_session, init_db, read_session
 from .importer import import_transactions
 
 
@@ -69,13 +71,13 @@ MAX_IMPORT_BYTES = 10 * 1024 * 1024
 
 
 @app.post("/api/import")
-async def import_file(file: UploadFile = File(...)) -> dict:
+async def import_file(file: UploadFile = File(...), account_id: int = Form(accounts_mod.DEFAULT_ID)) -> dict:
     content = await file.read(MAX_IMPORT_BYTES + 1)
     if len(content) > MAX_IMPORT_BYTES:
         raise HTTPException(status_code=413, detail="Plik importu jest większy niż 10 MB")
     with db_session() as conn:
         try:
-            return import_transactions(conn, content)
+            return import_transactions(conn, content, accounts_mod.require(conn, account_id))
         except importer.BrokerMappingRequired as e:
             raise HTTPException(status_code=422, detail={
                 "code": "broker_mapping_required",
@@ -201,10 +203,39 @@ def put_instrument(isin: str, payload: InstrumentUpdate) -> dict:
     return updated
 
 
-@app.get("/api/allocation")
-def get_allocation() -> dict:
-    """Porównanie alokacji docelowej z rzeczywistą (grupy + gotówka)."""
+@app.get("/api/accounts")
+def get_accounts() -> list[dict]:
     with db_session() as conn:
+        return accounts_mod.list_accounts(conn)
+
+
+class AccountIn(BaseModel):
+    name: str
+    taxed: bool = False  # True → szacujemy 19% podatku od zysków (rachunek poza IKE/IKZE)
+
+
+@app.post("/api/accounts")
+def add_account(payload: AccountIn) -> dict:
+    with db_session() as conn:
+        try:
+            return accounts_mod.save(conn, None, payload.name, payload.taxed)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.put("/api/accounts/{account_id}")
+def put_account(account_id: int, payload: AccountIn) -> dict:
+    with db_session() as conn:
+        try:
+            return accounts_mod.save(conn, account_id, payload.name, payload.taxed)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/allocation")
+def get_allocation(account: int | None = None) -> dict:
+    """Porównanie alokacji docelowej z rzeczywistą (grupy + gotówka)."""
+    with read_session(account) as conn:
         return allocation_mod.compute(conn)
 
 
@@ -213,9 +244,9 @@ class ContributionPlanIn(BaseModel):
 
 
 @app.post("/api/allocation/plan")
-def post_contribution_plan(payload: ContributionPlanIn) -> dict:
+def post_contribution_plan(payload: ContributionPlanIn, account: int | None = None) -> dict:
     """Dzieli nową wpłatę zgodnie z celem, bez sugerowania sprzedaży."""
-    with db_session() as conn:
+    with read_session(account) as conn:
         try:
             return allocation_mod.contribution_plan(conn, payload.amount_pln)
         except ValueError as e:
@@ -235,8 +266,9 @@ def put_allocation(payload: TargetAllocationIn) -> dict:
 
 
 @app.get("/api/portfolio")
-def get_portfolio(refresh: bool = False) -> dict:
-    with db_session() as conn:
+def get_portfolio(refresh: bool = False, account: int | None = None) -> dict:
+    """Pozycje i sumy całego portfela albo jednego konta (`account`)."""
+    with read_session(account) as conn:
         result = portfolio_mod.value_positions(conn, refresh=refresh)
         totals = result["totals"]
         etf_value = totals["value_pln_partial"]
@@ -244,44 +276,50 @@ def get_portfolio(refresh: bool = False) -> dict:
         totals["xirr"] = history_mod.portfolio_xirr(conn, etf_value, portfolio_value)
         totals["twr"] = history_mod.portfolio_twr(conn)
         totals["returns"] = history_mod.portfolio_returns(conn)
-        return result
+        accounts = accounts_mod.list_accounts(conn)
+    # Szacunek podatku przy sprzedaży dziś — informacyjny; wartości i zwroty zostają brutto.
+    totals["tax_pln"] = accounts_mod.estimate_tax(accounts, account, result["positions"])
+    totals["value_after_tax_pln"] = round(portfolio_value - totals["tax_pln"], 2)
+    return result
 
 
 @app.get("/api/summary")
-def get_summary() -> dict:
+def get_summary(account: int | None = None) -> dict:
     """Zwięzły digest portfela (wartość, P/L, zmiana D/D, zwroty, alokacja vs cel).
 
     Pod powiadomienia/n8n — gotowy „jednym GET-em". Czyta z cache; odpalaj po cronie.
     """
-    with db_session() as conn:
+    with read_session(account) as conn:
         return summary_mod.build(conn)
 
 
 @app.get("/api/history")
-def get_history(benchmark_rate: float = 0.05, cpi_spread: float = 0.0) -> list[dict]:
-    with db_session() as conn:
+def get_history(
+    benchmark_rate: float = 0.05, cpi_spread: float = 0.0, account: int | None = None,
+) -> list[dict]:
+    with read_session(account) as conn:
         return history_mod.portfolio_history(
             conn, benchmark_rate=benchmark_rate, cpi_spread=cpi_spread
         )
 
 
 @app.get("/api/daily-changes")
-def get_daily_changes() -> list[dict]:
+def get_daily_changes(account: int | None = None) -> list[dict]:
     """Dzienna zmiana wartości portfela (zysk/strata D/D, bez wpływu wpłat)."""
-    with db_session() as conn:
+    with read_session(account) as conn:
         return history_mod.portfolio_daily_changes(conn)
 
 
 @app.get("/api/drawdown")
-def get_drawdown() -> dict:
+def get_drawdown(account: int | None = None) -> dict:
     """Obsunięcie portfela (drawdown) na indeksie TWR: krzywa „pod wodą" + max/bieżące DD."""
-    with db_session() as conn:
+    with read_session(account) as conn:
         return history_mod.portfolio_drawdown(conn)
 
 
 @app.get("/api/analytics")
-def get_analytics() -> dict:
-    with db_session() as conn:
+def get_analytics(account: int | None = None) -> dict:
+    with read_session(account) as conn:
         return analytics_mod.build(conn)
 
 
@@ -291,9 +329,10 @@ def get_report(
     to_date: date,
     benchmark_rate: float = 0.05,
     cpi_spread: float = 0.0,
+    account: int | None = None,
 ) -> dict:
     """Raport okresowy: wynik, zwroty, benchmarki, przepływy i atrybucja."""
-    with db_session() as conn:
+    with read_session(account) as conn:
         try:
             return reports_mod.build(conn, from_date, to_date, benchmark_rate, cpi_spread)
         except ValueError as exc:
@@ -306,8 +345,9 @@ def export_report_csv(
     to_date: date,
     benchmark_rate: float = 0.05,
     cpi_spread: float = 0.0,
+    account: int | None = None,
 ) -> Response:
-    with db_session() as conn:
+    with read_session(account) as conn:
         try:
             report = reports_mod.build(conn, from_date, to_date, benchmark_rate, cpi_spread)
         except ValueError as exc:
@@ -322,8 +362,8 @@ def export_report_csv(
 
 
 @app.get("/api/data-quality")
-def get_data_quality() -> dict:
-    with db_session() as conn:
+def get_data_quality(account: int | None = None) -> dict:
+    with read_session(account) as conn:
         return data_quality_mod.inspect(conn)
 
 
@@ -441,17 +481,18 @@ async def restore_uploaded_backup(
 
 
 @app.get("/api/transactions")
-def get_transactions() -> list[dict]:
+def get_transactions(account: int | None = None) -> list[dict]:
     """Historia transakcji (z nazwą instrumentu), od najnowszych."""
-    with db_session() as conn:
+    with read_session(account) as conn:
         rows = conn.execute(
             """
             SELECT t.id, t.ts, t.type, t.quantity, t.price_pln, t.value_pln,
                    t.commission_pln, t.native_price, t.native_currency, t.fx_rate,
                    t.settlement_date, t.market, t.broker_order_id, t.source_format,
-                   t.note, t.isin, i.name, i.ticker
+                   t.note, t.isin, i.name, i.ticker, t.account_id, a.name AS account
               FROM transactions t
               LEFT JOIN instruments i ON i.isin = t.isin
+              LEFT JOIN accounts a ON a.id = t.account_id
              ORDER BY t.ts DESC, t.id DESC
             """
         ).fetchall()
@@ -467,6 +508,7 @@ class TransactionIn(BaseModel):
     price_pln: float
     commission_pln: float = 0.0
     note: str | None = None
+    account_id: int | None = None  # nowa: domyślne konto; edycja: bez zmiany konta
 
 
 @app.post("/api/transactions")
@@ -484,9 +526,52 @@ def add_transaction(payload: TransactionIn) -> dict:
                 price_pln=payload.price_pln,
                 commission_pln=payload.commission_pln,
                 note=payload.note,
+                account_id=accounts_mod.require(conn, payload.account_id),
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
+
+
+class BondPurchaseIn(BaseModel):
+    series: str  # np. 'EDO0334'
+    purchase_date: str
+    quantity: float
+    price_pln: float = bonds_mod.NOMINAL  # 99,90 przy zamianie
+    account_id: int | None = None
+
+
+@app.post("/api/bonds")
+def add_bond_purchase(payload: BondPurchaseIn) -> dict:
+    """Dodaje zakup detalicznych obligacji skarbowych wycenianych z tabel odsetkowych MF."""
+    with db_session() as conn:
+        try:
+            return importer.add_bond_purchase(
+                conn,
+                series=payload.series,
+                purchase_date=payload.purchase_date,
+                quantity=payload.quantity,
+                price_pln=payload.price_pln,
+                account_id=accounts_mod.require(conn, payload.account_id),
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/bonds/tables")
+async def import_bond_table(file: UploadFile = File(...)) -> dict:
+    """Ręczne wgranie tabeli odsetkowej MF (PDF) — zapas, gdy automatyczne pobranie zawiedzie."""
+    content = await file.read(MAX_IMPORT_BYTES + 1)
+    if len(content) > MAX_IMPORT_BYTES:
+        raise HTTPException(status_code=413, detail="Plik jest większy niż 10 MB")
+    with db_session() as conn:
+        try:
+            parsed = bonds_mod.parse_table_pdf(content)
+            bonds_mod.normalize_series(parsed["series"])
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        points = bonds_mod.store_table(conn, parsed)
+    return {"series": parsed["series"], "points": points,
+            "first_date": parsed["points"][0][0], "last_date": parsed["points"][-1][0]}
 
 
 @app.put("/api/transactions/{tx_id}")
@@ -504,6 +589,10 @@ def update_transaction(tx_id: int, payload: TransactionIn) -> dict:
                 price_pln=payload.price_pln,
                 commission_pln=payload.commission_pln,
                 note=payload.note,
+                account_id=(
+                    None if payload.account_id is None
+                    else accounts_mod.require(conn, payload.account_id)
+                ),
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
@@ -522,9 +611,9 @@ def delete_transaction(tx_id: int) -> dict:
 
 
 @app.get("/api/instruments/{isin}/history")
-def get_instrument_history(isin: str) -> dict:
+def get_instrument_history(isin: str, account: int | None = None) -> dict:
     """Dzienna historia waloru: cena natywna, kurs NBP, cena w PLN, posiadana ilość."""
-    with db_session() as conn:
+    with read_session(account) as conn:
         result = history_mod.instrument_history(conn, isin)
     if result is None:
         raise HTTPException(status_code=404, detail="Instrument not found")
@@ -532,8 +621,8 @@ def get_instrument_history(isin: str) -> dict:
 
 
 @app.get("/api/cash")
-def get_cash() -> dict:
-    with db_session() as conn:
+def get_cash(account: int | None = None) -> dict:
+    with read_session(account) as conn:
         return {
             "balance_pln": cash_mod.balance(conn),
             "net_deposits_pln": cash_mod.deposits_total(conn),
@@ -546,13 +635,17 @@ class CashFlowIn(BaseModel):
     kind: str  # 'deposit' | 'withdrawal'
     amount: float
     note: str | None = None
+    account_id: int | None = None
 
 
 @app.post("/api/cash")
 def add_cash(payload: CashFlowIn) -> dict:
     with db_session() as conn:
         try:
-            return cash_mod.add_flow(conn, payload.ts, payload.kind, payload.amount, payload.note)
+            return cash_mod.add_flow(
+                conn, payload.ts, payload.kind, payload.amount, payload.note,
+                accounts_mod.require(conn, payload.account_id),
+            )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 

@@ -6,10 +6,13 @@ import sqlite3
 from datetime import datetime
 
 
-def has_external(conn: sqlite3.Connection) -> bool:
-    """Czy użytkownik śledzi gotówkę (dodał choć jedną wpłatę/wypłatę)."""
+def has_external(conn: sqlite3.Connection, account_id: int | None = None) -> bool:
+    """Czy użytkownik śledzi gotówkę (dodał choć jedną wpłatę/wypłatę) — w widoku
+    połączenia albo na wskazanym koncie."""
     row = conn.execute(
-        "SELECT 1 FROM cash_flows WHERE kind IN ('deposit', 'withdrawal') LIMIT 1"
+        "SELECT 1 FROM cash_flows WHERE kind IN ('deposit', 'withdrawal') "
+        "AND (? IS NULL OR account_id = ?) LIMIT 1",
+        (account_id, account_id),
     ).fetchone()
     return row is not None
 
@@ -32,14 +35,18 @@ def deposits_total(conn: sqlite3.Connection) -> float:
 
 
 def list_external(conn: sqlite3.Connection) -> list[dict]:
-    """Tylko wpłaty/wypłaty (do ręcznej edycji w UI)."""
+    """Tylko wpłaty/wypłaty (do ręcznej edycji w UI); bez syntetycznych z widoku łącznego."""
     rows = conn.execute(
-        "SELECT * FROM cash_flows WHERE kind IN ('deposit', 'withdrawal') ORDER BY ts DESC, id DESC"
+        "SELECT * FROM cash_flows WHERE kind IN ('deposit', 'withdrawal') AND id > 0 "
+        "ORDER BY ts DESC, id DESC"
     ).fetchall()
     return [dict(r) for r in rows]
 
 
-def add_flow(conn: sqlite3.Connection, ts: str, kind: str, amount: float, note: str | None = None) -> dict:
+def add_flow(
+    conn: sqlite3.Connection, ts: str, kind: str, amount: float, note: str | None = None,
+    account_id: int = 1,
+) -> dict:
     """Dodaje ręczną wpłatę/wypłatę. amount > 0; znak ustalany przez kind."""
     kind = kind.lower()
     if kind not in ("deposit", "withdrawal"):
@@ -48,8 +55,9 @@ def add_flow(conn: sqlite3.Connection, ts: str, kind: str, amount: float, note: 
     ts = normalize_ts(ts)
     signed = abs(amount) if kind == "deposit" else -abs(amount)
     cur = conn.execute(
-        "INSERT INTO cash_flows (ts, kind, amount_pln, note, import_hash) VALUES (?, ?, ?, ?, NULL)",
-        (ts, kind, signed, note),
+        "INSERT INTO cash_flows (ts, kind, amount_pln, note, import_hash, account_id) "
+        "VALUES (?, ?, ?, ?, NULL, ?)",
+        (ts, kind, signed, note, account_id),
     )
     conn.commit()
     return dict(conn.execute("SELECT * FROM cash_flows WHERE id = ?", (cur.lastrowid,)).fetchone())
@@ -63,14 +71,18 @@ def delete_flow(conn: sqlite3.Connection, flow_id: int) -> bool:
     return cur.rowcount > 0
 
 
-def record_trade_cash(conn: sqlite3.Connection, ts: str, tx_type: str, value_pln: float, import_hash: str) -> None:
+def record_trade_cash(
+    conn: sqlite3.Connection, ts: str, tx_type: str, value_pln: float, import_hash: str,
+    account_id: int = 1,
+) -> None:
     """Zapisuje wpływ transakcji na gotówkę (kupno −, sprzedaż +). Idempotentne."""
     kind = "buy" if tx_type == "BUY" else "sell"
     signed = -abs(value_pln) if tx_type == "BUY" else abs(value_pln)
     h = hashlib.sha1(f"cash|{import_hash}".encode()).hexdigest()
     conn.execute(
-        "INSERT OR IGNORE INTO cash_flows (ts, kind, amount_pln, note, import_hash) VALUES (?, ?, ?, NULL, ?)",
-        (ts, kind, signed, h),
+        "INSERT OR IGNORE INTO cash_flows (ts, kind, amount_pln, note, import_hash, account_id) "
+        "VALUES (?, ?, ?, NULL, ?, ?)",
+        (ts, kind, signed, h, account_id),
     )
 
 

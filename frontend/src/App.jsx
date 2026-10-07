@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api } from "./api.js";
+import { api, setAccountScope } from "./api.js";
 import { cls, daysSince, fmtPct, fmtPln } from "./format.js";
 import HistoryChart from "./components/HistoryChart.jsx";
 import HeroSparkline from "./components/HeroSparkline.jsx";
@@ -7,6 +7,7 @@ import DrawdownChart from "./components/DrawdownChart.jsx";
 import InstrumentDetail from "./components/InstrumentDetail.jsx";
 import PositionsTable from "./components/PositionsTable.jsx";
 import TransactionForm from "./components/TransactionForm.jsx";
+import BondForm from "./components/BondForm.jsx";
 import TransactionsTable from "./components/TransactionsTable.jsx";
 import CashPanel from "./components/CashPanel.jsx";
 import InstrumentsPanel from "./components/InstrumentsPanel.jsx";
@@ -21,6 +22,8 @@ import RebalancePlanner from "./components/RebalancePlanner.jsx";
 import AnalyticsBreakdown from "./components/AnalyticsBreakdown.jsx";
 import ReportsPanel from "./components/ReportsPanel.jsx";
 import BrokerMappingModal from "./components/BrokerMappingModal.jsx";
+import AccountSelect from "./components/AccountSelect.jsx";
+import AccountsPanel from "./components/AccountsPanel.jsx";
 
 // Czwarty element to skrót etykiety dla paska mobilnego, gdzie na kafelek przypada ~50 px.
 const NAV = [
@@ -53,6 +56,13 @@ function initialPage() {
   const fromUrl = new URLSearchParams(window.location.search).get("tab");
   const normalized = LEGACY_TABS[fromUrl] || fromUrl;
   return NAV.some(([id]) => id === normalized) ? normalized : "overview";
+}
+
+// Widok konta żyje w URL (?account=), żeby odświeżenie strony go nie gubiło. 0 = cały portfel.
+function initialAccount() {
+  const id = Number(new URLSearchParams(window.location.search).get("account")) || 0;
+  setAccountScope(id);
+  return id;
 }
 
 function SectionHeader({ eyebrow, title, description, action }) {
@@ -111,6 +121,9 @@ export default function App() {
   const [quality, setQuality] = useState(null);
   const [analytics, setAnalytics] = useState(null);
   const [detail, setDetail] = useState(null);
+  const [accounts, setAccounts] = useState([]);
+  const [account, setAccount] = useState(initialAccount);
+  const [importAccount, setImportAccount] = useState(null);
   const [page, setPage] = useState(initialPage);
   const [structureView, setStructureView] = useState("categories");
   const [analysisView, setAnalysisView] = useState("report");
@@ -130,7 +143,7 @@ export default function App() {
   };
 
   const loadAll = async () => {
-    const [pf, hist, insts, txs, cs, alloc, daily, dd, bk, dq, analysis] = await Promise.all([
+    const [pf, hist, insts, txs, cs, alloc, daily, dd, bk, dq, analysis, accs] = await Promise.all([
       api.portfolio(),
       api.history(benchmarkRate / 100, cpiSpread / 100),
       api.instruments(),
@@ -142,6 +155,7 @@ export default function App() {
       api.backups(),
       api.dataQuality(),
       api.analytics(),
+      api.accounts(),
     ]);
     setPortfolio(pf);
     setHistory(hist);
@@ -154,6 +168,7 @@ export default function App() {
     setBackups(bk);
     setQuality(dq);
     setAnalytics(analysis);
+    setAccounts(accs);
   };
 
   useEffect(() => {
@@ -205,6 +220,18 @@ export default function App() {
     }
   };
 
+  const changeAccount = (id) => {
+    setAccountScope(id);
+    setAccount(id);
+    const url = new URL(window.location.href);
+    if (id) url.searchParams.set("account", id); else url.searchParams.delete("account");
+    window.history.replaceState({}, "", url);
+    run(() => Promise.resolve()).catch(() => {});
+  };
+  // Konto dla nowych operacji: oglądane, a w widoku całego portfela — pierwsze z listy.
+  const defaultAccount = account || accounts[0]?.id;
+  const targetImportAccount = importAccount || defaultAccount;
+
   const openDetail = (isin) => {
     api.instrumentHistory(isin).then(setDetail).catch((e) => flash(`Nie udało się otworzyć instrumentu: ${e.message}`, false));
   };
@@ -237,7 +264,7 @@ export default function App() {
   const importFile = async (file) => {
     setBusy(true);
     try {
-      const result = await api.importTransactions(file);
+      const result = await api.importTransactions(file, targetImportAccount);
       await loadAll();
       flash(importSuccessMessage(result));
     } catch (error) {
@@ -256,7 +283,7 @@ export default function App() {
     setBusy(true);
     try {
       await api.saveBrokerInstrumentMappings(mappings);
-      const result = await api.importTransactions(pendingImport.file);
+      const result = await api.importTransactions(pendingImport.file, targetImportAccount);
       setPendingImport(null);
       await loadAll();
       flash(importSuccessMessage(result));
@@ -317,6 +344,11 @@ export default function App() {
             </StatusDot>
           </div>
           <div className="hero-value">{fmtPln(accountValue)}</div>
+          {totals.tax_pln > 0 && (
+            <div className="tag" title="Wartość po 19% podatku od zysków na kontach opodatkowanych, gdyby sprzedać dziś">
+              Po podatku: {fmtPln(totals.value_after_tax_pln)} · szac. podatek {fmtPln(totals.tax_pln)}
+            </div>
+          )}
           <div className="hero-performance">
             <span className={cls(totals.total_pl_pln)}>
               {fmtPln(totals.total_pl_pln)}
@@ -424,6 +456,12 @@ export default function App() {
         <Metric label="Koszt" value={fmtPln(totals.cost_pln)} detail="Kapitał w otwartych pozycjach" />
         <Metric label="Zysk niezrealizowany" value={fmtPln(totals.unrealized_pl_pln)} detail={fmtPct(totals.pl_pct)} tone={cls(totals.unrealized_pl_pln)} />
         <Metric label="Zysk zrealizowany" value={fmtPln(totals.realized_pl_pln)} detail="Zamknięte transakcje" tone={cls(totals.realized_pl_pln)} />
+        {totals.tax_pln > 0 && (
+          <>
+            <Metric label="Podatek przy sprzedaży dziś" value={fmtPln(totals.tax_pln)} detail="Szacunek: 19% zysku na kontach opodatkowanych" />
+            <Metric label="Wartość po podatku" value={fmtPln(totals.value_after_tax_pln)} detail="Pozycje i gotówka minus szacowany podatek" />
+          </>
+        )}
       </div>
       <section className="surface">
         <SectionHeader eyebrow="Pozycje" title="Twój portfel" description="Kliknij instrument, aby zobaczyć historię i źródła wyniku." />
@@ -432,7 +470,10 @@ export default function App() {
       <section className="surface">
         <SectionHeader eyebrow="Płynność" title="Konto gotówkowe" description="Wpłaty, wypłaty i środki oczekujące na inwestycję." />
         <CashPanel
+          key={account}
           cash={cash}
+          accounts={accounts}
+          defaultAccount={defaultAccount}
           onAdd={(body) => run(() => api.addCash(body), "Operacja gotówkowa została dodana.").catch(() => {})}
           onDelete={(id) => {
             if (window.confirm("Usunąć tę operację gotówkową?")) {
@@ -449,10 +490,30 @@ export default function App() {
       <section className="surface">
         <SectionHeader eyebrow="Nowa operacja" title="Dodaj transakcję" description="Wprowadź zakup lub sprzedaż ręcznie." />
         <TransactionForm
+          key={account}
           instruments={instruments}
+          accounts={accounts}
+          defaultAccount={defaultAccount}
           onAdd={(body) => run(
             () => api.addTransaction(body),
             (r) => r.created ? "Transakcja została dodana." : "Taka transakcja już istnieje.",
+          ).catch(() => {})}
+        />
+      </section>
+      <section className="surface">
+        <SectionHeader eyebrow="Obligacje skarbowe" title="Dodaj obligacje oszczędnościowe" description="EDO, TOS, ROS i ROD — wycena z tabel odsetkowych Ministerstwa Finansów. Wykup dodaj jako sprzedaż." />
+        <BondForm
+          key={account}
+          accounts={accounts}
+          defaultAccount={defaultAccount}
+          busy={busy}
+          onAdd={(body) => run(
+            () => api.addBondPurchase(body),
+            (r) => r.created ? "Obligacje zostały dodane." : "Taki zakup już istnieje.",
+          ).catch(() => {})}
+          onImportTable={(file) => run(
+            () => api.importBondTable(file),
+            (r) => `Wczytano tabelę ${r.series}: ${r.first_date} – ${r.last_date}.`,
           ).catch(() => {})}
         />
       </section>
@@ -466,6 +527,7 @@ export default function App() {
         <TransactionsTable
           transactions={transactions}
           instruments={instruments}
+          accounts={accounts}
           onOpen={openDetail}
           onUpdate={(id, body) => run(
             () => api.updateTransaction(id, body),
@@ -526,7 +588,7 @@ export default function App() {
         </div>
       </div>
 
-      {analysisView === "report" && <ReportsPanel benchmarkRate={benchmarkRate} cpiSpread={cpiSpread} onOpen={openDetail} />}
+      {analysisView === "report" && <ReportsPanel key={account} benchmarkRate={benchmarkRate} cpiSpread={cpiSpread} onOpen={openDetail} />}
 
       {analysisView === "performance" && (
         <div className="analysis-view-content">
@@ -619,11 +681,27 @@ export default function App() {
         />
       </section>
 
+      <section className="surface">
+        <SectionHeader
+          eyebrow="Konta"
+          title="Konta inwestycyjne"
+          description="Każda transakcja i wpłata należy do konta. Dla kont opodatkowanych aplikacja szacuje 19% podatku od zysków; IKE i IKZE zostaw bez podatku. Konto transakcji zmienisz w jej edycji."
+        />
+        <AccountsPanel
+          accounts={accounts}
+          busy={busy}
+          onSave={(id, body) => run(() => api.saveAccount(id, body), "Konto zostało zapisane.").catch(() => {})}
+        />
+      </section>
+
       <section className="surface settings-split">
         <div>
           <SectionHeader eyebrow="Import" title="Import transakcji" description="Obsługuje CSV „historia PW”, eMAKLER „Transakcje bieżące” oraz potwierdzenia PDF mBanku. Format jest rozpoznawany automatycznie." />
           <input ref={fileRef} type="file" accept=".csv,.pdf,application/pdf" className="hidden-file" onChange={onImport} />
-          <button className="secondary" onClick={() => fileRef.current?.click()} disabled={busy}>Wybierz plik CSV lub PDF</button>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 9 }}>
+            <AccountSelect accounts={accounts} value={targetImportAccount} onChange={setImportAccount} />
+            <button className="secondary" onClick={() => fileRef.current?.click()} disabled={busy}>Wybierz plik CSV lub PDF</button>
+          </div>
         </div>
         <div className="settings-divider" />
         <div>
@@ -679,6 +757,12 @@ export default function App() {
             <p>{pageMeta[1]}</p>
           </div>
           <div className="header-meta">
+            {accounts.length > 1 && (
+              <select className="cell" aria-label="Widok konta" title="Widok konta" value={account} onChange={(e) => changeAccount(Number(e.target.value))}>
+                <option value={0}>Cały portfel</option>
+                {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            )}
             <span>{new Intl.DateTimeFormat("pl-PL", { day: "numeric", month: "long", year: "numeric" }).format(new Date())}</span>
             <button className="avatar" onClick={() => navigate("settings")} aria-label="Otwórz ustawienia">KP</button>
           </div>

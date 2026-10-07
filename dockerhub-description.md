@@ -22,6 +22,8 @@ wyceny i pokazuje wartość, zysk/stratę oraz stopy zwrotu — **wszystko w PLN
   walutę, mapowanie zapisuje się w SQLite, a import jest automatycznie ponawiany. Bez
   zaszytych aliasów i bez zgadywania instrumentów.
 - **Ręczne dodawanie/usuwanie transakcji** w UI (z tym samym dedupem co import).
+- **Konta (np. IKE i zwykły rachunek)** — przełącznik w nagłówku pokazuje cały portfel albo jedno konto ze wszystkimi statystykami; dla kont opodatkowanych szacunek 19% podatku od zysków i wartość po podatku.
+- **Obligacje oszczędnościowe (EDO, TOS, ROS, ROD)** — wycena z oficjalnych tabel odsetkowych Ministerstwa Finansów, trzymanych lokalnie; wystarczy seria, dzień zakupu i liczba sztuk.
 - **Wycena w PLN** — ETF-y notowane w EUR/USD/GBP przeliczane bieżącym kursem NBP;
   Yahoo wykrywa walutę automatycznie (z obsługą pensów GBx), dla providerów REST ustawia ją UI.
 - **Yahoo, EODHD i Alpha Vantage** — osobny symbol i waluta zapisywane dla każdego providera;
@@ -53,6 +55,7 @@ wyceny i pokazuje wartość, zysk/stratę oraz stopy zwrotu — **wszystko w PLN
 ## Źródła danych
 
 - Wyceny: Yahoo Finance, EODHD lub Alpha Vantage per instrument; ręczny CSV jako fallback.
+- Obligacje oszczędnościowe: tabele odsetkowe z [obligacjeskarbowe.pl](https://www.obligacjeskarbowe.pl) (PDF, bez klucza).
 - Kursy walut: [NBP API](https://api.nbp.pl) (tabela A, darmowe).
 - Inflacja (benchmark): [Eurostat HICP](https://ec.europa.eu/eurostat) (miesięczny, PL, darmowe).
 

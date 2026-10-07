@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS instruments (
     imported_name TEXT,                        -- nazwa z importu (read-only, nie nadpisywana przez UI)
     ticker        TEXT,
     currency     TEXT,                       -- 'EUR' | 'PLN'
-    source       TEXT,                       -- 'yfinance' | 'eodhd' | 'alphavantage' | 'csv'
+    source       TEXT,                       -- 'yfinance' | 'eodhd' | 'alphavantage' | 'csv' | 'obligacje'
     category     TEXT,                       -- klasa aktywów: 'Akcje' | 'Obligacje' | ...
     active       INTEGER NOT NULL DEFAULT 1,
     needs_config INTEGER NOT NULL DEFAULT 1
@@ -43,6 +43,15 @@ CREATE TABLE IF NOT EXISTS broker_instrument_aliases (
 );
 CREATE INDEX IF NOT EXISTS idx_broker_alias_isin ON broker_instrument_aliases(isin);
 
+-- Konta inwestycyjne (np. IKE, zwykły rachunek). taxed=1 → szacujemy 19% podatku od zysków.
+-- Konto 1 istnieje zawsze: do niego należą dane sprzed wprowadzenia kont.
+CREATE TABLE IF NOT EXISTS accounts (
+    id    INTEGER PRIMARY KEY,
+    name  TEXT NOT NULL UNIQUE,
+    taxed INTEGER NOT NULL DEFAULT 0
+);
+INSERT OR IGNORE INTO accounts (id, name, taxed) VALUES (1, 'IKE', 0);
+
 -- Model docelowy alokacji: kategoria -> docelowy udział %.
 CREATE TABLE IF NOT EXISTS target_allocation (
     category   TEXT PRIMARY KEY,
@@ -66,7 +75,8 @@ CREATE TABLE IF NOT EXISTS transactions (
     broker_order_id TEXT,                  -- numer zlecenia u brokera
     source_format  TEXT,                    -- format źródłowy importu
     note           TEXT,
-    import_hash    TEXT NOT NULL UNIQUE
+    import_hash    TEXT NOT NULL UNIQUE,
+    account_id     INTEGER NOT NULL DEFAULT 1 -- konto (accounts.id); musi być ostatnią kolumną
 );
 CREATE INDEX IF NOT EXISTS idx_tx_isin ON transactions(isin);
 
@@ -91,6 +101,15 @@ CREATE TABLE IF NOT EXISTS cpi_index (
     idx   REAL NOT NULL                      -- indeks HICP, baza 2015=100
 );
 
+-- Tabele odsetkowe MF dla detalicznych obligacji skarbowych: narosłe odsetki (zł na 1 szt.)
+-- na dany dzień dla zakupu w pierwszym dniu sprzedaży serii. MIN(date) = początek sprzedaży.
+CREATE TABLE IF NOT EXISTS bond_interest (
+    series   TEXT NOT NULL,                  -- np. 'EDO0334'
+    date     TEXT NOT NULL,                  -- YYYY-MM-DD
+    interest REAL NOT NULL,
+    PRIMARY KEY (series, date)
+);
+
 -- Księga gotówki. amount_pln = wpływ na saldo: wpłata +, wypłata −, kupno −, sprzedaż +.
 -- Saldo gotówki = SUM(amount_pln). Kind 'deposit'/'withdrawal' to przepływy zewnętrzne
 -- (do XIRR); 'buy'/'sell' to ruchy wewnętrzne (gotówka <-> ETF) tworzone przy imporcie.
@@ -100,7 +119,8 @@ CREATE TABLE IF NOT EXISTS cash_flows (
     kind        TEXT NOT NULL,               -- 'deposit' | 'withdrawal' | 'buy' | 'sell'
     amount_pln  REAL NOT NULL,
     note        TEXT,
-    import_hash TEXT UNIQUE
+    import_hash TEXT UNIQUE,
+    account_id  INTEGER NOT NULL DEFAULT 1   -- konto (accounts.id); musi być ostatnią kolumną
 );
 """
 
@@ -144,6 +164,11 @@ def _migrate(conn: sqlite3.Connection) -> None:
     for column, column_type in transaction_columns.items():
         if column not in tx_cols:
             conn.execute(f"ALTER TABLE transactions ADD COLUMN {column} {column_type}")
+    # Konta: istniejące dane trafiają na konto 1. Kolumna dodawana jako ostatnia —
+    # tak samo jak w SCHEMA, bo `scope_reads` składa UNION po `SELECT *`.
+    for table in ("transactions", "cash_flows"):
+        if "account_id" not in {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN account_id INTEGER NOT NULL DEFAULT 1")
 
 
 def init_db(conn: sqlite3.Connection | None = None) -> None:
@@ -162,6 +187,53 @@ def init_db(conn: sqlite3.Connection | None = None) -> None:
 def db_session():
     conn = get_connection()
     try:
+        yield conn
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def scope_reads(conn: sqlite3.Connection, account_id: int | None) -> None:
+    """Zawęża ODCZYTY połączenia do konta albo do spójnego widoku całego portfela.
+
+    Widoki TEMP przesłaniają tabele `transactions`/`cash_flows` (SQLite szuka nazw najpierw
+    w schemacie temp), więc każda funkcja analityczna liczy na przefiltrowanych danych bez
+    własnego WHERE — żadna nie może filtra pominąć. Zapisy idą zwykłym `db_session()`.
+
+    Widok łączny (account_id=None): konto bez wpłat/wypłat nie prowadzi księgi gotówki, więc
+    obok kont, które ją prowadzą, jego kupna wyglądałyby jak ujemne saldo. Dostaje więc
+    syntetyczne wpłaty równe kupnom (i wypłaty równe sprzedażom; id ujemne): saldo zero,
+    a wkładem kapitału jest koszt zakupów — jak w widoku samego konta.
+    """
+    if account_id is not None:
+        account_id = int(account_id)  # widok nie przyjmuje parametrów — tylko liczba w SQL
+        for table in ("transactions", "cash_flows"):
+            conn.execute(
+                f"CREATE TEMP VIEW {table} AS SELECT * FROM main.{table} WHERE account_id = {account_id}"
+            )
+        return
+    conn.execute(
+        """
+        CREATE TEMP VIEW cash_flows AS
+        SELECT * FROM main.cash_flows
+        UNION ALL
+        SELECT -id, ts, CASE kind WHEN 'buy' THEN 'deposit' ELSE 'withdrawal' END,
+               -amount_pln, NULL, NULL, account_id
+          FROM main.cash_flows
+         WHERE kind IN ('buy', 'sell')
+           AND account_id NOT IN (
+               SELECT account_id FROM main.cash_flows WHERE kind IN ('deposit', 'withdrawal'))
+           AND EXISTS (SELECT 1 FROM main.cash_flows WHERE kind IN ('deposit', 'withdrawal'))
+        """
+    )
+
+
+@contextmanager
+def read_session(account_id: int | None = None):
+    """Sesja tylko do odczytu: jedno konto albo cały portfel (patrz `scope_reads`)."""
+    conn = get_connection()
+    try:
+        scope_reads(conn, account_id)
         yield conn
         conn.commit()
     finally:

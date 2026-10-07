@@ -18,10 +18,20 @@ const json = async (r) => {
   return r.json();
 };
 
+// Widok konta: "" = cały portfel. Stan modułu, bo dotyczy wszystkich odczytów naraz —
+// przełącznik w nagłówku ustawia go przed przeładowaniem danych.
+let accountScope = "";
+export const setAccountScope = (id) => { accountScope = id || ""; };
+const scoped = (url) => (accountScope ? `${url}${url.includes("?") ? "&" : "?"}account=${accountScope}` : url);
+const send = (method, url, body) =>
+  fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(json);
+
 export const api = {
-  portfolio: (refresh = false) => fetch(`/api/portfolio?refresh=${refresh}`).then(json),
+  accounts: () => fetch("/api/accounts").then(json),
+  saveAccount: (id, body) => (id ? send("PUT", `/api/accounts/${id}`, body) : send("POST", "/api/accounts", body)),
+  portfolio: (refresh = false) => fetch(scoped(`/api/portfolio?refresh=${refresh}`)).then(json),
   history: (benchmarkRate = 0.05, cpiSpread = 0) =>
-    fetch(`/api/history?benchmark_rate=${benchmarkRate}&cpi_spread=${cpiSpread}`).then(json),
+    fetch(scoped(`/api/history?benchmark_rate=${benchmarkRate}&cpi_spread=${cpiSpread}`)).then(json),
   instruments: () => fetch("/api/instruments").then(json),
   searchProviderSymbols: (source, query) => {
     const params = new URLSearchParams({ source, query });
@@ -39,9 +49,10 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mappings }),
     }).then(json),
-  importTransactions: (file) => {
+  importTransactions: (file, accountId) => {
     const fd = new FormData();
     fd.append("file", file);
+    if (accountId) fd.append("account_id", accountId);
     return fetch("/api/import", { method: "POST", body: fd }).then(json);
   },
   importPrices: (isin, file, currency) => {
@@ -54,13 +65,24 @@ export const api = {
   refresh: () => fetch("/api/refresh", { method: "POST" }).then(json),
   backfill: () => fetch("/api/backfill", { method: "POST" }).then(json),
   refreshCpi: () => fetch("/api/cpi/refresh", { method: "POST" }).then(json),
-  transactions: () => fetch("/api/transactions").then(json),
+  transactions: () => fetch(scoped("/api/transactions")).then(json),
   addTransaction: (body) =>
     fetch("/api/transactions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }).then(json),
+  addBondPurchase: (body) =>
+    fetch("/api/bonds", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then(json),
+  importBondTable: (file) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return fetch("/api/bonds/tables", { method: "POST", body: fd }).then(json);
+  },
   deleteTransaction: (id) => fetch(`/api/transactions/${id}`, { method: "DELETE" }).then(json),
   updateTransaction: (id, body) =>
     fetch(`/api/transactions/${id}`, {
@@ -68,10 +90,10 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }).then(json),
-  instrumentHistory: (isin) => fetch(`/api/instruments/${isin}/history`).then(json),
-  dailyChanges: () => fetch("/api/daily-changes").then(json),
-  drawdown: () => fetch("/api/drawdown").then(json),
-  cash: () => fetch("/api/cash").then(json),
+  instrumentHistory: (isin) => fetch(scoped(`/api/instruments/${isin}/history`)).then(json),
+  dailyChanges: () => fetch(scoped("/api/daily-changes")).then(json),
+  drawdown: () => fetch(scoped("/api/drawdown")).then(json),
+  cash: () => fetch(scoped("/api/cash")).then(json),
   addCash: (body) =>
     fetch("/api/cash", {
       method: "POST",
@@ -93,7 +115,7 @@ export const api = {
     fd.append("confirmation", "PRZYWRÓĆ");
     return fetch("/api/backups/restore-upload", { method: "POST", body: fd }).then(json);
   },
-  allocation: () => fetch("/api/allocation").then(json),
+  allocation: () => fetch(scoped("/api/allocation")).then(json),
   setAllocation: (targets) =>
     fetch("/api/allocation", {
       method: "PUT",
@@ -101,12 +123,12 @@ export const api = {
       body: JSON.stringify({ targets }),
     }).then(json),
   contributionPlan: (amountPln) =>
-    fetch("/api/allocation/plan", {
+    fetch(scoped("/api/allocation/plan"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ amount_pln: amountPln }),
     }).then(json),
-  analytics: () => fetch("/api/analytics").then(json),
+  analytics: () => fetch(scoped("/api/analytics")).then(json),
   report: (fromDate, toDate, benchmarkRate = 0.05, cpiSpread = 0, signal) => {
     const params = new URLSearchParams({
       from_date: fromDate,
@@ -114,7 +136,7 @@ export const api = {
       benchmark_rate: String(benchmarkRate),
       cpi_spread: String(cpiSpread),
     });
-    return fetch(`/api/reports?${params}`, { signal }).then(json);
+    return fetch(scoped(`/api/reports?${params}`), { signal }).then(json);
   },
   reportCsvUrl: (fromDate, toDate, benchmarkRate = 0.05, cpiSpread = 0) => {
     const params = new URLSearchParams({
@@ -123,7 +145,7 @@ export const api = {
       benchmark_rate: String(benchmarkRate),
       cpi_spread: String(cpiSpread),
     });
-    return `/api/reports.csv?${params}`;
+    return scoped(`/api/reports.csv?${params}`);
   },
-  dataQuality: () => fetch("/api/data-quality").then(json),
+  dataQuality: () => fetch(scoped("/api/data-quality")).then(json),
 };

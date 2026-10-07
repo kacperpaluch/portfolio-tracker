@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { fmtPln, fmtDate } from "../format.js";
+import AccountSelect from "./AccountSelect.jsx";
 
-export default function TransactionsTable({ transactions, instruments, onOpen, onDelete, onUpdate }) {
+export default function TransactionsTable({ transactions, instruments, accounts = [], onOpen, onDelete, onUpdate }) {
   const [query, setQuery] = useState("");
   const [type, setType] = useState("ALL");
   const [editing, setEditing] = useState(null);
@@ -27,6 +28,7 @@ export default function TransactionsTable({ transactions, instruments, onOpen, o
       price_pln: tx.price_pln,
       commission_pln: tx.commission_pln || 0,
       note: tx.note || "",
+      account_id: tx.account_id,
     });
   };
   const set = (key, value) => setDraft((current) => ({ ...current, [key]: value }));
@@ -76,6 +78,7 @@ export default function TransactionsTable({ transactions, instruments, onOpen, o
                 <select className="cell edit-instrument" value={draft.isin} onChange={(e) => set("isin", e.target.value)}>
                   {instruments.map((i) => <option key={i.isin} value={i.isin}>{i.name}</option>)}
                 </select>
+                <AccountSelect accounts={accounts} value={draft.account_id} onChange={(v) => set("account_id", v)} />
               </td>
               <td>
                 <select className="cell narrow" value={draft.type} onChange={(e) => set("type", e.target.value)}>
@@ -101,7 +104,7 @@ export default function TransactionsTable({ transactions, instruments, onOpen, o
               </td>
               <td className="txt">
                 <button className="instrument-link" onClick={() => onOpen?.(t.isin)}>{t.name || t.isin}</button>
-                <div className="tag">{t.ticker || t.isin}</div>
+                <div className="tag">{t.ticker || t.isin}{accounts.length > 1 && t.account ? ` · ${t.account}` : ""}</div>
                 {(t.market || t.broker_order_id) && (
                   <div className="tag">{[t.market, t.broker_order_id && `zlec. ${t.broker_order_id}`].filter(Boolean).join(" · ")}</div>
                 )}

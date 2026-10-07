@@ -392,13 +392,12 @@ def portfolio_twr(conn: sqlite3.Connection) -> float | None:
         return None
     series = [(date.fromisoformat(r["date"]), r["value_pln"]) for r in series_rows]
 
-    flows = conn.execute(
-        "SELECT ts, amount_pln FROM cash_flows WHERE kind IN ('deposit', 'withdrawal')"
-    ).fetchall()
+    # Te same wkłady co w `portfolio_returns`: bez wpłat zewnętrznych wkładem są kupna —
+    # inaczej dokupienie na koncie bez księgi gotówki liczyłoby się jako zysk.
+    _, has_external = _cash_timeline(conn)
     cf_by_day: dict[date, float] = {}
-    for f in flows:
-        d = date.fromisoformat(f["ts"][:10])
-        cf_by_day[d] = cf_by_day.get(d, 0.0) + f["amount_pln"]
+    for d, amount in _contributions(conn, has_external):
+        cf_by_day[d] = cf_by_day.get(d, 0.0) + amount
 
     detail = twr_detail(series, cf_by_day)
     return detail[1] if detail is not None else None

@@ -14,6 +14,7 @@ import sqlite3
 import unicodedata
 from datetime import datetime
 
+from . import bonds, prices
 from . import cash as cash_mod
 from .instruments import ensure_instrument, resolve_broker_instrument
 
@@ -364,8 +365,8 @@ def parse_import(content: bytes) -> list[dict]:
     return _parse_mbank_pdf(content) if import_format == PDF_FORMAT else parse_csv(content)
 
 
-def import_transactions(conn: sqlite3.Connection, content: bytes) -> dict:
-    """Importuje transakcje do bazy. Idempotentny — duplikaty (import_hash) pomijane."""
+def import_transactions(conn: sqlite3.Connection, content: bytes, account_id: int = 1) -> dict:
+    """Importuje transakcje na wskazane konto. Idempotentny — duplikaty (import_hash) pomijane."""
     import_format = detect_import_format(content)
     if import_format == PDF_FORMAT:
         rows = _parse_mbank_pdf(content)
@@ -385,6 +386,7 @@ def import_transactions(conn: sqlite3.Connection, content: bytes) -> dict:
         ):
             r.setdefault(key, None)
         r["source_format"] = r["source_format"] or import_format
+        r["account_id"] = account_id
         before = conn.execute(
             "SELECT 1 FROM instruments WHERE isin = ?", (r["isin"],)
         ).fetchone()
@@ -397,10 +399,10 @@ def import_transactions(conn: sqlite3.Connection, content: bytes) -> dict:
             INSERT OR IGNORE INTO transactions
                 (ts, isin, type, quantity, price_pln, value_pln, commission_pln,
                  native_price, native_currency, fx_rate, settlement_date, market,
-                 broker_order_id, source_format, import_hash)
+                 broker_order_id, source_format, import_hash, account_id)
             VALUES (:ts, :isin, :type, :quantity, :price_pln, :value_pln, :commission_pln,
                     :native_price, :native_currency, :fx_rate, :settlement_date, :market,
-                    :broker_order_id, :source_format, :import_hash)
+                    :broker_order_id, :source_format, :import_hash, :account_id)
             """,
             r,
         )
@@ -427,8 +429,11 @@ def import_transactions(conn: sqlite3.Connection, content: bytes) -> dict:
                 )
                 enriched += updated.rowcount
 
-        # Wpływ transakcji na gotówkę (idempotentny po import_hash).
-        cash_mod.record_trade_cash(conn, r["ts"], r["type"], r["value_pln"], r["import_hash"])
+        # Wpływ transakcji na gotówkę (idempotentny po import_hash). Duplikat zachowuje
+        # konto istniejącej transakcji — jej przepływ już jest, więc INSERT OR IGNORE nic nie robi.
+        cash_mod.record_trade_cash(
+            conn, r["ts"], r["type"], r["value_pln"], r["import_hash"], account_id
+        )
 
     conn.commit()
     return {
@@ -452,6 +457,7 @@ def add_transaction(
     price_pln: float,
     commission_pln: float = 0.0,
     note: str | None = None,
+    account_id: int = 1,
 ) -> dict:
     """Dodaje pojedynczą transakcję ręcznie. Idempotentne (ten sam hash co import)."""
     ts = cash_mod.normalize_ts(ts)
@@ -472,20 +478,78 @@ def add_transaction(
     cur = conn.execute(
         """
         INSERT OR IGNORE INTO transactions
-            (ts, isin, type, quantity, price_pln, value_pln, commission_pln, note, import_hash)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (ts, isin, type, quantity, price_pln, value_pln, commission_pln, note, import_hash,
+             account_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             ts, isin, tx_type, quantity, price_pln, value_pln, commission_pln,
-            (note or "").strip() or None, import_hash,
+            (note or "").strip() or None, import_hash, account_id,
         ),
     )
     if cur.rowcount == 1:
-        cash_mod.record_trade_cash(conn, ts, tx_type, value_pln, import_hash)
+        cash_mod.record_trade_cash(conn, ts, tx_type, value_pln, import_hash, account_id)
         conn.commit()
         return {"created": True, "id": cur.lastrowid}
     conn.commit()
     return {"created": False, "reason": "duplicate"}
+
+
+def add_bond_purchase(
+    conn: sqlite3.Connection,
+    *,
+    series: str,
+    purchase_date: str,
+    quantity: float,
+    price_pln: float = bonds.NOMINAL,
+    account_id: int = 1,
+) -> dict:
+    """Dodaje zakup detalicznych obligacji skarbowych: instrument (seria + dzień zakupu),
+    transakcję BUY i wycenę z tabel odsetkowych MF.
+
+    Obligacje kupuje się za pieniądze spoza rachunku, więc gdy konto prowadzi księgę gotówki,
+    zakup dostaje równą mu wpłatę — saldo się zgadza, a XIRR/TWR widzą nowy kapitał. Gdy
+    księga konta jest nieaktywna (brak wpłat), nie włączamy jej tą wpłatą.
+    """
+    series = bonds.normalize_series(series)
+    try:
+        day = datetime.strptime(purchase_date.strip()[:10], "%Y-%m-%d").date()
+    except ValueError:
+        raise ValueError("Data zakupu musi mieć format RRRR-MM-DD")
+
+    sync_error = bonds.try_sync(conn, series)
+    first = bonds.sale_start(conn, series)
+    if not first:
+        raise ValueError(
+            (sync_error or f"Brak tabeli odsetkowej serii {series}")
+            + " — możesz wgrać tabelę odsetkową z PDF."
+        )
+    # Seria jest w sprzedaży przez miesiąc; zapas chroni przed odrzuceniem nietypowej emisji,
+    # a nadal łapie literówkę w serii lub roku (błędne przesunięcie = błędna wycena).
+    if not 0 <= (day - datetime.strptime(first, "%Y-%m-%d").date()).days <= 62:
+        raise ValueError(f"Seria {series} była sprzedawana od {first} — sprawdź datę zakupu")
+
+    isin = f"{series}-{day:%Y%m%d}"
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO instruments
+            (isin, name, imported_name, ticker, currency, source, category, active, needs_config)
+        VALUES (?, ?, ?, ?, 'PLN', ?, 'Obligacje', 1, 0)
+        """,
+        (isin, f"{series} (zakup {day.isoformat()})", series, series, bonds.SOURCE),
+    )
+    result = add_transaction(
+        conn, ts=day.isoformat(), isin=isin, name=None, tx_type="BUY",
+        quantity=quantity, price_pln=price_pln, note="Obligacje skarbowe", account_id=account_id,
+    )
+    if result["created"] and cash_mod.has_external(conn, account_id):
+        cash_mod.add_flow(
+            conn, day.isoformat(), "deposit", round(quantity * price_pln, 2),
+            f"Zakup obligacji {series}", account_id,
+        )
+    instrument = dict(conn.execute("SELECT * FROM instruments WHERE isin = ?", (isin,)).fetchone())
+    prices.fetch_history(conn, instrument, day.isoformat(), datetime.now().date().isoformat())
+    return {**result, "isin": isin}
 
 
 def update_transaction(
@@ -500,13 +564,16 @@ def update_transaction(
     price_pln: float,
     commission_pln: float = 0.0,
     note: str | None = None,
+    account_id: int | None = None,
 ) -> dict | None:
-    """Edytuje transakcję i atomowo odtwarza powiązany ruch gotówkowy."""
+    """Edytuje transakcję i atomowo odtwarza powiązany ruch gotówkowy.
+    `account_id=None` zostawia transakcję na dotychczasowym koncie."""
     existing = conn.execute(
-        "SELECT import_hash FROM transactions WHERE id = ?", (tx_id,)
+        "SELECT import_hash, account_id FROM transactions WHERE id = ?", (tx_id,)
     ).fetchone()
     if existing is None:
         return None
+    account_id = existing["account_id"] if account_id is None else account_id
 
     ts = cash_mod.normalize_ts(ts)
     isin = isin.strip()
@@ -534,15 +601,15 @@ def update_transaction(
         """
         UPDATE transactions
            SET ts = ?, isin = ?, type = ?, quantity = ?, price_pln = ?,
-               value_pln = ?, commission_pln = ?, note = ?, import_hash = ?
+               value_pln = ?, commission_pln = ?, note = ?, import_hash = ?, account_id = ?
          WHERE id = ?
         """,
         (
             ts, isin, tx_type, quantity, price_pln, value_pln, commission_pln,
-            (note or "").strip() or None, import_hash, tx_id,
+            (note or "").strip() or None, import_hash, account_id, tx_id,
         ),
     )
-    cash_mod.record_trade_cash(conn, ts, tx_type, value_pln, import_hash)
+    cash_mod.record_trade_cash(conn, ts, tx_type, value_pln, import_hash, account_id)
     conn.commit()
     return dict(conn.execute("SELECT * FROM transactions WHERE id = ?", (tx_id,)).fetchone())
 

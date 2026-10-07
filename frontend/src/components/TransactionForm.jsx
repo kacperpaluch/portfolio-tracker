@@ -1,10 +1,11 @@
 import { useState } from "react";
+import AccountSelect from "./AccountSelect.jsx";
 
-export default function TransactionForm({ instruments, onAdd }) {
+export default function TransactionForm({ instruments, accounts, defaultAccount, onAdd }) {
   const today = new Date().toISOString().slice(0, 10);
   const empty = {
     ts: today, isin: "", type: "BUY", quantity: "", price_pln: "",
-    commission_pln: "", note: "", newIsin: "", newName: "",
+    commission_pln: "", note: "", newIsin: "", newName: "", account_id: defaultAccount,
   };
   const [f, setF] = useState(empty);
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
@@ -20,13 +21,15 @@ export default function TransactionForm({ instruments, onAdd }) {
       type: f.type, quantity: qty, price_pln: price,
       commission_pln: parseFloat(f.commission_pln) || 0,
       note: f.note.trim() || undefined,
+      account_id: f.account_id,
     });
-    setF({ ...empty, ts: f.ts });
+    setF({ ...empty, ts: f.ts, account_id: f.account_id });
   };
 
   return (
     <div className="tx-form">
       <input className="cell" type="date" value={f.ts} onChange={(e) => set("ts", e.target.value)} />
+      <AccountSelect accounts={accounts} value={f.account_id} onChange={(v) => set("account_id", v)} />
       <select className="cell" value={f.isin} onChange={(e) => set("isin", e.target.value)}>
         <option value="">— wybierz walor —</option>
         {instruments.map((i) => <option key={i.isin} value={i.isin}>{i.name}</option>)}

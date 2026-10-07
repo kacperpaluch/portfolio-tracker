@@ -63,6 +63,16 @@ Internetu bez dodatkowej warstwy dostępu (np. VPN, Tailscale lub reverse proxy 
 - **Trzy automatyczne źródła notowań** — Yahoo Finance, EODHD i Alpha Vantage wybierane
   osobno dla każdego instrumentu. UI obsługuje symbole właściwe dla providera, np.
   `WEBN.DE`, `WEBN.XETRA` lub `WEBN.DEX`, oraz ostrzega, gdy brakuje klucza API.
+- **Konta (np. IKE i zwykły rachunek)** — każda transakcja i wpłata należy do konta. Przełącznik
+  w nagłówku pokazuje cały portfel albo jedno konto, ze wszystkimi statystykami (wartość, TWR/XIRR,
+  historia, alokacja, raporty). Dla kont oznaczonych jako opodatkowane aplikacja szacuje 19% podatku
+  od zysków „gdyby sprzedać dziś” i pokazuje wartość po podatku; zwroty pozostają liczone brutto.
+  Szacunek jest informacyjny (średni koszt, bez kompensowania strat) — nie zastępuje PIT-8C.
+- **Detaliczne obligacje skarbowe (EDO, TOS, ROS, ROD)** — podajesz serię, dzień zakupu i liczbę
+  sztuk; wartość to 100 zł + narosłe odsetki z oficjalnych tabel odsetkowych Ministerstwa Finansów
+  (obligacjeskarbowe.pl). Tabele są trzymane lokalnie, a sieć jest potrzebna raz na okres odsetkowy;
+  gdy pobranie zawiedzie, tabelę można wgrać z PDF. Wartość jest brutto (bez podatku Belki i opłaty
+  za wcześniejszy wykup). Typy wypłacające odsetki (COI, ROR, DOR) nie są jeszcze obsługiwane.
 - **Import cen z CSV (ratunek dla danych providera)** — gdy automatyczne źródła nie oddają historii
   dla mało płynnego waloru (np. ETN na GPW), wgraj dzienne ceny z pliku CSV (format stooq:
   `Data,…,Zamkniecie`) wprost na widoku waloru. Nadpisuje błędne punkty w cache i naprawia
@@ -141,12 +151,13 @@ Interfejs celowo rozdziela codzienne sprawdzanie portfela od operacji administra
 
 | Sekcja | Zawartość |
 |---|---|
-| **Pulpit** | łączna wartość konta, wynik całkowity, ostatnia zmiana, TWR, XIRR, gotówka, główny wykres, przełączana struktura kategorii/walorów i największe pozycje z udziałami |
-| **Portfel** | pełna tabela otwartych pozycji, koszt, wartość, zysk niezrealizowany i zrealizowany oraz konto gotówkowe |
-| **Aktywność** | ręczne dodawanie i edycja transakcji, notatki, filtry, historia kupna/sprzedaży i dzienne zmiany wartości |
+| **Nagłówek** | przełącznik widoku: cały portfel albo jedno konto (widoczny przy co najmniej dwóch kontach; wybór zapisany w `?account=`) |
+| **Pulpit** | łączna wartość konta, wartość po szacowanym podatku, wynik całkowity, ostatnia zmiana, TWR, XIRR, gotówka, główny wykres, przełączana struktura kategorii/walorów i największe pozycje z udziałami |
+| **Portfel** | pełna tabela otwartych pozycji, koszt, wartość, zysk niezrealizowany i zrealizowany, szacowany podatek i wartość po podatku oraz konto gotówkowe |
+| **Aktywność** | ręczne dodawanie i edycja transakcji (z wyborem konta), dodawanie obligacji oszczędnościowych, notatki, filtry, historia kupna/sprzedaży i dzienne zmiany wartości |
 | **Alokacja** | rzeczywisty i docelowy udział kategorii, odchylenie, kwota rebalansu oraz plan podziału nowej wpłaty bez sprzedaży |
 | **Raporty i analiza** | raport okresowy i porównawczy, mapa miesięcznych TWR, eksport CSV/PDF oraz osobne widoki wyniku, atrybucji, benchmarków i drawdown |
-| **Dane i ustawienia** | kontrola jakości danych, odświeżanie wycen, backfill historii, HICP, mapowanie instrumentów, import, eksport i backup |
+| **Dane i ustawienia** | kontrola jakości danych, odświeżanie wycen, backfill historii, HICP, mapowanie instrumentów, konta inwestycyjne, import (na wybrane konto), eksport i backup |
 
 Najważniejsze operacje mają własne komunikaty postępu i błędów. Usunięcie transakcji albo
 operacji gotówkowej wymaga potwierdzenia. Bieżąca sekcja jest zapisana w parametrze `tab`
@@ -277,7 +288,14 @@ Nie należy wystawiać portu `8000` bezpośrednio do Internetu.
    XIRR i benchmarki uwzględnią niezainwestowaną gotówkę oraz timing przepływów.
 6. Opcjonalnie pobierz HICP w **Dane i ustawienia**, aby uruchomić benchmark
    „inflacja + X%". Ta operacja nie dotyka tabeli cen i nie nadpisuje ręcznych importów.
-7. Na co dzień korzystaj z **Pulpitu**; szczegółowe TWR, XIRR, benchmarki i drawdown są
+7. Masz więcej niż jedno konto (np. IKE i zwykły rachunek)? Dodaj je w **Dane i ustawienia →
+   Konta inwestycyjne** i zaznacz, które są opodatkowane. Dotychczasowe dane należą do konta
+   „IKE”; konto transakcji zmienisz w jej edycji, a przy imporcie i w formularzach wybierasz je
+   z listy. Przełącznik w nagłówku pokazuje cały portfel albo jedno konto.
+8. Obligacje oszczędnościowe (EDO, TOS, ROS, ROD) dodaj w **Aktywność → Dodaj obligacje
+   oszczędnościowe**: seria (np. `EDO0334`), dzień zakupu i liczba sztuk. Wycena pochodzi z tabel
+   odsetkowych MF; wykup wprowadź jako zwykłą sprzedaż.
+9. Na co dzień korzystaj z **Pulpitu**; szczegółowe TWR, XIRR, benchmarki i drawdown są
    zebrane w sekcji **Raporty i analiza**.
 
 ## Architektura
@@ -287,10 +305,12 @@ portfolio-tracker/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py        # FastAPI: wszystkie endpointy + serwowanie frontendu, lifespan crona
-│   │   ├── db.py          # SQLite: połączenie, schemat (CREATE TABLE IF NOT EXISTS), sesje
+│   │   ├── db.py          # SQLite: połączenie, schemat, sesje; read_session(konto) zawęża odczyty do konta
 │   │   ├── importer.py    # parsing CSV/PDF, wzbogacanie metadanych i dedup po import_hash
 │   │   ├── instruments.py # instrumenty, seed ISIN→ticker i trwałe aliasy brokera z UI
 │   │   ├── prices.py      # dispatcher Yahoo/EODHD/Alpha + import CSV, ochrona ręcznych danych i cache
+│   │   ├── bonds.py       # obligacje detaliczne: tabele odsetkowe MF (PDF) → lokalny cache → dzienna wartość
+│   │   ├── accounts.py    # konta (IKE, zwykłe…): CRUD i szacunek 19% podatku od zysków
 │   │   ├── fx.py          # klient NBP + cache fx_rates, lookback na weekendy/święta
 │   │   ├── cpi.py         # klient Eurostat HICP + cache cpi_index (inflacja pod benchmark)
 │   │   ├── portfolio.py   # agregacja pozycji (średni koszt), wycena, P/L (zreal. + niezreal.)
@@ -320,19 +340,21 @@ portfolio-tracker/
 
 ## Model danych
 
-SQLite, 8 tabel (schemat w `backend/app/db.py`):
+SQLite, 11 tabel (schemat w `backend/app/db.py`):
 
 | Tabela | Klucz | Zawartość |
 |---|---|---|
 | `instruments` | `isin` | nazwa, symbol providera w `ticker`, `currency`, `source` (`yfinance`/`eodhd`/`alphavantage`), `category`, `needs_config` |
 | `instrument_provider_mappings` | `(isin, source)` | osobny `ticker` i `currency` dla każdego providera; aktywny wybór jest synchronizowany do `instruments` |
 | `broker_instrument_aliases` | (`broker`,`symbol`,`exchange`) | trwałe, tworzone przez użytkownika mapowanie symbolu z raportu bez ISIN-u do `instruments.isin` |
+| `accounts` | `id` | konto inwestycyjne: `name`, `taxed` (1 = szacujemy 19% podatku od zysków); konto 1 („IKE”) istnieje zawsze |
 | `target_allocation` | `category` | docelowy udział grupy (`weight_pct`) |
-| `transactions` | `id` | dane handlu w PLN oraz opcjonalne metadane PDF: `native_price`, `native_currency`, `fx_rate`, `settlement_date`, `market`, `broker_order_id`, `source_format`; `import_hash` jest unikalny |
+| `transactions` | `id` | dane handlu w PLN oraz opcjonalne metadane PDF: `native_price`, `native_currency`, `fx_rate`, `settlement_date`, `market`, `broker_order_id`, `source_format`; `import_hash` jest unikalny; `account_id` wskazuje konto |
 | `prices` | (`isin`,`date`) | cena dzienna w walucie natywnej (cache) |
 | `fx_rates` | (`date`,`currency`) | kurs do PLN z NBP (cache) |
 | `cpi_index` | `month` | miesięczny indeks inflacji HICP (Eurostat, baza 2015=100) — cache pod benchmark „inflacja + X%" |
-| `cash_flows` | `id` | `ts`, `kind` (deposit/withdrawal/buy/sell), `amount_pln` (znak = wpływ na saldo) |
+| `bond_interest` | (`series`,`date`) | lokalna kopia tabel odsetkowych MF: narosłe odsetki w zł na 1 obligację |
+| `cash_flows` | `id` | `ts`, `kind` (deposit/withdrawal/buy/sell), `amount_pln` (znak = wpływ na saldo), `account_id` |
 
 Pozycje nie są materializowane — liczone w locie z `transactions` (chronologicznie, średni koszt).
 
@@ -379,6 +401,9 @@ Pozycje nie są materializowane — liczone w locie z `transactions` (chronologi
 | Metoda | Ścieżka | Opis |
 |---|---|---|
 | `POST` | `/api/import` | import CSV lub potwierdzenia PDF mBanku (multipart `file`, auto-detekcja) |
+| `GET`/`POST`/`PUT` | `/api/accounts[/{id}]` | konta inwestycyjne (`name`, `taxed`); endpointy odczytu przyjmują `?account={id}` (brak = cały portfel), zapisy pole `account_id` |
+| `POST` | `/api/bonds` | zakup detalicznych obligacji skarbowych (`series`, `purchase_date`, `quantity`, opcjonalnie `price_pln`) — instrument + transakcja + wycena z tabel MF |
+| `POST` | `/api/bonds/tables` | ręczne wgranie tabeli odsetkowej MF (multipart `file`, PDF) |
 | `POST` | `/api/prices/import` | import dziennych cen waloru z CSV (multipart `isin` + `file` + opcjonalnie `currency`, format stooq) — fallback dla providerów; waluta wymagana do wyceny |
 | `GET` | `/api/providers/search?source=…&query=…` | wyszukiwanie symboli EODHD/Alpha Vantage; klucz pozostaje w backendzie |
 | `GET` | `/api/portfolio?refresh=false` | pozycje + sumy (wartość, P/L zreal./niezreal., gotówka, XIRR, TWR, zwroty w okresach) |
@@ -507,7 +532,8 @@ cd frontend && node --test src/format.test.mjs   # czyste helpery UI, bez dodatk
 Testy są deterministyczne i nie wymagają sieci (ceny/kursy wstrzykiwane ręcznie, import na
 `sample_hisPW.csv`). Pokrywają m.in.: parsing i idempotencję importu, edycję transakcji,
 średni koszt, zrealizowany zysk, księgę gotówki, analitykę, kontrolę jakości danych,
-planowanie nowej wpłaty, XIRR oraz tworzenie, walidację i odtwarzanie backupu.
+planowanie nowej wpłaty, XIRR, tworzenie, walidację i odtwarzanie backupu, parser tabel
+odsetkowych i wycenę obligacji oraz widoki kont i szacunek podatku.
 
 ## Jak rozbudować
 

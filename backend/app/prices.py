@@ -23,7 +23,9 @@ from urllib.parse import quote
 
 import httpx
 
-SUPPORTED_SOURCES = {"yfinance", "eodhd", "alphavantage", "csv"}
+from . import bonds
+
+SUPPORTED_SOURCES = {"yfinance", "eodhd", "alphavantage", "csv", bonds.SOURCE}
 PROVIDER_KEY_ENV = {
     "eodhd": "EODHD_API_KEY",
     "alphavantage": "ALPHA_VANTAGE_API_KEY",
@@ -101,7 +103,7 @@ def provider_configured(source: str | None) -> bool:
     """Czy provider może działać w bieżącym środowisku."""
     source = (source or "").strip().lower()
     env_name = PROVIDER_KEY_ENV.get(source)
-    return bool(os.environ.get(env_name, "").strip()) if env_name else source in {"yfinance", "csv"}
+    return bool(os.environ.get(env_name, "").strip()) if env_name else source in {"yfinance", "csv", bonds.SOURCE}
 
 
 def _cache_put(conn: sqlite3.Connection, isin: str, day: str, price: float, source: str) -> None:
@@ -314,11 +316,25 @@ def _sync_currency(conn: sqlite3.Connection, isin: str, currency: str | None) ->
         conn.execute("UPDATE instruments SET currency = ? WHERE isin = ?", (currency, isin))
 
 
+def _bond_fill(conn: sqlite3.Connection, instrument: dict, start: str, end: str) -> int:
+    """Obligacje detaliczne: cena jest wyliczana z lokalnych tabel odsetkowych MF, nie pobierana."""
+    bonds.try_sync(conn, instrument["ticker"])
+    points = bonds.price_points(conn, instrument, start, end)
+    for day, price in points:
+        _cache_put(conn, instrument["isin"], day, price, bonds.SOURCE)
+    conn.commit()
+    return len(points)
+
+
 def fetch_latest(conn: sqlite3.Connection, instrument: dict) -> tuple[str, float] | None:
     """Pobiera ostatnią cenę (waluta natywna, znormalizowana), cache'uje i synchronizuje walutę."""
     ticker, source = instrument.get("ticker"), instrument.get("source")
     if not ticker or not source:
         return None
+    if source == bonds.SOURCE:
+        cached = latest_cached_price(conn, instrument["isin"])
+        _bond_fill(conn, instrument, cached[0] if cached else "", datetime.now().date().isoformat())
+        return latest_cached_price(conn, instrument["isin"])
     if source == "yfinance":
         result = _yf_last(ticker)
     elif source == "eodhd":
@@ -341,6 +357,8 @@ def fetch_history(conn: sqlite3.Connection, instrument: dict, start: str, end: s
     ticker, source = instrument.get("ticker"), instrument.get("source")
     if not ticker or not source:
         return 0
+    if source == bonds.SOURCE:
+        return _bond_fill(conn, instrument, start, end)
     if source == "yfinance":
         series, ccy = _yf_hist(ticker, start, end)
     elif source == "eodhd":

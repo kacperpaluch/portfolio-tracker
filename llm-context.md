@@ -84,7 +84,7 @@ chunka, dzięki czemu kod własny aplikacji pozostaje mały.
 ```
 backend/app/
   main.py        # FastAPI: WSZYSTKIE endpointy, opcjonalny scheduler w lifespan, serwowanie frontend/dist
-  db.py          # połączenie SQLite, SCHEMA (CREATE IF NOT EXISTS), _migrate(), db_session()
+  db.py          # połączenie SQLite, SCHEMA (CREATE IF NOT EXISTS), _migrate(), db_session() (zapisy), read_session(account)/scope_reads (odczyty per konto)
   importer.py    # parse_csv/parse_import, PDF mBank, import/add/update/delete + spójność cash flow
   analytics.py   # atrybucja wyniku: instrumenty, kategorie, wpłaty i aktywność
   reports.py     # raport zakresu: TWR/XIRR/PLN, benchmarki, porównanie, atrybucja, przepływy, heatmapa i CSV
@@ -92,6 +92,8 @@ backend/app/
   instruments.py # instrument CRUD bez hardcoded mapowań; trwałe aliasy brokera zapisywane z UI
   prices.py      # dispatcher Yahoo/EODHD/Alpha: fetch_latest/history + chroniony cache; import cen CSV
   fx.py          # NBP: get_rate (lookback), backfill_range, cache w fx_rates
+  accounts.py    # konta (IKE/zwykłe): CRUD, require(), szacunek podatku 19% (apply_tax/estimate_tax)
+  bonds.py       # detaliczne obligacje skarbowe: parser tabel odsetkowych MF (PDF), sync z obligacjeskarbowe.pl, cache `bond_interest`, price_points (przesunięcie o dzień zakupu)
   cpi.py         # Eurostat HICP: refresh_cpi (cache cpi_index), load_points, index_at (interpolacja) — pod benchmark inflacyjny
   cash.py        # księga gotówki: balance/has_external, add/delete flow, record/remove_trade_cash
   portfolio.py   # compute_positions (średni koszt + zrealizowany), value_positions (sumy)
@@ -107,6 +109,7 @@ frontend/src/
                  #   InstrumentDetail, PositionsTable, TransactionForm, TransactionsTable, CashPanel,
                  #   InstrumentsPanel, AllocationPanel (+ AllocationDonut), DataPanel,
                  #   DailyChangesTable, ReportsPanel, ReportPerformanceChart, MonthlyReturnsHeatmap,
+                 #   BondForm (zakup obligacji + upload tabeli PDF), AccountSelect, AccountsPanel,
                  #   BrokerMappingModal (konfiguracja nierozpoznanych symboli i retry importu),
                  #   HeroSparkline (przebieg wartości w tle karty na Pulpicie)
   format.js      # wspólne helpery: fmtPln, fmtPct, cls (0 => neutralne), fmtDate, daysSince
@@ -120,7 +123,7 @@ frontend/src/
 
 `App.jsx` utrzymuje jeden wspólny snapshot danych (`portfolio`, `history`, `instruments`,
 `transactions`, `cash`, `allocation`, `dailyChanges`, `drawdown`, `backups`, `quality`,
-`analytics`). `loadAll()` pobiera jedenaście endpointów równolegle, a `run()` wykonuje mutację, przeładowuje snapshot
+`analytics`, `accounts`). Stan `account` (0 = cały portfel) ustawia `setAccountScope` w `api.js`. `loadAll()` pobiera dwanaście endpointów równolegle, a `run()` wykonuje mutację, przeładowuje snapshot
 i publikuje toast. Parametry benchmarków są odświeżane osobno z debounce 350 ms.
 
 | `tab` | Ekran | Główne komponenty / odpowiedzialność |
@@ -153,8 +156,10 @@ udostępniania. Inicjały w nagłówku prowadzą wyłącznie do lokalnych ustawi
 ### Zależności między modułami (kierunek importów)
 
 ```
-main.py → importer, instruments, prices, fx, cpi, cash, portfolio, history, allocation, analytics, data_quality, scheduler
-importer.py → cash, instruments
+main.py → accounts, bonds, importer, instruments, prices, fx, cpi, cash, portfolio, history, allocation, analytics, data_quality, scheduler
+importer.py → cash, instruments, bonds, prices
+accounts.py → portfolio, db
+prices.py → bonds
 portfolio.py → cash, fx, prices
 history.py → cpi, fx, prices, returns
 allocation.py → cash, portfolio
@@ -163,7 +168,7 @@ reports.py → history, returns, data_quality
 data_quality.py → portfolio
 summary.py → portfolio, history, allocation
 backup.py → db
-cash.py, fx.py, cpi.py, prices.py, instruments.py, returns.py, db.py → (liście, bez zależności wewn.)
+cash.py, fx.py, cpi.py, bonds.py, returns.py, db.py → (liście, bez zależności wewn.); instruments.py → prices
 scheduler.py → cash, instruments, prices, fx, db, backup
 ```
 
@@ -179,6 +184,8 @@ scheduler.py → cash, instruments, prices, fx, db, backup
 | `transactions` | `id` | ts, isin→, type, quantity, price_pln, value_pln, commission_pln; metadane PDF: native_price/currency, fx_rate, settlement_date, market, broker_order_id, source_format; note, **import_hash UNIQUE** | handel |
 | `prices` | (isin,date) | price (waluta natywna), source | cache wycen |
 | `fx_rates` | (date,currency) | rate_to_pln | cache kursów NBP |
+| `accounts` | `id` | name UNIQUE, taxed | konta; id 1 („IKE”) istnieje zawsze i dostaje dane sprzed kont. `transactions.account_id` i `cash_flows.account_id` (ostatnia kolumna, DEFAULT 1) |
+| `bond_interest` | (series,date) | interest (zł na 1 szt., zakup w 1. dniu sprzedaży) | lokalna kopia tabel odsetkowych MF; `MIN(date)` = początek sprzedaży serii |
 | `cpi_index` | `month` | idx (HICP, baza 2015=100) | cache inflacji (miesięczny, `month`='YYYY-MM-01') |
 | `cash_flows` | `id` | ts, kind(deposit/withdrawal/buy/sell), amount_pln, note, **import_hash UNIQUE** | księga gotówki |
 | `target_allocation` | `category` | weight_pct | model docelowy |
@@ -211,6 +218,9 @@ odczyt
 |---|---|---|
 | POST | `/api/import` | import CSV/PDF (multipart `file`): auto-detekcja GPW „historia PW”, eMAKLER „Transakcje bieżące” i potwierdzenia wykonania zleceń mBanku |
 | POST | `/api/broker-instrument-mappings` | atomowy zapis listy aliasów broker/symbol/giełda → ISIN oraz konfiguracji instrumentów; frontend ponawia potem zachowany import |
+| GET/POST/PUT | `/api/accounts[/{id}]` | konta (`accounts.list_accounts/save`). Odczyty (`portfolio`, `summary`, `history`, `daily-changes`, `drawdown`, `analytics`, `reports[.csv]`, `data-quality`, `allocation`, `allocation/plan`, `transactions`, `cash`, `instruments/{isin}/history`) biorą `?account=`; zapisy (`import`, `transactions`, `bonds`, `cash`) pole `account_id` |
+| POST | `/api/bonds` | zakup obligacji detalicznych (`importer.add_bond_purchase`): instrument `SERIA-YYYYMMDD`, BUY, wpłata (gdy księga gotówki aktywna), wycena |
+| POST | `/api/bonds/tables` | ręczne wgranie tabeli odsetkowej MF z PDF (`bonds.parse_table_pdf` + `store_table`) |
 | POST | `/api/prices/import` | import dziennych cen waloru z CSV (multipart `isin`+`file`+opcjonalnie `currency`, format stooq) → cache `prices` (`prices.import_prices`); waluta wymagana do wyceny |
 | GET/POST | `/api/transactions` | lista / ręczne dodanie transakcji |
 | PUT | `/api/transactions/{id}` | edycja transakcji + atomowe odtworzenie cash flow |
@@ -263,7 +273,7 @@ Swagger UI `/docs` · ReDoc `/redoc` · OpenAPI JSON `/openapi.json` (do importu
 - **NBP lookback** — brak kursu w weekend/święto → ostatni dostępny ≤ data.
 - **Gotówka „bramkowana"** — bez żadnej wpłaty saldo = 0 (nie pokazujemy ujemnego z samych zakupów); aktywuje się po pierwszej wpłacie (`cash.has_external`).
 - **XIRR** — money-weighted; przepływy = wpłaty/wypłaty (lub fallback transakcje) + wartość końcowa.
-- **TWR** — time-weighted; łańcuch dziennych zwrotów z neutralizacją przepływów (konwencja „początek dnia").
+- **TWR** — time-weighted; łańcuch dziennych zwrotów z neutralizacją przepływów (konwencja „początek dnia"). `portfolio_twr` bierze wkłady z `_contributions` (jak `portfolio_returns`): bez wpłat zewnętrznych wkładem są kupna — wcześniej dokupienie przy nieaktywnej księdze gotówki liczyło się jako zysk.
 - **Zwroty w okresach** (`history.portfolio_returns`) — okna 1M/3M/YTD/1R/od początku liczone z jednej dziennej serii. Per okno: TWR skumulowany (nie-zannualizowany, headline dla krótkich okien), TWR roczny, XIRR roczny. Wkłady kapitału (z `_contributions`) spójne z serią → neutralizacja TWR i baza XIRR nie liczą dopłat jako zwrotu. Zwracane w `totals.returns` z `/api/portfolio`.
 - **Benchmarki** (`portfolio_history`) — DWA, oba money-weighted (każda wpłata oprocentowana od swojej daty, nie płaska linia): (1) **stała stopa** `amount × (1+benchmark_rate)^lata`; (2) **inflacja + X%** `amount × indeks_HICP(d)/indeks_HICP(wpłata) × (1+cpi_spread)^lata`. Indeks HICP z cache `cpi_index` (`cpi.load_points`), interpolacja liniowa między miesiącami + forward-fill końca (`cpi.index_at`). Bazowy indeks per wkład liczony raz przed pętlą. Gdy cache CPI pusty (`has_cpi=False`) → pola `benchmark_cpi_*` = `None` (front nie rysuje linii). Pola wyjściowe: `benchmark_pln`/`benchmark_pct` (stała), `benchmark_cpi_pln`/`benchmark_cpi_pct` (inflacja). Front: `HistoryChart` ma osobne przełączniki widoczności obu benchmarków, działa w trybie PLN i %.
 - **Drawdown** (`history.portfolio_drawdown` + `returns.twr_index`) — obsunięcie liczone na **indeksie wzrostu TWR** (growth-of-1, ta sama neutralizacja przepływów co `twr_detail`), NIE na surowej wartości PLN: wpłaty IKE nie maskują spadków, wypłaty nie udają obsunięć. `drawdown[d] = indeks/dotychczasowy_szczyt − 1` (≤ 0). Zwraca dzienną krzywą „pod wodą" (`series`), `max_drawdown` z datami szczytu/dołka (`..._from`/`..._to`), `recovery_date` (pierwszy dzień powrotu do poziomu szczytu sprzed obsunięcia) oraz `current_drawdown`/`in_drawdown`. Front: `DrawdownChart` (czerwona krzywa pod osią 0 + pasek podsumowania) na Pulpicie pod wykresem wartości.
@@ -273,6 +283,8 @@ Swagger UI `/docs` · ReDoc `/redoc` · OpenAPI JSON `/openapi.json` (do importu
 - **Import cen z CSV** (`prices.parse_price_csv` + `prices.import_prices`) — ratunek, gdy provider nie oddaje poprawnej historii dla waloru (jedyny działający kanał dla niszowych papierów GPW). Parser czysty: rozpoznaje kolumny po nagłówku (PL/EN: `Data`/`Date`, `Zamkniecie`/`Close`), wykrywa separator (`,`/`;`/tab), akceptuje datę ISO/`YYYYMMDD`/`DD.MM.YYYY` i przecinek dziesiętny. Zapis przez `prices._cache_put` z `source='csv'`. **Waluta wymagana do wyceny** (CSV jej nie niesie; bez niej kurs FX → wartość 0): `import_prices(currency=...)` ustawia ją na instrumencie, jeśli podana; gdy brak i instrument też jej nie ma → `ValueError` (NIE zgadujemy PLN — stooq notuje też w USD/EUR/GBP). W UI: przy braku waluty frontend pyta (podpowiedź PLN). Punkty CSV są chronione przed wszystkimi automatycznymi providerami; re-import nadal nadpisuje, gdy chcesz. Endpoint `POST /api/prices/import` (`isin`+`file`+opcjonalnie `currency`), w UI przycisk „Importuj ceny (CSV)" w oknie waloru.
 - **Świeżość cen (UI)** — `value_positions` zwraca `price_date` per pozycja; front (`PositionsTable`/`PriceAge`, `format.daysSince`) pokazuje „dziś/wczoraj/N dni temu", a przy `> 4` dniach kalendarzowych (poza weekend+święto) ⚠️ — sygnał, że provider milczy i czas na import CSV. Czysto frontendowe, backend już miał `price_date`.
 - **Refresh dociąga luki, tylko trzymane** (`history.refresh_latest`) — odświeżenie pobiera bieżący punkt (`fetch_latest`/`get_rate`) ORAZ uzupełnia brakujący zakres od ostatniego dnia w cache do dziś (`fetch_history`/`backfill_range`). Okno zawsze od ostatniego cache (instrument bez cache → od pierwszej transakcji), NIGDY całość co odświeżenie — świadomie, ze względu na limity API. **Odpytuje tylko AKTUALNIE TRZYMANE walory** (`held` = `SUM(BUY−SELL) > 0` liczone z `transactions`, NIE ręczna flaga `active`, której nikt nie zmienia po sprzedaży) — sprzedany do zera ETF nie jest pobierany ani nie zaśmieca `prices` punktami pod bieżącą datą; jego historia z okresu posiadania zostaje w cache. FX gated tym samym (waluty tylko trzymanych). Pełną rekonstrukcję wszystkich walorów robi ręczny `backfill_all`. Współdzielone przez `/api/refresh` i cron.
+- **Konta** (`accounts.py`, `db.scope_reads`) — konto to kolumna `account_id` na transakcji i przepływie gotówki. **Moduły analityczne nie wiedzą o kontach**: endpoint odczytu otwiera `read_session(account)`, a ta tworzy widoki TEMP `transactions`/`cash_flows`, które przesłaniają tabele (SQLite szuka nazw najpierw w schemacie temp) — żadna funkcja nie może pominąć filtra. Konsekwencje: (1) **zapisy tylko przez `db_session()`** (do widoku nie da się pisać); (2) nowy kod czytający te tabele NIE może używać prefiksu `main.`; (3) `account_id` musi być ostatnią kolumną `cash_flows` (UNION po `SELECT *`). Widok łączny (`account=None`): konto bez wpłat nie prowadzi księgi gotówki, więc dostaje syntetyczne wpłaty = kupna / wypłaty = sprzedaże (id ujemne, `cash.list_external` je pomija) — saldo zero, wkład kapitału = koszt zakupów, suma kont = całość. Syntetyki powstają tylko gdy choć jedno konto prowadzi księgę (inaczej zachowanie jak przed kontami). W widoku łącznym pozycje tego samego ISIN z różnych kont zlewają się (średni koszt). **Podatek** (`estimate_tax`): 19% × max(0, P/L) per pozycja na kontach `taxed`, liczony per konto na własnym widoku; trafia do `totals.tax_pln` / `value_after_tax_pln` w `/api/portfolio`. TWR/XIRR/historia zostają brutto. Frontend: `api.js` trzyma `accountScope` (stan modułu) i dokleja `?account=` do odczytów; wybór żyje w URL (`?account=`), formularze dostają `key={account}`.
+- **Obligacje detaliczne** (`bonds.py`, `source='obligacje'`) — brak notowań, więc cena jest WYLICZANA: `100 + odsetki z tabeli MF`. Instrument = seria + dzień zakupu (`EDO0334-20240315`, ticker = seria, PLN, kategoria „Obligacje”), bo okresy odsetkowe biegną od dnia zakupu, a średni koszt per ISIN zlałby dwa zakupy. Tabela MF zakłada zakup w 1. dniu sprzedaży → `price_points` przesuwa daty o `dzień_zakupu − MIN(date)`. Dispatcher `prices.fetch_latest/fetch_history` woła `_bond_fill`, więc refresh/backfill/historia/TWR działają bez zmian. **Sieć tylko gdy lokalne dane kończą się za < 14 dni** (`sync_series`): strona `/tabela-odsetkowa/` zawiera listę serii i okresów (`table_id`), podstrona okresu link do PDF. Awaria/zmiana strony nie wywala refreshu (`try_sync`) — wycena stoi, `data_quality` zgłasza `stale_price`, zapasem jest upload PDF. **Do `prices` nigdy nie trafiają przyszłe daty** (tabela zna rok naprzód, a `latest_cached_price` bierze najnowszy punkt). Tabele sprzed 2023 mają nieczytelne nagłówki miesięcy — kolumny odtwarzane z początku okresu z listy MF. Zakup dostaje parę wpłata+kupno tylko gdy księga gotówki jest aktywna (`cash.has_external`), żeby jej nie włączyć przypadkiem. Wartość brutto: bez Belki i opłaty za wcześniejszy wykup. Tylko typy kapitalizujące (EDO/TOS/ROS/ROD); COI/ROR/DOR wymagają przepływu `interest`.
 - **Ochrona danych z CSV** (`prices._cache_put`) — ręczny import (`source='csv'`) jest „święty": każdy automatyczny provider używa UPSERT `ON CONFLICT(isin,date) DO UPDATE … WHERE prices.source IS NOT 'csv'` — wypełnia brakujące dni i aktualizuje punkty automatyczne, ale NIE nadpisuje CSV. Re-import CSV używa `INSERT OR REPLACE` i zawsze wygrywa.
 - **Ceny NaN są pomijane** (`prices._cache_put`) — yfinance zwraca wiersz bieżącego dnia z `Close=NaN`, zanim giełda poda kurs; `float(NaN)` przechodzi każdy guard `is None`, a `sqlite3` binduje NaN jako NULL → `IntegrityError: NOT NULL constraint failed: prices.price` wywalało CAŁY `POST /api/refresh` na 500. Guard `math.isfinite` siedzi w `_cache_put`, więc chroni wszystkie ścieżki zapisu (`fetch_latest`, `fetch_history`, dowolny nowy provider); dodatkowo `_yf_last` robi `dropna(subset=["Close"])`, żeby wziąć ostatni dzień z realną ceną zamiast go zgubić.
 
@@ -355,6 +367,7 @@ aktywny tylko gdy katalog istnieje). Dockerfile robi to w etapie multi-stage.
 | Nowe źródło cen | `prices.py` — funkcje `_xxx_last/_xxx_hist` + nowa wartość `source` |
 | Kolejny benchmark (np. realny indeks ETF) | skopiuj wzorzec benchmarku inflacyjnego: klient+cache jak `cpi.py`, nowe pole w `portfolio_history` (mnożnik `seria(d)/seria(wpłata)`), param w `/api/history`, linia + przełącznik w `HistoryChart` |
 | FIFO / realizowany P/L per lot | `portfolio.compute_positions` — kolejka lotów zamiast średniego kosztu |
+| Obligacje wypłacające odsetki (COI/ROR/DOR) | nowy `kind='interest'` w `cash_flows` (kwota = ostatnia wartość tabeli okresu) + typ w `bonds.SUPPORTED_TYPES` |
 | Dywidendy / podatki | nowe `kind` w `cash_flows` + obsługa w imporcie i `cash.balance`; uwzględnij w XIRR |
 | Nowe metryki/raporty | endpoint w `main.py` + funkcja w module backendu + komponent w `frontend/src/components/` i sekcja odpowiedniego widoku w `App.jsx` |
 | Nowy główny ekran UI | dodaj identyfikator do `NAV` i `PAGE_META`, element do `pages`, zachowaj `?tab=` i responsywną dolną nawigację |
