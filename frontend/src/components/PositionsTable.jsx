@@ -16,7 +16,7 @@ function PriceMeta({ date, fxRate }) {
   );
 }
 
-export default function PositionsTable({ positions, allPositions = positions, totals, onOpen, compact = false }) {
+export default function PositionsTable({ positions, allPositions = positions, totals, onOpen, onConfigure, compact = false }) {
   if (!positions || positions.length === 0)
     return <div className="spinner">Brak pozycji. Zaimportuj plik CSV.</div>;
   const structureTotal = portfolioStructureTotal(allPositions, totals?.cash_pln);
@@ -43,7 +43,7 @@ export default function PositionsTable({ positions, allPositions = positions, to
           <tr key={p.isin}>
             <td>
               <button className="instrument-link" onClick={() => onOpen?.(p.isin)}>{p.name}</button>
-              {" "}{p.needs_config && <span className="badge">brak tickera</span>}
+              {" "}{p.needs_config && <button className="badge" onClick={onConfigure} title="Przejdź do ustawień instrumentów">uzupełnij ticker</button>}
               <div className="tag">{p.ticker || p.isin} · {p.currency || "?"}</div>
             </td>
             <td>{p.quantity}</td>

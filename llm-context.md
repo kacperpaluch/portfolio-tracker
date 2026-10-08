@@ -129,11 +129,13 @@ i publikuje toast. Parametry benchmarków są odświeżane osobno z debounce 350
 | `tab` | Ekran | Główne komponenty / odpowiedzialność |
 |---|---|---|
 | `overview` | Pulpit | hero wartości z `HeroSparkline` w tle, TWR/XIRR/gotówka, kompaktowy `HistoryChart`, przełącznik `AllocationDonut` / `HoldingsStructureChart`, największe pozycje (wszędzie sortowane malejąco po wartości) |
-| `portfolio` | Portfel | KPI otwartych pozycji, `PositionsTable`, `CashPanel` |
-| `activity` | Aktywność | `TransactionForm`, filtrowanie/edycja w `TransactionsTable`, `DailyChangesTable` |
+| `portfolio` | Portfel | KPI otwartych pozycji, `PositionsTable`, `CashPanel` (saldo i historia; formularz jest w oknie „Dodaj") |
+| `activity` | Aktywność | filtrowanie/edycja w `TransactionsTable` |
 | `allocation` | Alokacja | `AllocationPanel`, donut oraz `RebalancePlanner` dla nowej wpłaty bez sprzedaży |
-| `analysis` | Raporty i analiza | wewnętrzne widoki: `ReportsPanel` (okres/porównanie/CSV/PDF), wynik i atrybucja (`AnalyticsBreakdown`, `ReturnsStrip`, `HistoryChart`) oraz ryzyko (`DrawdownChart`) |
-| `settings` | Dane i ustawienia | `DataQualityPanel` (problemy tego samego `code` zwinięte w `<details>`), synchronizacja, `InstrumentsPanel`, import, `DataPanel` |
+| `analysis` | Raporty i analiza | wewnętrzne widoki: `ReportsPanel` (okres/porównanie/CSV/PDF), wynik i atrybucja (`AnalyticsBreakdown`, `ReturnsStrip`, `HistoryChart`) ryzyko (`DrawdownChart`) oraz zmiany dzienne (`DailyChangesTable`) |
+| `settings` | Dane i ustawienia | `DataQualityPanel` zawsze na górze (problemy tego samego `code` zwinięte w `<details>`, mapa `FIX` daje link do miejsca naprawy), pod nim zakładki `settingsView`: `InstrumentsPanel`, `AccountsPanel`, dane i backup (synchronizacja + `DataPanel`) |
+
+Dodawanie jest w jednym miejscu: przycisk „+ Dodaj" w nagłówku otwiera okno (stan `adding` w `App.jsx`) z zakładkami `TransactionForm`, `BondForm`, `CashForm` (eksport z `CashPanel.jsx`) i importem pliku. Pola formularzy mają etykiety (`label.field`), a błędy walidacji trafiają do `.form-error`. `navigate(page, sub)` z `sub` przełącza pod-zakładkę ustawień i przewija do niej.
 
 Wspólne elementy wizualne (`SectionHeader`, `Metric`, `StatusDot`) są lokalnymi komponentami
 `App.jsx`. Desktop używa stałego sidebara; poniżej 820 px sidebar zastępuje dolna nawigacja.

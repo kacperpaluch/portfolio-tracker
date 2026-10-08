@@ -10,6 +10,26 @@ function groupIssues(issues) {
   return [...byCode.values()];
 }
 
+// Dokąd prowadzi naprawa problemu danego typu: [strona, pod-zakładka ustawień, etykieta].
+const FIX = {
+  instrument_config: ["settings", "instruments", "Otwórz instrumenty"],
+  missing_category: ["settings", "instruments", "Otwórz instrumenty"],
+  missing_price: ["settings", "data", "Otwórz synchronizację"],
+  stale_price: ["settings", "data", "Otwórz synchronizację"],
+  missing_fx: ["settings", "data", "Otwórz synchronizację"],
+  stale_fx: ["settings", "data", "Otwórz synchronizację"],
+  invalid_transaction: ["activity", null, "Otwórz transakcje"],
+  oversell: ["activity", null, "Otwórz transakcje"],
+  cash_reconciliation: ["portfolio", null, "Otwórz portfel"],
+  allocation_target: ["allocation", null, "Otwórz alokację"],
+};
+
+function FixLink({ code, onGo }) {
+  const fix = FIX[code];
+  if (!fix || !onGo) return null;
+  return <button className="text-button quality-fix" onClick={() => onGo(fix[0], fix[1])}>{fix[2]} →</button>;
+}
+
 function IssueBody({ issue }) {
   return (
     <>
@@ -19,7 +39,7 @@ function IssueBody({ issue }) {
   );
 }
 
-export default function DataQualityPanel({ quality, busy, onRefresh }) {
+export default function DataQualityPanel({ quality, busy, onRefresh, onGo }) {
   if (!quality) return <div className="spinner">Trwa sprawdzanie jakości danych…</div>;
   const { status, summary, stats, issues } = quality;
   const label = status === "good" ? "Dane są spójne" : status === "error" ? "Wymagają uwagi" : "Drobne braki";
@@ -48,6 +68,7 @@ export default function DataQualityPanel({ quality, busy, onRefresh }) {
               <div>
                 <strong>{group.title}</strong>
                 <IssueBody issue={group} />
+                <FixLink code={group.code} onGo={onGo} />
               </div>
             </div>
           ) : (
@@ -63,6 +84,7 @@ export default function DataQualityPanel({ quality, busy, onRefresh }) {
                     <IssueBody issue={issue} />
                   </div>
                 ))}
+                <FixLink code={group.code} onGo={onGo} />
               </div>
             </details>
           ))}

@@ -9,7 +9,7 @@ import PositionsTable from "./components/PositionsTable.jsx";
 import TransactionForm from "./components/TransactionForm.jsx";
 import BondForm from "./components/BondForm.jsx";
 import TransactionsTable from "./components/TransactionsTable.jsx";
-import CashPanel from "./components/CashPanel.jsx";
+import CashPanel, { CashForm } from "./components/CashPanel.jsx";
 import InstrumentsPanel from "./components/InstrumentsPanel.jsx";
 import AllocationPanel from "./components/AllocationPanel.jsx";
 import AllocationDonut from "./components/AllocationDonut.jsx";
@@ -38,7 +38,7 @@ const NAV = [
 const LEGACY_TABS = {
   dashboard: "overview",
   transactions: "activity",
-  daily: "activity",
+  daily: "analysis",
   cash: "portfolio",
   instruments: "settings",
 };
@@ -46,11 +46,24 @@ const LEGACY_TABS = {
 const PAGE_META = {
   overview: ["Pulpit", "Najważniejsze informacje o Twoim portfelu"],
   portfolio: ["Portfel", "Pozycje, wyniki i niezainwestowana gotówka"],
-  activity: ["Aktywność", "Transakcje i dzienne zmiany wartości"],
+  activity: ["Aktywność", "Historia transakcji"],
   allocation: ["Alokacja", "Kontroluj zgodność portfela z założonym planem"],
   analysis: ["Raporty i analiza", "Wyniki okresowe, benchmarki, atrybucja i ryzyko portfela"],
   settings: ["Dane i ustawienia", "Jakość danych, instrumenty, synchronizacja i kopie zapasowe"],
 };
+
+const ADD_TABS = [
+  ["tx", "Transakcja"],
+  ["bond", "Obligacje"],
+  ["cash", "Wpłata / wypłata"],
+  ["import", "Import z pliku"],
+];
+
+const SETTINGS_TABS = [
+  ["instruments", "Instrumenty"],
+  ["accounts", "Konta"],
+  ["data", "Dane i backup"],
+];
 
 function initialPage() {
   const fromUrl = new URLSearchParams(window.location.search).get("tab");
@@ -88,12 +101,13 @@ function Metric({ label, value, detail, tone, featured = false }) {
   );
 }
 
-function StatusDot({ tone = "good", children }) {
+function StatusDot({ tone = "good", onClick, children }) {
+  const Tag = onClick ? "button" : "span";
   return (
-    <span className={`status-chip ${tone}`}>
+    <Tag className={`status-chip ${tone}`} onClick={onClick}>
       <i aria-hidden="true" />
       {children}
-    </span>
+    </Tag>
   );
 }
 
@@ -127,6 +141,8 @@ export default function App() {
   const [page, setPage] = useState(initialPage);
   const [structureView, setStructureView] = useState("categories");
   const [analysisView, setAnalysisView] = useState("report");
+  const [settingsView, setSettingsView] = useState("instruments");
+  const [adding, setAdding] = useState(null);
   const [benchmarkRate, setBenchmarkRate] = useState(5);
   const [cpiSpread, setCpiSpread] = useState(2);
   const [busy, setBusy] = useState(false);
@@ -193,16 +209,22 @@ export default function App() {
 
   // Otwarty modal ma własny scroll — bez tego tło przewija się pod nim na dotyku.
   useEffect(() => {
-    document.body.style.overflow = detail || pendingImport ? "hidden" : "";
+    document.body.style.overflow = detail || pendingImport || adding ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
-  }, [detail, pendingImport]);
+  }, [detail, pendingImport, adding]);
 
-  const navigate = (next) => {
+  // `sub` to pod-zakładka ustawień — ostrzeżenia prowadzą prosto do miejsca naprawy.
+  const navigate = (next, sub) => {
     setPage(next);
     const url = new URL(window.location.href);
     url.searchParams.set("tab", next);
     window.history.pushState({}, "", url);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (sub) {
+      setSettingsView(sub);
+      window.setTimeout(() => document.getElementById("settings-tabs")?.scrollIntoView({ behavior: "smooth" }), 0);
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   };
 
   const run = async (fn, okMsg) => {
@@ -266,6 +288,7 @@ export default function App() {
     try {
       const result = await api.importTransactions(file, targetImportAccount);
       await loadAll();
+      setAdding(null);
       flash(importSuccessMessage(result));
     } catch (error) {
       if (error.detail?.code === "broker_mapping_required") {
@@ -285,6 +308,7 @@ export default function App() {
       await api.saveBrokerInstrumentMappings(mappings);
       const result = await api.importTransactions(pendingImport.file, targetImportAccount);
       setPendingImport(null);
+      setAdding(null);
       await loadAll();
       flash(importSuccessMessage(result));
     } catch (error) {
@@ -339,7 +363,7 @@ export default function App() {
           <HeroSparkline data={history} />
           <div className="hero-topline">
             <span>Łączna wartość</span>
-            <StatusDot tone={staleCount ? "warn" : "good"}>
+            <StatusDot tone={staleCount ? "warn" : "good"} onClick={staleCount ? () => navigate("settings", "data") : undefined}>
               {staleCount ? `${staleCount} nieaktualne wyceny` : `Aktualne ${latestPriceDate || ""}`}
             </StatusDot>
           </div>
@@ -362,7 +386,7 @@ export default function App() {
             )}
           </div>
           <div className="hero-actions">
-            <button className="primary" onClick={() => navigate("activity")}>Dodaj transakcję</button>
+            <button className="primary" onClick={() => setAdding("tx")}>Dodaj transakcję</button>
             <button className="secondary" onClick={() => run(() => api.refresh(), "Wyceny zostały odświeżone.").catch(() => {})} disabled={busy}>
               {busy ? "Odświeżam…" : "Odśwież wyceny"}
             </button>
@@ -443,6 +467,7 @@ export default function App() {
           allPositions={positions}
           totals={totals}
           onOpen={openDetail}
+          onConfigure={() => navigate("settings", "instruments")}
           compact
         />
       </section>
@@ -465,16 +490,18 @@ export default function App() {
       </div>
       <section className="surface">
         <SectionHeader eyebrow="Pozycje" title="Twój portfel" description="Kliknij instrument, aby zobaczyć historię i źródła wyniku." />
-        <PositionsTable positions={positions} totals={totals} onOpen={openDetail} />
+        <PositionsTable positions={positions} totals={totals} onOpen={openDetail} onConfigure={() => navigate("settings", "instruments")} />
       </section>
       <section className="surface">
-        <SectionHeader eyebrow="Płynność" title="Konto gotówkowe" description="Wpłaty, wypłaty i środki oczekujące na inwestycję." />
+        <SectionHeader
+          eyebrow="Płynność"
+          title="Konto gotówkowe"
+          description="Wpłaty, wypłaty i środki oczekujące na inwestycję."
+          action={<button className="text-button" onClick={() => setAdding("cash")}>Dodaj wpłatę lub wypłatę</button>}
+        />
         <CashPanel
-          key={account}
           cash={cash}
           accounts={accounts}
-          defaultAccount={defaultAccount}
-          onAdd={(body) => run(() => api.addCash(body), "Operacja gotówkowa została dodana.").catch(() => {})}
           onDelete={(id) => {
             if (window.confirm("Usunąć tę operację gotówkową?")) {
               run(() => api.deleteCash(id), "Operacja została usunięta.").catch(() => {});
@@ -487,36 +514,6 @@ export default function App() {
 
   const Activity = (
     <>
-      <section className="surface">
-        <SectionHeader eyebrow="Nowa operacja" title="Dodaj transakcję" description="Wprowadź zakup lub sprzedaż ręcznie." />
-        <TransactionForm
-          key={account}
-          instruments={instruments}
-          accounts={accounts}
-          defaultAccount={defaultAccount}
-          onAdd={(body) => run(
-            () => api.addTransaction(body),
-            (r) => r.created ? "Transakcja została dodana." : "Taka transakcja już istnieje.",
-          ).catch(() => {})}
-        />
-      </section>
-      <section className="surface">
-        <SectionHeader eyebrow="Obligacje skarbowe" title="Dodaj obligacje oszczędnościowe" description="EDO, TOS, ROS i ROD — wycena z tabel odsetkowych Ministerstwa Finansów. Wykup dodaj jako sprzedaż." />
-        <BondForm
-          key={account}
-          accounts={accounts}
-          defaultAccount={defaultAccount}
-          busy={busy}
-          onAdd={(body) => run(
-            () => api.addBondPurchase(body),
-            (r) => r.created ? "Obligacje zostały dodane." : "Taki zakup już istnieje.",
-          ).catch(() => {})}
-          onImportTable={(file) => run(
-            () => api.importBondTable(file),
-            (r) => `Wczytano tabelę ${r.series}: ${r.first_date} – ${r.last_date}.`,
-          ).catch(() => {})}
-        />
-      </section>
       <section className="surface">
         <SectionHeader
           eyebrow="Historia"
@@ -539,15 +536,6 @@ export default function App() {
             }
           }}
         />
-      </section>
-      <section className="surface">
-        <SectionHeader
-          eyebrow="Dzień po dniu"
-          title="Zmiany wartości"
-          description="Wynik rynkowy bez traktowania zakupu jako zysku."
-          action={<a className="text-button" href="/api/export/daily-changes.csv">Eksportuj dane</a>}
-        />
-        <DailyChangesTable rows={dailyChanges} />
       </section>
     </>
   );
@@ -582,6 +570,7 @@ export default function App() {
         <button role="tab" aria-selected={analysisView === "report"} className={analysisView === "report" ? "active" : ""} onClick={() => setAnalysisView("report")}>Raport okresowy</button>
         <button role="tab" aria-selected={analysisView === "performance"} className={analysisView === "performance" ? "active" : ""} onClick={() => setAnalysisView("performance")}>Wynik i atrybucja</button>
         <button role="tab" aria-selected={analysisView === "risk"} className={analysisView === "risk" ? "active" : ""} onClick={() => setAnalysisView("risk")}>Ryzyko</button>
+        <button role="tab" aria-selected={analysisView === "daily"} className={analysisView === "daily" ? "active" : ""} onClick={() => setAnalysisView("daily")}>Zmiany dzienne</button>
         <div className="benchmark-fields">
           <label>Stała stopa <input type="number" step="0.5" value={benchmarkRate} onChange={(e) => setBenchmarkRate(parseFloat(e.target.value) || 0)} />%</label>
           <label>Inflacja + <input type="number" step="0.5" value={cpiSpread} onChange={(e) => setCpiSpread(parseFloat(e.target.value) || 0)} />%</label>
@@ -622,6 +611,18 @@ export default function App() {
           <DrawdownChart data={drawdown} />
         </section>
       )}
+
+      {analysisView === "daily" && (
+        <section className="surface">
+          <SectionHeader
+            eyebrow="Dzień po dniu"
+            title="Zmiany wartości"
+            description="Wynik rynkowy bez traktowania zakupu jako zysku."
+            action={<a className="text-button" href="/api/export/daily-changes.csv">Eksportuj dane</a>}
+          />
+          <DailyChangesTable rows={dailyChanges} />
+        </section>
+      )}
     </>
   );
 
@@ -637,8 +638,17 @@ export default function App() {
           quality={quality}
           busy={busy}
           onRefresh={() => run(() => api.dataQuality(), "Kontrola jakości została odświeżona.").catch(() => {})}
+          onGo={navigate}
         />
       </section>
+
+      <div id="settings-tabs" className="analysis-view-nav" role="tablist" aria-label="Sekcja ustawień">
+        {SETTINGS_TABS.map(([id, label]) => (
+          <button key={id} role="tab" aria-selected={settingsView === id} className={settingsView === id ? "active" : ""} onClick={() => setSettingsView(id)}>{label}</button>
+        ))}
+      </div>
+
+      {settingsView === "data" && (
       <section className="surface">
         <SectionHeader eyebrow="Synchronizacja" title="Źródła danych" description="Zarządzaj wycenami i danymi potrzebnymi do obliczeń." />
         <div className="sync-grid">
@@ -668,7 +678,9 @@ export default function App() {
           </div>
         </div>
       </section>
+      )}
 
+      {settingsView === "instruments" && (
       <section className="surface">
         <SectionHeader
           eyebrow="Instrumenty"
@@ -680,7 +692,9 @@ export default function App() {
           onSave={(isin, body) => run(() => api.updateInstrument(isin, body), "Ustawienia instrumentu zostały zapisane.")}
         />
       </section>
+      )}
 
+      {settingsView === "accounts" && (
       <section className="surface">
         <SectionHeader
           eyebrow="Konta"
@@ -693,34 +707,26 @@ export default function App() {
           onSave={(id, body) => run(() => api.saveAccount(id, body), "Konto zostało zapisane.").catch(() => {})}
         />
       </section>
+      )}
 
-      <section className="surface settings-split">
-        <div>
-          <SectionHeader eyebrow="Import" title="Import transakcji" description="Obsługuje CSV „historia PW”, eMAKLER „Transakcje bieżące” oraz potwierdzenia PDF mBanku. Format jest rozpoznawany automatycznie." />
-          <input ref={fileRef} type="file" accept=".csv,.pdf,application/pdf" className="hidden-file" onChange={onImport} />
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 9 }}>
-            <AccountSelect accounts={accounts} value={targetImportAccount} onChange={setImportAccount} />
-            <button className="secondary" onClick={() => fileRef.current?.click()} disabled={busy}>Wybierz plik CSV lub PDF</button>
-          </div>
-        </div>
-        <div className="settings-divider" />
-        <div>
-          <SectionHeader eyebrow="Bezpieczeństwo" title="Backup i eksport" description="Pobierz dane lub utwórz kopię na serwerze." />
-          <DataPanel
-            backups={backups}
-            busy={busy}
-            onBackup={() => run(() => api.backupNow(), "Kopia zapasowa została utworzona.").catch(() => {})}
-            onRestore={(filename) => run(
-              () => api.restoreBackup(filename),
-              (result) => `Baza została przywrócona. Kopia bezpieczeństwa: ${result.safety_backup}.`,
-            ).catch(() => {})}
-            onRestoreUpload={(file) => run(
-              () => api.restoreUploadedBackup(file),
-              (result) => `Baza została przywrócona z pliku. Kopia bezpieczeństwa: ${result.safety_backup}.`,
-            ).catch(() => {})}
-          />
-        </div>
+      {settingsView === "data" && (
+      <section className="surface">
+        <SectionHeader eyebrow="Bezpieczeństwo" title="Backup i eksport" description="Pobierz dane lub utwórz kopię na serwerze." />
+        <DataPanel
+          backups={backups}
+          busy={busy}
+          onBackup={() => run(() => api.backupNow(), "Kopia zapasowa została utworzona.").catch(() => {})}
+          onRestore={(filename) => run(
+            () => api.restoreBackup(filename),
+            (result) => `Baza została przywrócona. Kopia bezpieczeństwa: ${result.safety_backup}.`,
+          ).catch(() => {})}
+          onRestoreUpload={(file) => run(
+            () => api.restoreUploadedBackup(file),
+            (result) => `Baza została przywrócona z pliku. Kopia bezpieczeństwa: ${result.safety_backup}.`,
+          ).catch(() => {})}
+        />
       </section>
+      )}
     </>
   );
 
@@ -742,7 +748,7 @@ export default function App() {
           ))}
         </nav>
         <div className="sidebar-foot">
-          <StatusDot tone={quality?.status === "good" ? "good" : "warn"}>
+          <StatusDot tone={quality?.status === "good" ? "good" : "warn"} onClick={() => navigate("settings")}>
             {quality?.status === "error" ? "Błędy danych" : quality?.status === "warning" ? "Sprawdź dane" : "Dane aktualne"}
           </StatusDot>
           <small>Wszystkie wartości w PLN</small>
@@ -757,6 +763,7 @@ export default function App() {
             <p>{pageMeta[1]}</p>
           </div>
           <div className="header-meta">
+            <button className="primary add-button" onClick={() => setAdding("tx")}>+ Dodaj</button>
             {accounts.length > 1 && (
               <select className="cell" aria-label="Widok konta" title="Widok konta" value={account} onChange={(e) => changeAccount(Number(e.target.value))}>
                 <option value={0}>Cały portfel</option>
@@ -782,6 +789,76 @@ export default function App() {
         ))}
       </nav>
 
+      <input ref={fileRef} type="file" accept=".csv,.pdf,application/pdf" className="hidden-file" onChange={onImport} />
+      {adding && (
+        <div className="modal-backdrop" onClick={() => setAdding(null)}>
+          <div className="modal add-modal" role="dialog" aria-modal="true" aria-label="Dodaj" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>Dodaj</h2>
+              <div className="modal-actions"><button onClick={() => setAdding(null)}>Zamknij ✕</button></div>
+            </div>
+            <div className="analysis-view-nav" role="tablist" aria-label="Co chcesz dodać">
+              {ADD_TABS.map(([id, label]) => (
+                <button key={id} role="tab" aria-selected={adding === id} className={adding === id ? "active" : ""} onClick={() => setAdding(id)}>{label}</button>
+              ))}
+            </div>
+            {adding === "tx" && (
+              <>
+                <p className="add-hint">Wprowadź zakup lub sprzedaż ręcznie.</p>
+                <TransactionForm
+                  key={account}
+                  instruments={instruments}
+                  accounts={accounts}
+                  defaultAccount={defaultAccount}
+                  onAdd={(body) => run(
+                    () => api.addTransaction(body),
+                    (r) => r.created ? "Transakcja została dodana." : "Taka transakcja już istnieje.",
+                  ).catch(() => {})}
+                />
+              </>
+            )}
+            {adding === "bond" && (
+              <>
+                <p className="add-hint">EDO, TOS, ROS i ROD — wycena z tabel odsetkowych Ministerstwa Finansów. Wykup dodaj jako sprzedaż.</p>
+                <BondForm
+                  key={account}
+                  accounts={accounts}
+                  defaultAccount={defaultAccount}
+                  busy={busy}
+                  onAdd={(body) => run(
+                    () => api.addBondPurchase(body),
+                    (r) => r.created ? "Obligacje zostały dodane." : "Taki zakup już istnieje.",
+                  ).catch(() => {})}
+                  onImportTable={(file) => run(
+                    () => api.importBondTable(file),
+                    (r) => `Wczytano tabelę ${r.series}: ${r.first_date} – ${r.last_date}.`,
+                  ).catch(() => {})}
+                />
+              </>
+            )}
+            {adding === "cash" && (
+              <>
+                <p className="add-hint">Wpłata lub wypłata gotówki z konta inwestycyjnego.</p>
+                <CashForm
+                  key={account}
+                  accounts={accounts}
+                  defaultAccount={defaultAccount}
+                  onAdd={(body) => run(() => api.addCash(body), "Operacja gotówkowa została dodana.").catch(() => {})}
+                />
+              </>
+            )}
+            {adding === "import" && (
+              <>
+                <p className="add-hint">Obsługuje CSV „historia PW”, eMAKLER „Transakcje bieżące” oraz potwierdzenia PDF mBanku. Format jest rozpoznawany automatycznie.</p>
+                <div className="tx-form">
+                  <AccountSelect label="Konto" accounts={accounts} value={targetImportAccount} onChange={setImportAccount} />
+                  <button className="secondary" onClick={() => fileRef.current?.click()} disabled={busy}>Wybierz plik CSV lub PDF</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
       {detail && (
         <InstrumentDetail
           data={detail}

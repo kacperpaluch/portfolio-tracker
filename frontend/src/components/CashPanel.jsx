@@ -2,16 +2,49 @@ import { useState } from "react";
 import { fmtPln } from "../format.js";
 import AccountSelect from "./AccountSelect.jsx";
 
-export default function CashPanel({ cash, accounts, defaultAccount, onAdd, onDelete }) {
+// Formularz żyje w oknie „Dodaj"; panel na stronie Portfel tylko pokazuje saldo i historię.
+export function CashForm({ accounts, defaultAccount, onAdd }) {
   const today = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({ ts: today, kind: "deposit", amount: "", account_id: defaultAccount });
+  const [error, setError] = useState("");
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const submit = () => {
     const amount = parseFloat(form.amount);
-    if (!amount || amount <= 0) return;
+    const problem = !amount || amount <= 0 ? "Podaj kwotę większą od zera." : "";
+    setError(problem);
+    if (problem) return;
     onAdd({ ts: form.ts, kind: form.kind, amount, account_id: form.account_id });
     setForm({ ...form, amount: "" });
   };
+  return (
+    <div className="cash-form">
+      <label className="field"><span>Data</span>
+        <input className="cell" type="date" value={form.ts} onChange={(e) => set("ts", e.target.value)} />
+      </label>
+      <AccountSelect label="Konto" accounts={accounts} value={form.account_id} onChange={(v) => set("account_id", v)} />
+      <label className="field"><span>Typ</span>
+        <select className="cell narrow" value={form.kind} onChange={(e) => set("kind", e.target.value)}>
+          <option value="deposit">Wpłata</option>
+          <option value="withdrawal">Wypłata</option>
+        </select>
+      </label>
+      <label className="field"><span>Kwota PLN</span>
+        <input
+          className="cell"
+          type="number"
+          step="0.01"
+          value={form.amount}
+          onChange={(e) => set("amount", e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && submit()}
+        />
+      </label>
+      <button className="primary" onClick={submit}>Dodaj</button>
+      {error && <p className="form-error" role="alert">{error}</p>}
+    </div>
+  );
+}
+
+export default function CashPanel({ cash, accounts, onDelete }) {
   const flows = cash?.flows || [];
   const multi = (accounts || []).length > 1;
   const accountName = (id) => accounts.find((a) => a.id === id)?.name || "—";
@@ -28,27 +61,8 @@ export default function CashPanel({ cash, accounts, defaultAccount, onAdd, onDel
         </div>
       </div>
 
-      <div className="cash-form">
-        <input className="cell" type="date" value={form.ts} onChange={(e) => set("ts", e.target.value)} />
-        <AccountSelect accounts={accounts} value={form.account_id} onChange={(v) => set("account_id", v)} />
-        <select className="cell narrow" value={form.kind} onChange={(e) => set("kind", e.target.value)}>
-          <option value="deposit">Wpłata</option>
-          <option value="withdrawal">Wypłata</option>
-        </select>
-        <input
-          className="cell"
-          type="number"
-          step="0.01"
-          placeholder="kwota PLN"
-          value={form.amount}
-          onChange={(e) => set("amount", e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && submit()}
-        />
-        <button className="primary" onClick={submit}>Dodaj</button>
-      </div>
-
       {flows.length === 0 ? (
-        <div className="spinner">Brak wpłat/wypłat. Dodaj wpłatę, aby śledzić niezainwestowaną gotówkę.</div>
+        <div className="spinner">Brak wpłat/wypłat. Dodaj wpłatę przyciskiem „Dodaj", aby śledzić niezainwestowaną gotówkę.</div>
       ) : (
         <table>
           <thead>

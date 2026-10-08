@@ -151,13 +151,13 @@ Interfejs celowo rozdziela codzienne sprawdzanie portfela od operacji administra
 
 | Sekcja | Zawartość |
 |---|---|
-| **Nagłówek** | przełącznik widoku: cały portfel albo jedno konto (widoczny przy co najmniej dwóch kontach; wybór zapisany w `?account=`) |
+| **Nagłówek** | przycisk **+ Dodaj** (jedno okno z zakładkami: transakcja, obligacje, wpłata/wypłata, import z pliku; na telefonie pływa nad dolnym paskiem) oraz przełącznik widoku: cały portfel albo jedno konto (widoczny przy co najmniej dwóch kontach; wybór zapisany w `?account=`) |
 | **Pulpit** | łączna wartość konta, wartość po szacowanym podatku, wynik całkowity, ostatnia zmiana, TWR, XIRR, gotówka, główny wykres, przełączana struktura kategorii/walorów i największe pozycje z udziałami |
 | **Portfel** | pełna tabela otwartych pozycji, koszt, wartość, zysk niezrealizowany i zrealizowany, szacowany podatek i wartość po podatku oraz konto gotówkowe |
-| **Aktywność** | ręczne dodawanie i edycja transakcji (z wyborem konta), dodawanie obligacji oszczędnościowych, notatki, filtry, historia kupna/sprzedaży i dzienne zmiany wartości |
+| **Aktywność** | historia kupna/sprzedaży z filtrami, edycja transakcji (z wyborem konta) i notatki |
 | **Alokacja** | rzeczywisty i docelowy udział kategorii, odchylenie, kwota rebalansu oraz plan podziału nowej wpłaty bez sprzedaży |
-| **Raporty i analiza** | raport okresowy i porównawczy, mapa miesięcznych TWR, eksport CSV/PDF oraz osobne widoki wyniku, atrybucji, benchmarków i drawdown |
-| **Dane i ustawienia** | kontrola jakości danych, odświeżanie wycen, backfill historii, HICP, mapowanie instrumentów, konta inwestycyjne, import (na wybrane konto), eksport i backup |
+| **Raporty i analiza** | raport okresowy i porównawczy, mapa miesięcznych TWR, eksport CSV/PDF oraz osobne widoki wyniku, atrybucji, benchmarków, drawdown i dziennych zmian wartości |
+| **Dane i ustawienia** | kontrola jakości danych z linkami do miejsca naprawy, a pod nią zakładki: Instrumenty (mapowanie notowań), Konta, Dane i backup (odświeżanie wycen, backfill historii, HICP, eksport i backup) |
 
 Najważniejsze operacje mają własne komunikaty postępu i błędów. Usunięcie transakcji albo
 operacji gotówkowej wymaga potwierdzenia. Bieżąca sekcja jest zapisana w parametrze `tab`
@@ -270,7 +270,7 @@ Nie należy wystawiać portu `8000` bezpośrednio do Internetu.
 
 ## Sposób użycia
 
-1. Otwórz **Dane i ustawienia → Import transakcji** i wgraj eksport historii rachunku.
+1. Kliknij **+ Dodaj → Import z pliku** i wgraj eksport historii rachunku.
    Powstaną transakcje oraz instrumenty wymagające konfiguracji użytkownika. Jeśli
    eksport eMAKLER zawiera nowy symbol bez ISIN-u, uzupełnij wyświetlony formularz — po
    zapisaniu mapowania aplikacja sama ponowi import pliku.
@@ -280,20 +280,21 @@ Nie należy wystawiać portu `8000` bezpośrednio do Internetu.
    wartości zapisanej w UI. Dla EODHD i Alpha Vantage możesz użyć przycisku **Wyszukaj**:
    EODHD najlepiej rozpoznaje ISIN, a Alpha Vantage nazwę lub ticker. Wynik jest tylko
    propozycją — użytkownik wybiera właściwy instrument przed zapisem.
-3. W **Dane i ustawienia → Źródła danych** wybierz **Odśwież**, aby pobrać wyceny
+3. W **Dane i ustawienia → Dane i backup → Źródła danych** wybierz **Odśwież**, aby pobrać wyceny
    z providerów przypisanych do instrumentów oraz kursy NBP.
 4. Przy pierwszym uruchomieniu wybierz **Uzupełnij** przy pełnej historii. Backfill pobierze
    dzienne ceny i kursy od pierwszej transakcji, zasilając wykresy i miary ryzyka.
-5. W sekcji **Portfel → Konto gotówkowe** dodaj wpłaty i wypłaty. Dzięki temu wartość konta,
+5. Wpłaty i wypłaty dodaj przez **+ Dodaj → Wpłata / wypłata** (historia jest w **Portfel →
+   Konto gotówkowe**). Dzięki temu wartość konta,
    XIRR i benchmarki uwzględnią niezainwestowaną gotówkę oraz timing przepływów.
-6. Opcjonalnie pobierz HICP w **Dane i ustawienia**, aby uruchomić benchmark
+6. Opcjonalnie pobierz HICP w **Dane i ustawienia → Dane i backup**, aby uruchomić benchmark
    „inflacja + X%". Ta operacja nie dotyka tabeli cen i nie nadpisuje ręcznych importów.
 7. Masz więcej niż jedno konto (np. IKE i zwykły rachunek)? Dodaj je w **Dane i ustawienia →
-   Konta inwestycyjne** i zaznacz, które są opodatkowane. Dotychczasowe dane należą do konta
+   Konta** i zaznacz, które są opodatkowane. Dotychczasowe dane należą do konta
    „IKE”; konto transakcji zmienisz w jej edycji, a przy imporcie i w formularzach wybierasz je
    z listy. Przełącznik w nagłówku pokazuje cały portfel albo jedno konto.
-8. Obligacje oszczędnościowe (EDO, TOS, ROS, ROD) dodaj w **Aktywność → Dodaj obligacje
-   oszczędnościowe**: seria (np. `EDO0334`), dzień zakupu i liczba sztuk. Wycena pochodzi z tabel
+8. Obligacje oszczędnościowe (EDO, TOS, ROS, ROD) dodaj przez **+ Dodaj →
+   Obligacje**: seria (np. `EDO0334`), dzień zakupu i liczba sztuk. Wycena pochodzi z tabel
    odsetkowych MF; wykup wprowadź jako zwykłą sprzedaż.
 9. Na co dzień korzystaj z **Pulpitu**; szczegółowe TWR, XIRR, benchmarki i drawdown są
    zebrane w sekcji **Raporty i analiza**.
@@ -500,14 +501,14 @@ celowo wykluczone z repo (`.gitignore`), bo zawierają dane osobiste.
   ETF-ów są dozwolone, ale transakcje, ceny, daty, kwoty i wyniki muszą być syntetyczne.
   Screenshotów z prywatnej bazy nie commitujemy.
 - Backup w aplikacji tworzy spójną kopię SQLite wewnątrz wolumenu. Kopię poza serwer można
-  pobrać przez **Dane i ustawienia → Backup i eksport → Pobierz całą bazę**.
+  pobrać przez **Dane i ustawienia → Dane i backup → Pobierz bieżącą bazę**.
 - Każdy backup jest sprawdzany przez `PRAGMA integrity_check`, obecność wymaganych tabel
   i sumę SHA-256. Restore odrzuca pusty, uszkodzony lub obcy plik, a przed zastąpieniem
   aktywnej bazy zawsze tworzy automatyczną kopię bezpieczeństwa.
 
 ### Jak sprawdzić backup i odtwarzanie
 
-1. Otwórz **Dane i ustawienia → Backup i eksport** i kliknij **Utwórz backup teraz**.
+1. Otwórz **Dane i ustawienia → Dane i backup** i kliknij **Utwórz backup teraz**.
 2. Sprawdź, czy panel pokazuje „Ostatnia poprawna kopia”, potwierdzoną integralność,
    liczbę transakcji i skrót SHA-256.
 3. Pobierz utworzoną kopię przyciskiem **Pobierz** i przechowaj ją także poza named volume
