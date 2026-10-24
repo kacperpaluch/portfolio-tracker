@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import Modal from "./Modal.jsx";
 import {
   Area,
   CartesianGrid,
@@ -31,8 +32,7 @@ export default function InstrumentDetail({ data, onClose, onImportPrices, busy }
     e.target.value = "";
   };
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+    <Modal label={data.name} onClose={onClose}>
         <div className="modal-head">
           <div>
             <h2>{data.name}</h2>
@@ -47,12 +47,12 @@ export default function InstrumentDetail({ data, onClose, onImportPrices, busy }
               title="Wgraj dzienne ceny z CSV (format stooq) — gdy provider nie ma poprawnej historii">
               Importuj ceny (CSV)
             </button>
-            <button onClick={onClose}>Zamknij ✕</button>
+            <button onClick={onClose}>Zamknij</button>
           </div>
         </div>
 
         {rows.length === 0 ? (
-          <div className="spinner">Brak historii wycen. Uzupełnij historię w sekcji „Dane i ustawienia".</div>
+          <div className="spinner">Brak historii wycen. Uzupełnij ją w Ustawieniach → Synchronizacja i kopie.</div>
         ) : (
           <>
             {data.summary && (
@@ -131,7 +131,6 @@ export default function InstrumentDetail({ data, onClose, onImportPrices, busy }
             </div>
           </>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 }

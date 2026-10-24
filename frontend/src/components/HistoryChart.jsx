@@ -20,7 +20,7 @@ export default function HistoryChart({ data, benchmarkRate = 5, cpiSpread = 2, c
   const [showCpi, setShowCpi] = useState(true);
 
   if (!data || data.length === 0)
-    return <div className="spinner">Brak danych historycznych — uzupełnij historię w sekcji „Dane i ustawienia".</div>;
+    return <div className="spinner">Brak danych historycznych — uzupełnij ją w Ustawieniach → Synchronizacja i kopie.</div>;
 
   // Benchmark inflacyjny pokazujemy tylko gdy backend zwrócił dane CPI (Eurostat pobrany).
   const hasCpi = data.some((d) => d.benchmark_cpi_pln != null);
@@ -41,14 +41,14 @@ export default function HistoryChart({ data, benchmarkRate = 5, cpiSpread = 2, c
   return (
     <>
       <div className="chart-toggle">
-        <button className={`tg ${!isPct ? "on" : ""}`} onClick={() => setMode("pln")}>Wartość (PLN)</button>
-        <button className={`tg ${isPct ? "on" : ""}`} onClick={() => setMode("pct")}>Stopa zwrotu (%)</button>
+        <button aria-pressed={!isPct} className={`tg ${!isPct ? "on" : ""}`} onClick={() => setMode("pln")}>Wartość (PLN)</button>
+        <button aria-pressed={isPct} className={`tg ${isPct ? "on" : ""}`} onClick={() => setMode("pct")}>Stopa zwrotu (%)</button>
         <span className="chart-toggle-sep" />
-        <button className={`tg ${showBench ? "on" : ""}`} onClick={() => setShowBench((v) => !v)}>
+        <button aria-pressed={showBench} className={`tg ${showBench ? "on" : ""}`} onClick={() => setShowBench((v) => !v)}>
           Benchmark {benchmarkRate}%
         </button>
         {hasCpi && (
-          <button className={`tg ${showCpi ? "on" : ""}`} onClick={() => setShowCpi((v) => !v)}>
+          <button aria-pressed={showCpi} className={`tg ${showCpi ? "on" : ""}`} onClick={() => setShowCpi((v) => !v)}>
             Inflacja +{cpiSpread}%
           </button>
         )}

@@ -2,7 +2,9 @@
 const plnFmt = new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN" });
 
 export const fmtPln = (v) => (v == null ? "—" : plnFmt.format(v));
-export const fmtPct = (v) => (v == null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(2)}%`);
+// Liczba z polskim przecinkiem dziesiętnym (bez grupowania tysięcy).
+export const fmtNum = (v, digits = 1) => v.toFixed(digits).replace(".", ",");
+export const fmtPct = (v) => (v == null ? "—" : `${v > 0 ? "+" : ""}${fmtNum(v, 2)}%`);
 // Zero nie jest zyskiem — zostaje neutralne, żeby „0,00 zł" nie świeciło na zielono.
 export const cls = (v) => (v == null || v === 0 ? "muted" : v > 0 ? "pos" : "neg");
 export const fmtDate = (ts) => (ts ? ts.slice(0, 16).replace("T", " ") : "—");

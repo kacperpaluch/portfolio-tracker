@@ -2,10 +2,11 @@ import { cls, fmtPct } from "../format.js";
 
 const MONTHS = ["Sty", "Lut", "Mar", "Kwi", "Maj", "Cze", "Lip", "Sie", "Wrz", "Paź", "Lis", "Gru"];
 
+// Tło z kolorów motywu (działa też w trybie ciemnym); tekst zostaje w kolorze atramentu, żeby trzymał kontrast.
 function cellStyle(value) {
   if (value == null) return undefined;
-  const alpha = Math.min(0.42, 0.08 + Math.abs(value) / 35);
-  return { backgroundColor: value >= 0 ? `rgba(52,122,80,${alpha})` : `rgba(196,76,70,${alpha})` };
+  const share = Math.round(Math.min(32, 6 + Math.abs(value) * 2.5));
+  return { backgroundColor: `color-mix(in srgb, var(${value >= 0 ? "--pos" : "--neg"}) ${share}%, transparent)` };
 }
 
 export default function MonthlyReturnsHeatmap({ rows }) {
@@ -22,7 +23,7 @@ export default function MonthlyReturnsHeatmap({ rows }) {
               <th>{row.year}</th>
               {MONTHS.map((month, index) => {
                 const value = row.months?.[String(index + 1)];
-                return <td key={month} className={cls(value)} style={cellStyle(value)}>{value == null ? "—" : fmtPct(value)}</td>;
+                return <td key={month} style={cellStyle(value)}>{value == null ? "—" : fmtPct(value)}</td>;
               })}
               <td className={`annual ${cls(row.annual_pct)}`}>{row.annual_pct == null ? "—" : fmtPct(row.annual_pct)}</td>
             </tr>

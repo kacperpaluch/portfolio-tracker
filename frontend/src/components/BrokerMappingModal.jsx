@@ -1,5 +1,6 @@
 import { useState } from "react";
 import ProviderSymbolSearch from "./ProviderSymbolSearch.jsx";
+import Modal from "./Modal.jsx";
 
 const initialDraft = (instruments) => instruments.map((item) => ({
   ...item,
@@ -67,11 +68,10 @@ export default function BrokerMappingModal({ instruments, filename, busy, onCanc
   };
 
   return (
-    <div className="modal-backdrop" role="presentation">
-      <form className="modal broker-mapping-modal" onSubmit={submit}>
+    <Modal as="form" label="Uzupełnij nowe instrumenty" className="broker-mapping-modal" onSubmit={submit}
+      onClose={busy ? undefined : onCancel} closeOnBackdrop={false}>
         <div className="modal-head">
           <div>
-            <div className="eyebrow">Import eMAKLER</div>
             <h2>Uzupełnij nowe instrumenty</h2>
             <p className="mapping-intro">
               Plik <strong>{filename}</strong> nie zawiera ISIN-ów. Dane zapiszą się w Twojej bazie,
@@ -136,7 +136,6 @@ export default function BrokerMappingModal({ instruments, filename, busy, onCanc
         </div>
         {validation && <p className="mapping-error" role="alert">{validation}</p>}
         <p className="mapping-help">ISIN i symbol źródła sprawdź przed zapisem. Każdy provider używa innego sufiksu giełdy.</p>
-      </form>
-    </div>
+    </Modal>
   );
 }

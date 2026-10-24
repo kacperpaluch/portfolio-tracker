@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { fmtPln } from "../format.js";
+import { fmtPln, fmtNum } from "../format.js";
 import AllocationDonut from "./AllocationDonut.jsx";
 
 // Próg, od którego odchylenie od modelu wymaga reakcji.
@@ -28,7 +28,7 @@ export default function AllocationPanel({ allocation, onSave }) {
   }, 0);
 
   if (groups.length === 0)
-    return <div className="spinner">Brak danych. Przypisz instrumentom kategorie w sekcji „Dane i ustawienia".</div>;
+    return <div className="spinner">Brak danych. Przypisz instrumentom kategorie w Ustawieniach → Instrumenty.</div>;
 
   return (
     <div>
@@ -58,11 +58,11 @@ export default function AllocationPanel({ allocation, onSave }) {
                   onChange={(e) => set(g.category, e.target.value)}
                 />
               </td>
-              <td>{g.actual_pct == null ? "—" : `${g.actual_pct.toFixed(1)}%`}</td>
+              <td>{g.actual_pct == null ? "—" : `${fmtNum(g.actual_pct, 1)}%`}</td>
               <td>{fmtPln(g.actual_pln)}</td>
               {/* Czerwień dopiero przy realnym odchyleniu — 0,3 pp to szum, nie problem. */}
               <td className={g.drift_pp != null && Math.abs(g.drift_pp) >= DRIFT_ALERT_PP ? "neg" : "muted"}>
-                {g.drift_pp == null ? "—" : `${g.drift_pp > 0 ? "+" : ""}${g.drift_pp.toFixed(1)} pp`}
+                {g.drift_pp == null ? "—" : `${g.drift_pp > 0 ? "+" : ""}${fmtNum(g.drift_pp, 1)} pp`}
               </td>
               {/* Dokupienie/sprzedaż to zlecenie do wykonania, nie zysk ani strata. */}
               <td className="flow">
@@ -74,7 +74,7 @@ export default function AllocationPanel({ allocation, onSave }) {
         <tfoot>
           <tr>
             <td>Suma</td>
-            <td className={Math.abs(sum - 100) < 0.01 ? "pos" : "neg"}>{sum.toFixed(0)}%</td>
+            <td className={Math.abs(sum - 100) < 0.01 ? "pos" : "neg"}>{fmtNum(sum, 0)}%</td>
             <td colSpan={2}>{fmtPln(allocation.total_pln)}</td>
             <td colSpan={2}></td>
           </tr>
@@ -83,7 +83,7 @@ export default function AllocationPanel({ allocation, onSave }) {
       <div className="alloc-actions">
         <button className="primary" onClick={save}>Zapisz model docelowy</button>
         {Math.abs(sum - 100) >= 0.01 && sum > 0 && (
-          <span className="tag">Uwaga: wagi docelowe sumują się do {sum.toFixed(0)}%, nie 100%.</span>
+          <span className="tag">Uwaga: wagi docelowe sumują się do {fmtNum(sum, 0)}%, nie 100%.</span>
         )}
       </div>
       <p className="tag" style={{ marginTop: 12 }}>

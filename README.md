@@ -34,13 +34,14 @@ Internetu bez dodatkowej warstwy dostępu (np. VPN, Tailscale lub reverse proxy 
 
 ## Funkcje
 
-- **Prywatny interfejs typu wealth cockpit** — czytelna przestrzeń robocza z ciemnym
-  sidebarem; osobne sekcje Pulpit, Portfel, Aktywność, Alokacja, Raporty i analiza oraz Dane i ustawienia.
-  Motyw jasny i ciemny przełączają się automatycznie za ustawieniem systemu (wykresy również);
-  wydruk raportu zawsze wychodzi w wersji jasnej. Widok mobilny korzysta z dolnej nawigacji
-  (wszystkie sześć sekcji) i zachowuje pełną funkcjonalność: tabele przewijają się w poziomie
+- **Przejrzysty interfejs trackera** — górne menu z pięcioma sekcjami (Przegląd, Portfel,
+  Historia, Raporty, Ustawienia), rząd kart z najważniejszymi liczbami, wykres i tabele na białych
+  kartach. Motyw jasny i ciemny przełączają się automatycznie za ustawieniem systemu (wykresy również);
+  wydruk raportu zawsze wychodzi w wersji jasnej. Na telefonie menu przewija się w poziomie pod logo,
+  a aplikacja zachowuje pełną funkcjonalność: tabele przewijają się w poziomie
   z przyklejoną pierwszą kolumną, pola formularzy nie wywołują zoomu w Safari na iOS,
-  a cele dotykowe mają co najmniej 44 px.
+  a cele dotykowe mają co najmniej 44 px. Okna dialogowe zamykają się klawiszem Esc
+  i trzymają fokus klawiatury w środku.
 - **Kolor niesie jedno znaczenie** — zieleń i czerwień zarezerwowane są dla zysku i straty.
   Typ operacji (kupno/sprzedaż, wpłata/wypłata) jest neutralnym znacznikiem, kwoty przepływów
   i rebalansu pokazują kierunek znakiem, a zero jest szare, nie zielone.
@@ -114,9 +115,8 @@ Internetu bez dodatkowej warstwy dostępu (np. VPN, Tailscale lub reverse proxy 
 - **Alokacja docelowa** — przypisz ETF-om kategorie (akcje/obligacje/…), ustaw wagi modelu
   (np. 60/40) i porównaj docelowy vs rzeczywisty udział grup z kwotą do rebalansu (gotówka
   liczona jako osobna grupa); wykres **donut** obok tabeli pokazuje rzeczywisty rozkład grup.
-- **Struktura według walorów** — na Pulpicie przełączaj między kategoriami a poziomym
-  wykresem największych pozycji, pozostałych aktywów i gotówki. Widok pokazuje udział
-  procentowy oraz koncentrację w trzech największych walorach; kliknięcie otwiera szczegóły.
+- **Największe pozycje na Przeglądzie** — lista walorów z udziałem procentowym w portfelu
+  i wartością; kliknięcie otwiera szczegóły waloru.
 - **Planowanie nowej wpłaty** — symulator dzieli wskazaną kwotę pomiędzy niedoważone klasy,
   zachowuje docelową gotówkę i nie sugeruje sprzedaży istniejących pozycji.
 - **Kontrola jakości danych** — automatycznie wykrywa brakujące i stare ceny, kursy FX,
@@ -151,13 +151,12 @@ Interfejs celowo rozdziela codzienne sprawdzanie portfela od operacji administra
 
 | Sekcja | Zawartość |
 |---|---|
-| **Nagłówek** | przycisk **+ Dodaj** (jedno okno z zakładkami: transakcja, obligacje, wpłata/wypłata, import z pliku; na telefonie pływa nad dolnym paskiem) oraz przełącznik widoku: cały portfel albo jedno konto (widoczny przy co najmniej dwóch kontach; wybór zapisany w `?account=`) |
-| **Pulpit** | łączna wartość konta, wartość po szacowanym podatku, wynik całkowity, ostatnia zmiana, TWR, XIRR, gotówka, główny wykres, przełączana struktura kategorii/walorów i największe pozycje z udziałami |
-| **Portfel** | pełna tabela otwartych pozycji, koszt, wartość, zysk niezrealizowany i zrealizowany, szacowany podatek i wartość po podatku oraz konto gotówkowe |
-| **Aktywność** | historia kupna/sprzedaży z filtrami, edycja transakcji (z wyborem konta) i notatki |
-| **Alokacja** | rzeczywisty i docelowy udział kategorii, odchylenie, kwota rebalansu oraz plan podziału nowej wpłaty bez sprzedaży |
-| **Raporty i analiza** | raport okresowy i porównawczy, mapa miesięcznych TWR, eksport CSV/PDF oraz osobne widoki wyniku, atrybucji, benchmarków, drawdown i dziennych zmian wartości |
-| **Dane i ustawienia** | kontrola jakości danych z linkami do miejsca naprawy, a pod nią zakładki: Instrumenty (mapowanie notowań), Konta, Dane i backup (odświeżanie wycen, backfill historii, HICP, eksport i backup) |
+| **Górny pasek** | pięć sekcji, przycisk **Dodaj** (jedno okno z zakładkami: transakcja, obligacje, wpłata/wypłata, import z pliku) oraz przełącznik widoku: cały portfel albo jedno konto (widoczny przy co najmniej dwóch kontach; wybór zapisany w `?account=`) |
+| **Przegląd** | karty: wartość portfela (z gotówką albo wartością po podatku), zysk od początku z TWR, ostatnia sesja, przewaga nad inflacją z XIRR; status aktualności wycen; wykres wartości z benchmarkami i największe pozycje z udziałami |
+| **Portfel** | karty: wartość pozycji, koszt, zysk niezrealizowany i zrealizowany (z szacowanym podatkiem); zakładki **Pozycje** (pełna tabela) i **Alokacja** (udział docelowy vs rzeczywisty, odchylenie, kwota rebalansu, plan podziału nowej wpłaty bez sprzedaży) |
+| **Historia** | zakładki **Transakcje** (filtry, edycja z wyborem konta, notatki, eksport CSV) oraz **Wpłaty i wypłaty** (saldo gotówki i historia przepływów) |
+| **Raporty** | raport okresowy i porównawczy, mapa miesięcznych TWR, eksport CSV/PDF oraz osobne widoki wyniku i atrybucji, ryzyka (drawdown) i dziennych zmian wartości |
+| **Ustawienia** | zakładki: Jakość danych (z linkami do miejsca naprawy), Instrumenty (mapowanie notowań), Konta, Synchronizacja i kopie (odświeżanie wycen, backfill historii, HICP, eksport i backup) |
 
 Najważniejsze operacje mają własne komunikaty postępu i błędów. Usunięcie transakcji albo
 operacji gotówkowej wymaga potwierdzenia. Bieżąca sekcja jest zapisana w parametrze `tab`
@@ -194,7 +193,7 @@ Zrozumienie tych założeń wyjaśnia, dlaczego liczby wychodzą tak, a nie inac
 | Kursy walut | **NBP API** (tabela A) | darmowe, oficjalne, bez klucza |
 | Harmonogram | **APScheduler** | dzienne odświeżanie w tle |
 | HTTP klient | **httpx** | zapytania do EODHD, Alpha Vantage, NBP i Eurostat |
-| Frontend | **React** + **Vite** + **Recharts** | wealth cockpit, motyw jasny/ciemny za systemem, wykresy, responsywny desktop/mobile |
+| Frontend | **React** + **Vite** + **Recharts** | górne menu + karty, motyw jasny/ciemny za systemem, wykresy, responsywny desktop/mobile |
 | Konteneryzacja | **Docker** (multi-stage, multi-arch arm64+amd64) | self-hosting |
 
 Źródła danych:
@@ -274,30 +273,30 @@ Nie należy wystawiać portu `8000` bezpośrednio do Internetu.
    Powstaną transakcje oraz instrumenty wymagające konfiguracji użytkownika. Jeśli
    eksport eMAKLER zawiera nowy symbol bez ISIN-u, uzupełnij wyświetlony formularz — po
    zapisaniu mapowania aplikacja sama ponowi import pliku.
-2. W **Dane i ustawienia → Instrumenty** wybierz provider i wpisz jego symbol: Yahoo
+2. W **Ustawienia → Instrumenty** wybierz provider i wpisz jego symbol: Yahoo
    (`WEBN.DE`), EODHD (`WEBN.XETRA`) albo Alpha Vantage (`WEBN.DEX`). Uzupełnij również
    walutę i kategorię. Yahoo może wykryć walutę automatycznie, pozostałe źródła używają
    wartości zapisanej w UI. Dla EODHD i Alpha Vantage możesz użyć przycisku **Wyszukaj**:
    EODHD najlepiej rozpoznaje ISIN, a Alpha Vantage nazwę lub ticker. Wynik jest tylko
    propozycją — użytkownik wybiera właściwy instrument przed zapisem.
-3. W **Dane i ustawienia → Dane i backup → Źródła danych** wybierz **Odśwież**, aby pobrać wyceny
+3. W **Ustawienia → Synchronizacja i kopie → Źródła danych** wybierz **Odśwież**, aby pobrać wyceny
    z providerów przypisanych do instrumentów oraz kursy NBP.
 4. Przy pierwszym uruchomieniu wybierz **Uzupełnij** przy pełnej historii. Backfill pobierze
    dzienne ceny i kursy od pierwszej transakcji, zasilając wykresy i miary ryzyka.
-5. Wpłaty i wypłaty dodaj przez **+ Dodaj → Wpłata / wypłata** (historia jest w **Portfel →
-   Konto gotówkowe**). Dzięki temu wartość konta,
+5. Wpłaty i wypłaty dodaj przez **+ Dodaj → Wpłata / wypłata** (historia jest w **Historia →
+   Wpłaty i wypłaty**). Dzięki temu wartość konta,
    XIRR i benchmarki uwzględnią niezainwestowaną gotówkę oraz timing przepływów.
-6. Opcjonalnie pobierz HICP w **Dane i ustawienia → Dane i backup**, aby uruchomić benchmark
+6. Opcjonalnie pobierz HICP w **Ustawienia → Synchronizacja i kopie**, aby uruchomić benchmark
    „inflacja + X%". Ta operacja nie dotyka tabeli cen i nie nadpisuje ręcznych importów.
-7. Masz więcej niż jedno konto (np. IKE i zwykły rachunek)? Dodaj je w **Dane i ustawienia →
+7. Masz więcej niż jedno konto (np. IKE i zwykły rachunek)? Dodaj je w **Ustawienia →
    Konta** i zaznacz, które są opodatkowane. Dotychczasowe dane należą do konta
    „IKE”; konto transakcji zmienisz w jej edycji, a przy imporcie i w formularzach wybierasz je
    z listy. Przełącznik w nagłówku pokazuje cały portfel albo jedno konto.
 8. Obligacje oszczędnościowe (EDO, TOS, ROS, ROD) dodaj przez **+ Dodaj →
    Obligacje**: seria (np. `EDO0334`), dzień zakupu i liczba sztuk. Wycena pochodzi z tabel
    odsetkowych MF; wykup wprowadź jako zwykłą sprzedaż.
-9. Na co dzień korzystaj z **Pulpitu**; szczegółowe TWR, XIRR, benchmarki i drawdown są
-   zebrane w sekcji **Raporty i analiza**.
+9. Na co dzień korzystaj z **Przeglądu**; szczegółowe TWR, XIRR, benchmarki i drawdown są
+   zebrane w sekcji **Raporty**.
 
 ## Architektura
 
@@ -326,12 +325,12 @@ portfolio-tracker/
 │   └── tests/             # pytest (+ sample_hisPW.csv — fikcyjne dane testowe)
 ├── frontend/              # Vite + React + Recharts (build serwowany przez FastAPI z /frontend/dist)
 │   └── src/
-│       ├── App.jsx        # shell, routing przez ?tab=, stan, ładowanie danych, akcje i sześć widoków aplikacji
-│       ├── components/    # tabele, formularze, wykresy, raporty, alokacja, backup i modal instrumentu
-│       ├── format.js      # wspólne helpery formatujące (fmtPln, fmtPct, cls, fmtDate)
+│       ├── App.jsx        # shell, routing przez ?tab=, stan, ładowanie danych, akcje i pięć widoków aplikacji
+│       ├── components/    # tabele, formularze, wykresy, raporty, alokacja, backup i okna (wspólny Modal)
+│       ├── format.js      # wspólne helpery formatujące (fmtPln, fmtPct, fmtNum, cls, fmtDate)
 │       ├── chartTheme.js  # wspólny motyw Recharts — kolory czytane ze zmiennych CSS, reagują na zmianę motywu
 │       ├── api.js         # cienki klient REST + czytelne błędy zwracane przez backend
-│       └── styles.css     # tokeny UI, motyw jasny/ciemny + ciemny sidebar, layout, breakpointy mobilne i arkusz wydruku
+│       └── styles.css     # tokeny UI, motyw jasny/ciemny, karty i górny pasek, breakpointy mobilne i arkusz wydruku
 ├── Dockerfile            # multi-stage: build frontendu (node) → obraz Pythona z backendem
 └── docker-compose.yml
 ```
@@ -501,14 +500,14 @@ celowo wykluczone z repo (`.gitignore`), bo zawierają dane osobiste.
   ETF-ów są dozwolone, ale transakcje, ceny, daty, kwoty i wyniki muszą być syntetyczne.
   Screenshotów z prywatnej bazy nie commitujemy.
 - Backup w aplikacji tworzy spójną kopię SQLite wewnątrz wolumenu. Kopię poza serwer można
-  pobrać przez **Dane i ustawienia → Dane i backup → Pobierz bieżącą bazę**.
+  pobrać przez **Ustawienia → Synchronizacja i kopie → Pobierz bieżącą bazę**.
 - Każdy backup jest sprawdzany przez `PRAGMA integrity_check`, obecność wymaganych tabel
   i sumę SHA-256. Restore odrzuca pusty, uszkodzony lub obcy plik, a przed zastąpieniem
   aktywnej bazy zawsze tworzy automatyczną kopię bezpieczeństwa.
 
 ### Jak sprawdzić backup i odtwarzanie
 
-1. Otwórz **Dane i ustawienia → Dane i backup** i kliknij **Utwórz backup teraz**.
+1. Otwórz **Ustawienia → Synchronizacja i kopie** i kliknij **Utwórz backup teraz**.
 2. Sprawdź, czy panel pokazuje „Ostatnia poprawna kopia”, potwierdzoną integralność,
    liczbę transakcji i skrót SHA-256.
 3. Pobierz utworzoną kopię przyciskiem **Pobierz** i przechowaj ją także poza named volume
@@ -516,7 +515,7 @@ celowo wykluczone z repo (`.gitignore`), bo zawierają dane osobiste.
 4. Test restore wykonuj dopiero po pobraniu bieżącej bazy. Wybierz kopię i kliknij
    **Przywróć** albo użyj **Przywróć z pliku .db**, a następnie wpisz dokładnie
    `PRZYWRÓĆ`. Aplikacja najpierw utworzy kopię `portfolio-pre-restore-…`.
-5. Po odtworzeniu sprawdź Pulpit, liczbę transakcji i najnowsze wyceny. Kopię
+5. Po odtworzeniu sprawdź Przegląd, liczbę transakcji i najnowsze wyceny. Kopię
    `portfolio-pre-restore-…` pozostaw do czasu potwierdzenia, że dane są poprawne.
 
 Kopie w `portfolio_tracker_data` chronią przed błędem aplikacji lub przypadkową edycją,

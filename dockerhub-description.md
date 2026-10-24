@@ -9,11 +9,10 @@ wyceny i pokazuje wartość, zysk/stratę oraz stopy zwrotu — **wszystko w PLN
 
 ## Funkcje
 
-- **Czytelny wealth cockpit** — jasna przestrzeń robocza z ciemnym sidebarem; osobne
-  sekcje Pulpit, Portfel, Aktywność, Alokacja, Raporty i analiza oraz Dane i ustawienia.
-- **Struktura portfela na Pulpicie** — przełączany widok kategorii i walorów, procentowe
-  udziały pozycji oraz wskaźnik koncentracji w trzech największych inwestycjach.
-- **Responsywny interfejs** — desktopowy sidebar i dolna nawigacja na telefonie.
+- **Przejrzysty interfejs** — górne menu z pięcioma sekcjami (Przegląd, Portfel, Historia,
+  Raporty, Ustawienia), karty z najważniejszymi liczbami, wykres i tabele; motyw jasny i ciemny.
+- **Największe pozycje na Przeglądzie** — udziały procentowe walorów i szybkie przejście do szczegółów.
+- **Responsywny interfejs** — pełna funkcjonalność na telefonie, cele dotykowe 44 px.
 - **Import CSV i PDF** z biura maklerskiego (GPW „historia PW”, eMAKLER
   „Transakcje bieżące” oraz potwierdzenia wykonania zleceń mBanku) — format rozpoznawany
   automatycznie, import idempotentny. PDF zapisuje dodatkowo cenę i walutę wykonania,

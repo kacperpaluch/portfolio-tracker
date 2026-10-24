@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { cls, fmtPct, fmtPln } from "../format.js";
+import { cls, fmtPct, fmtPln, fmtNum } from "../format.js";
 import { api } from "../api.js";
 import MonthlyReturnsHeatmap from "./MonthlyReturnsHeatmap.jsx";
 import ReportPerformanceChart from "./ReportPerformanceChart.jsx";
@@ -60,7 +60,7 @@ function attributionTable(rows, keyName, label) {
             <td>{row[keyName]}</td>
             <td>{row.instruments}</td>
             <td className={cls(row.total_pl_pln)}>{fmtPln(row.total_pl_pln)}</td>
-            <td>{row.contribution_pct == null ? "—" : `${row.contribution_pct.toFixed(1)}%`}</td>
+            <td>{row.contribution_pct == null ? "—" : `${fmtNum(row.contribution_pct, 1)}%`}</td>
           </tr>
         ))}
       </tbody>
@@ -108,16 +108,14 @@ export default function ReportsPanel({ benchmarkRate, cpiSpread, onOpen }) {
 
   return (
     <div className="report-workspace report-print-root">
-      <section className="surface report-controls no-print">
+      <section className="block report-controls no-print">
         <div className="panel-head">
           <div>
-            <div className="eyebrow">Zakres raportu</div>
             <h2>Wybierz okres kalendarzowy</h2>
-            <span className="sub">Porównanie dobierze automatycznie poprzedni miesiąc, rok albo równy zakres.</span>
           </div>
         </div>
         <div className="report-presets">
-          {PRESETS.map(([key, label]) => <button key={key} className={preset === key ? "active" : ""} onClick={() => selectPreset(key)}>{label}</button>)}
+          {PRESETS.map(([key, label]) => <button key={key} className={preset === key ? "active" : ""} aria-pressed={preset === key} onClick={() => selectPreset(key)}>{label}</button>)}
         </div>
         <div className="report-range">
           <label>Od <input type="date" value={range.from} max={range.to} onChange={(event) => updateDate("from", event.target.value)} /></label>
@@ -127,8 +125,8 @@ export default function ReportsPanel({ benchmarkRate, cpiSpread, onOpen }) {
         </div>
       </section>
 
-      {loading && !report && <section className="surface"><div className="spinner">Przygotowujemy raport okresowy…</div></section>}
-      {error && <section className="surface"><div className="inline-error">{error}</div></section>}
+      {loading && !report && <section className="block"><div className="spinner">Przygotowujemy raport okresowy…</div></section>}
+      {error && <section className="block"><div className="inline-error">{error}</div></section>}
       {report && (
         <ReportBody report={report} benchmarkRate={benchmarkRate} cpiSpread={cpiSpread} onOpen={onOpen} loading={loading} />
       )}
@@ -144,9 +142,8 @@ function ReportBody({ report, benchmarkRate, cpiSpread, onOpen, loading }) {
   const quality = report.quality;
   return (
     <>
-      <section className="surface report-cover">
+      <section className="block report-cover">
         <div>
-          <div className="eyebrow">Raport okresowy</div>
           <h2>{period.from} — {period.to}</h2>
           <p>Wygenerowano {report.generated_at} · wszystkie wartości w PLN</p>
         </div>
@@ -159,34 +156,34 @@ function ReportBody({ report, benchmarkRate, cpiSpread, onOpen, loading }) {
         <Metric label="TWR" value={pct(period.twr)} detail="bez wpływu wpłat" tone={cls(period.twr)} />
         <Metric label="XIRR" value={pct(period.xirr)} detail="rocznie, z timingiem wpłat" tone={cls(period.xirr)} />
         <Metric label="Wartość końcowa" value={fmtPln(period.closing_value_pln)} detail={`początek ${fmtPln(period.opening_value_pln)}`} />
-        <Metric label={`Ponad benchmark ${benchmarkRate}%`} value={period.excess_fixed_pp == null ? "—" : `${period.excess_fixed_pp > 0 ? "+" : ""}${period.excess_fixed_pp.toFixed(2)} pp`} tone={cls(period.excess_fixed_pp)} />
-        <Metric label={`Ponad inflację +${cpiSpread}%`} value={period.excess_inflation_pp == null ? "—" : `${period.excess_inflation_pp > 0 ? "+" : ""}${period.excess_inflation_pp.toFixed(2)} pp`} tone={cls(period.excess_inflation_pp)} />
+        <Metric label={`Ponad benchmark ${benchmarkRate}%`} value={period.excess_fixed_pp == null ? "—" : `${period.excess_fixed_pp > 0 ? "+" : ""}${fmtNum(period.excess_fixed_pp, 2)} pp`} tone={cls(period.excess_fixed_pp)} />
+        <Metric label={`Ponad inflację +${cpiSpread}%`} value={period.excess_inflation_pp == null ? "—" : `${period.excess_inflation_pp > 0 ? "+" : ""}${fmtNum(period.excess_inflation_pp, 2)} pp`} tone={cls(period.excess_inflation_pp)} />
         <Metric label="Zrealizowany" value={fmtPln(attribution.totals.realized_pl_pln)} tone={cls(attribution.totals.realized_pl_pln)} />
         <Metric label="Zmiana niezrealizowanego" value={fmtPln(attribution.totals.unrealized_change_pln)} tone={cls(attribution.totals.unrealized_change_pln)} />
       </section>
 
-      <section className="surface">
-        <div className="panel-head"><div><div className="eyebrow">Efektywność</div><h2>Portfel i punkty odniesienia</h2><span className="sub">Skumulowany TWR od początku wybranego okresu.</span></div></div>
+      <section className="block">
+        <div className="panel-head"><div><h2>Portfel i punkty odniesienia</h2></div></div>
         <ReportPerformanceChart rows={period.series} benchmarkRate={benchmarkRate} cpiSpread={cpiSpread} />
       </section>
 
-      <section className="surface">
-        <div className="panel-head"><div><div className="eyebrow">Porównanie</div><h2>Wybrany okres vs poprzedni</h2><span className="sub">Miesiące i lata są dopasowane kalendarzowo; własny zakres zachowuje tę samą długość.</span></div></div>
+      <section className="block">
+        <div className="panel-head"><div><h2>Wybrany okres vs poprzedni</h2></div></div>
         {comparison ? (
           <table className="period-comparison">
             <thead><tr><th>Miara</th><th>{period.from} — {period.to}</th><th>{comparison.from} — {comparison.to}</th><th>Różnica</th></tr></thead>
             <tbody>
               <tr><td>Wynik PLN</td><td className={cls(period.result_pln)}>{fmtPln(period.result_pln)}</td><td className={cls(comparison.result_pln)}>{fmtPln(comparison.result_pln)}</td><td className={cls(period.result_pln - comparison.result_pln)}>{fmtPln(period.result_pln - comparison.result_pln)}</td></tr>
-              <tr><td>TWR</td><td>{pct(period.twr)}</td><td>{pct(comparison.twr)}</td><td>{period.twr == null || comparison.twr == null ? "—" : `${((period.twr - comparison.twr) * 100).toFixed(2)} pp`}</td></tr>
-              <tr><td>XIRR roczny</td><td>{pct(period.xirr)}</td><td>{pct(comparison.xirr)}</td><td>{period.xirr == null || comparison.xirr == null ? "—" : `${((period.xirr - comparison.xirr) * 100).toFixed(2)} pp`}</td></tr>
+              <tr><td>TWR</td><td>{pct(period.twr)}</td><td>{pct(comparison.twr)}</td><td>{period.twr == null || comparison.twr == null ? "—" : `${fmtNum((period.twr - comparison.twr) * 100, 2)} pp`}</td></tr>
+              <tr><td>XIRR roczny</td><td>{pct(period.xirr)}</td><td>{pct(comparison.xirr)}</td><td>{period.xirr == null || comparison.xirr == null ? "—" : `${fmtNum((period.xirr - comparison.xirr) * 100, 2)} pp`}</td></tr>
               <tr><td>Kapitał netto</td><td>{fmtPln(period.net_capital_pln)}</td><td>{fmtPln(comparison.net_capital_pln)}</td><td>{fmtPln(period.net_capital_pln - comparison.net_capital_pln)}</td></tr>
             </tbody>
           </table>
         ) : <div className="quality-empty">Brak wcześniejszej historii do porównania.</div>}
       </section>
 
-      <section className="surface">
-        <div className="panel-head"><div><div className="eyebrow">Atrybucja</div><h2>Co zbudowało wynik</h2><span className="sub">Wynik rynkowy po neutralizacji zakupów i sprzedaży; prowizje pokazujemy osobno.</span></div></div>
+      <section className="block">
+        <div className="panel-head"><div><h2>Co zbudowało wynik</h2></div></div>
         <div className="analysis-columns report-attribution-groups">
           <div><h3>Klasy aktywów</h3>{attributionTable(attribution.categories, "category", "Klasa")}</div>
           <div><h3>Waluty notowania</h3>{attributionTable(attribution.currencies, "currency", "Waluta")}</div>
@@ -212,8 +209,8 @@ function ReportBody({ report, benchmarkRate, cpiSpread, onOpen, loading }) {
         </div>
       </section>
 
-      <section className="surface">
-        <div className="panel-head"><div><div className="eyebrow">Przepływy</div><h2>Kapitał i aktywność</h2><span className="sub">Wpłaty i wypłaty są zewnętrzne; zakupy i sprzedaże przesuwają środki wewnątrz portfela.</span></div></div>
+      <section className="block">
+        <div className="panel-head"><div><h2>Kapitał i aktywność</h2></div></div>
         <div className="report-flow-grid">
           <Metric label="Wpłaty" value={fmtPln(flows.deposits_pln)} />
           <Metric label="Wypłaty" value={fmtPln(flows.withdrawals_pln)} />
@@ -229,13 +226,13 @@ function ReportBody({ report, benchmarkRate, cpiSpread, onOpen, loading }) {
         ) : <div className="quality-empty">Brak przepływów w wybranym okresie.</div>}
       </section>
 
-      <section className="surface">
-        <div className="panel-head"><div><div className="eyebrow">Kalendarz wyników</div><h2>Miesięczne stopy zwrotu</h2><span className="sub">TWR w miesiącach i latach, bez wpływu dopłat oraz wypłat.</span></div></div>
+      <section className="block">
+        <div className="panel-head"><div><h2>Miesięczne stopy zwrotu</h2></div></div>
         <MonthlyReturnsHeatmap rows={report.monthly_returns} />
       </section>
 
-      <section className="surface report-data-quality">
-        <div><div className="eyebrow">Jakość raportu</div><h2>{quality.status === "good" ? "Dane kompletne" : "Raport zawiera uwagi do danych"}</h2><p>Kontrola: {quality.checked_at}. Ostatnia cena: {quality.stats.latest_price_date || "brak"}; ostatni kurs FX: {quality.stats.latest_fx_date || "nie dotyczy"}.</p></div>
+      <section className="block report-data-quality">
+        <div><h2>{quality.status === "good" ? "Dane kompletne" : "Raport zawiera uwagi do danych"}</h2><p>Kontrola: {quality.checked_at}. Ostatnia cena: {quality.stats.latest_price_date || "brak"}; ostatni kurs FX: {quality.stats.latest_fx_date || "nie dotyczy"}.</p></div>
         <div className="report-quality-facts"><span>Błędy <strong>{quality.summary.errors}</strong></span><span>Ostrzeżenia <strong>{quality.summary.warnings}</strong></span><span>Pełna wycena <strong>{quality.stats.fully_valued ? "Tak" : "Nie"}</strong></span></div>
       </section>
     </>

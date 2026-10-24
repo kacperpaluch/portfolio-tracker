@@ -11,12 +11,10 @@ const PERIOD_LABELS = [
 export default function ReturnsStrip({ returns }) {
   if (!returns || !Object.keys(returns).length) return null;
   return (
-    <section className="surface">
+    <section className="block">
       <div className="panel-head">
         <div>
-          <div className="eyebrow">Efektywność</div>
           <h2>Zwroty w okresach</h2>
-          <span className="sub">Główna wartość to TWR; pod spodem pokazujemy roczny XIRR.</span>
         </div>
       </div>
       <div className="returns-strip">

@@ -1,4 +1,4 @@
-import { fmtPln, fmtPct, cls, daysSince } from "../format.js";
+import { fmtPln, fmtPct, cls, daysSince, fmtNum } from "../format.js";
 import { portfolioStructureTotal, positionStructureValue } from "../portfolioStructure.js";
 
 // Znacznik świeżości ceny (opcjonalnie z kursem FX w tej samej linii). Gdy cena jest
@@ -54,7 +54,7 @@ export default function PositionsTable({ positions, allPositions = positions, to
               <PriceMeta date={p.price_date} fxRate={p.fx_rate} />
             </td>
             <td>{fmtPln(p.value_pln)}</td>
-            <td>{structureTotal ? `${(positionStructureValue(p) / structureTotal * 100).toFixed(1)}%` : "—"}</td>
+            <td>{structureTotal ? `${fmtNum(positionStructureValue(p) / structureTotal * 100, 1)}%` : "—"}</td>
             <td className={cls(p.pl_pln)}>{fmtPln(p.pl_pln)}</td>
             <td className={cls(p.pl_pct)}>{fmtPct(p.pl_pct)}</td>
           </tr>
@@ -68,7 +68,7 @@ export default function PositionsTable({ positions, allPositions = positions, to
             <td>{fmtPln(totals.cost_pln)}</td>
             <td></td>
             <td>{fmtPln(totals.value_pln ?? totals.value_pln_partial)}</td>
-            <td>{positionsShare == null ? "—" : `${positionsShare.toFixed(1)}%`}</td>
+            <td>{positionsShare == null ? "—" : `${fmtNum(positionsShare, 1)}%`}</td>
             <td className={cls(totals.unrealized_pl_pln)}>{fmtPln(totals.unrealized_pl_pln)}</td>
             <td className={cls(totals.pl_pct)}>{fmtPct(totals.pl_pct)}</td>
           </tr>

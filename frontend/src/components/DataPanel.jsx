@@ -37,7 +37,6 @@ export default function DataPanel({ backups, onBackup, onRestore, onRestoreUploa
       <div className={`backup-health ${backups?.healthy ? "good" : "warning"}`}>
         <div className="backup-health-icon">{backups?.healthy ? "OK" : "!"}</div>
         <div>
-          <span className="sync-kicker">Stan ochrony danych</span>
           <strong>
             {backups?.healthy
               ? `Ostatnia poprawna kopia ${ageLabel(latest?.age_hours)}`

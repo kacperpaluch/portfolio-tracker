@@ -14,8 +14,9 @@ maklerskie (konto IKE). Importuje transakcje z CSV/PDF (lub dodaje ręcznie), po
 przelicza waluty kursem NBP i liczy wartość, P/L (zrealizowany + niezrealizowany),
 XIRR/TWR, benchmark, alokację docelową oraz atrybucję zysku (instrument vs waluta).
 **Wszystko wyrażone w PLN.** Jeden użytkownik, brak autoryzacji (self-hosted w sieci domowej).
-Frontend ma formę prywatnego „wealth cockpit": spokojna przestrzeń robocza, ciemny sidebar
-i sześć sekcji rozdzielających codzienny podgląd portfela od konfiguracji danych. Motyw jasny
+Frontend to standardowy tracker: górne menu z pięcioma sekcjami, rząd kart z liczbami,
+wykres i tabele na białych kartach (bez zdań-wniosków i ozdobników — decyzja użytkownika, patrz
+`PRODUCT.md` i `DESIGN.md`). Motyw jasny
 i ciemny idą za `prefers-color-scheme`; wydruk raportu wymusza wariant jasny.
 
 ## 2. Stack i technologie
@@ -31,7 +32,7 @@ i ciemny idą za `prefers-color-scheme`; wydruk raportu wymusza wariant jasny.
 | Inflacja (benchmark) | **Eurostat HICP** (`prc_hicp_midx`, PL, miesięczny) | darmowe, bez klucza; GUS BDL ma CPI tylko rocznie/kwartalnie |
 | Harmonogram | **APScheduler** (BackgroundScheduler) | dzienne odświeżanie ~21:00 |
 | Klient HTTP | **httpx** | zapytania do NBP/Eurostat |
-| Frontend | **React 18** + **Vite 5** + **Recharts 2** | responsywne SPA, wealth cockpit z ciemnym sidebarem, motyw jasny/ciemny za systemem |
+| Frontend | **React 18** + **Vite 5** + **Recharts 2** | responsywne SPA, górne menu + karty KPI, motyw jasny/ciemny za systemem |
 | Konteneryzacja | **Docker** multi-stage, multi-arch (arm64+amd64) | obraz `kpa90/portfolio-tracker` |
 
 ## 3. Zależności
@@ -104,19 +105,19 @@ backend/app/
   backup.py      # online backup, retencja, status, integrity/SHA-256, download i bezpieczny restore
   scheduler.py   # start_scheduler() — APScheduler: refresh_job (~21:00, woła history.refresh_latest) + backup_job (~03:00)
 frontend/src/
-  App.jsx        # shell, NAV/PAGE_META, ?tab=, stan, loadAll/run, akcje i sześć widoków
+  App.jsx        # shell, NAV/SUBS/LEGACY_TABS, ?tab=, stan, loadAll/run, akcje i pięć widoków
   components/    # jeden komponent = jeden plik: ReturnsStrip, HistoryChart, DrawdownChart,
                  #   InstrumentDetail, PositionsTable, TransactionForm, TransactionsTable, CashPanel,
                  #   InstrumentsPanel, AllocationPanel (+ AllocationDonut), DataPanel,
                  #   DailyChangesTable, ReportsPanel, ReportPerformanceChart, MonthlyReturnsHeatmap,
                  #   BondForm (zakup obligacji + upload tabeli PDF), AccountSelect, AccountsPanel,
                  #   BrokerMappingModal (konfiguracja nierozpoznanych symboli i retry importu),
-                 #   HeroSparkline (przebieg wartości w tle karty na Pulpicie)
-  format.js      # wspólne helpery: fmtPln, fmtPct, cls (0 => neutralne), fmtDate, daysSince
+                 #   Modal (portal do <body>, Esc, pułapka fokusu, blokada przewijania tła)
+  format.js      # wspólne helpery: fmtPln, fmtPct, fmtNum (przecinek dziesiętny), cls (0 => neutralne), fmtDate, daysSince
   chartTheme.js  # wspólny motyw Recharts: useChartColors() czyta zmienne CSS i reaguje na zmianę
                  #   motywu, paddedDomain() ratuje oś przed powtórzoną etykietą na płaskiej serii
   api.js         # cienki klient REST + detail/message z błędów backendu
-  styles.css     # tokeny UI, motyw jasny/ciemny + ciemny sidebar, desktop/tablet/mobile, wydruk
+  styles.css     # tokeny UI, motyw jasny/ciemny, karty i górny pasek, desktop/tablet/mobile, wydruk
 ```
 
 ### Architektura interfejsu
@@ -126,19 +127,22 @@ frontend/src/
 `analytics`, `accounts`). Stan `account` (0 = cały portfel) ustawia `setAccountScope` w `api.js`. `loadAll()` pobiera dwanaście endpointów równolegle, a `run()` wykonuje mutację, przeładowuje snapshot
 i publikuje toast. Parametry benchmarków są odświeżane osobno z debounce 350 ms.
 
-| `tab` | Ekran | Główne komponenty / odpowiedzialność |
+| `tab` / pod-zakładki | Ekran | Główne komponenty / odpowiedzialność |
 |---|---|---|
-| `overview` | Pulpit | hero wartości z `HeroSparkline` w tle, TWR/XIRR/gotówka, kompaktowy `HistoryChart`, przełącznik `AllocationDonut` / `HoldingsStructureChart`, największe pozycje (wszędzie sortowane malejąco po wartości) |
-| `portfolio` | Portfel | KPI otwartych pozycji, `PositionsTable`, `CashPanel` (saldo i historia; formularz jest w oknie „Dodaj") |
-| `activity` | Aktywność | filtrowanie/edycja w `TransactionsTable` |
-| `allocation` | Alokacja | `AllocationPanel`, donut oraz `RebalancePlanner` dla nowej wpłaty bez sprzedaży |
-| `analysis` | Raporty i analiza | wewnętrzne widoki: `ReportsPanel` (okres/porównanie/CSV/PDF), wynik i atrybucja (`AnalyticsBreakdown`, `ReturnsStrip`, `HistoryChart`) ryzyko (`DrawdownChart`) oraz zmiany dzienne (`DailyChangesTable`) |
-| `settings` | Dane i ustawienia | `DataQualityPanel` zawsze na górze (problemy tego samego `code` zwinięte w `<details>`, mapa `FIX` daje link do miejsca naprawy), pod nim zakładki `settingsView`: `InstrumentsPanel`, `AccountsPanel`, dane i backup (synchronizacja + `DataPanel`) |
+| `overview` | Przegląd | cztery `Kpi` (wartość, zysk od początku + TWR, ostatnia sesja, przewaga nad inflacją + XIRR), kompaktowy `HistoryChart`, największe pozycje (wszędzie sortowane malejąco po wartości) |
+| `portfolio`: `positions`, `allocation` | Portfel | `Kpi` otwartych pozycji, `PositionsTable`; alokacja: `AllocationPanel` (+ donut) i `RebalancePlanner` |
+| `history`: `transactions`, `cash` | Historia | filtrowanie/edycja w `TransactionsTable`; `CashPanel` (saldo i historia; formularz jest w oknie „Dodaj") |
+| `analysis`: `report`, `performance`, `risk`, `daily` | Raporty | `ReportsPanel` (okres/porównanie/CSV/PDF), wynik i atrybucja (`ReturnsStrip`, `HistoryChart`, `AnalyticsBreakdown`), ryzyko (`DrawdownChart`), zmiany dzienne (`DailyChangesTable`) |
+| `settings`: `quality`, `instruments`, `accounts`, `data` | Ustawienia | `DataQualityPanel` (problemy tego samego `code` zwinięte w `<details>`, mapa `FIX` prowadzi do strony i pod-zakładki naprawy), `InstrumentsPanel`, `AccountsPanel`, synchronizacja + `DataPanel` |
 
-Dodawanie jest w jednym miejscu: przycisk „+ Dodaj" w nagłówku otwiera okno (stan `adding` w `App.jsx`) z zakładkami `TransactionForm`, `BondForm`, `CashForm` (eksport z `CashPanel.jsx`) i importem pliku. Pola formularzy mają etykiety (`label.field`), a błędy walidacji trafiają do `.form-error`. `navigate(page, sub)` z `sub` przełącza pod-zakładkę ustawień i przewija do niej.
+Stare linki `?tab=` (`dashboard`, `activity`, `transactions`, `cash`, `allocation`, `daily`, `instruments`) mapuje `LEGACY_TABS` na nową stronę i pod-zakładkę.
 
-Wspólne elementy wizualne (`SectionHeader`, `Metric`, `StatusDot`) są lokalnymi komponentami
-`App.jsx`. Desktop używa stałego sidebara; poniżej 820 px sidebar zastępuje dolna nawigacja.
+Dodawanie jest w jednym miejscu: przycisk „+ Dodaj" w nagłówku otwiera okno (stan `adding` w `App.jsx`) z zakładkami `TransactionForm`, `BondForm`, `CashForm` (eksport z `CashPanel.jsx`) i importem pliku. Pola formularzy mają etykiety (`label.field`), a błędy walidacji trafiają do `.form-error`. `navigate(page, sub)` z `sub` przełącza pod-zakładkę danej strony (stan `subs`).
+
+Wspólne elementy wizualne (`Kpi`, `Block` — karta z nagłówkiem, `Tabs` — zakładki ARIA ze
+strzałkami) są lokalnymi komponentami `App.jsx`; okna korzystają z `components/Modal.jsx`.
+Nawigacja to przyklejony górny pasek; poniżej 760 px pięć sekcji przewija się w poziomie pod logo.
+Liczby w UI formatuj przez `fmtNum`/`fmtPct` (polski przecinek), nie przez `toFixed`.
 Tabele pozostają poziomo przewijalne na małych ekranach, do prawej wyrównane są wyłącznie
 kolumny liczbowe (tekstowe dostają `.txt`). Kolory i typografia są definiowane tokenami CSS
 w `:root` i nadpisywane w bloku `prefers-color-scheme: dark`; Recharts nie przyjmuje `var()`
@@ -278,7 +282,7 @@ Swagger UI `/docs` · ReDoc `/redoc` · OpenAPI JSON `/openapi.json` (do importu
 - **TWR** — time-weighted; łańcuch dziennych zwrotów z neutralizacją przepływów (konwencja „początek dnia"). `portfolio_twr` bierze wkłady z `_contributions` (jak `portfolio_returns`): bez wpłat zewnętrznych wkładem są kupna — wcześniej dokupienie przy nieaktywnej księdze gotówki liczyło się jako zysk.
 - **Zwroty w okresach** (`history.portfolio_returns`) — okna 1M/3M/YTD/1R/od początku liczone z jednej dziennej serii. Per okno: TWR skumulowany (nie-zannualizowany, headline dla krótkich okien), TWR roczny, XIRR roczny. Wkłady kapitału (z `_contributions`) spójne z serią → neutralizacja TWR i baza XIRR nie liczą dopłat jako zwrotu. Zwracane w `totals.returns` z `/api/portfolio`.
 - **Benchmarki** (`portfolio_history`) — DWA, oba money-weighted (każda wpłata oprocentowana od swojej daty, nie płaska linia): (1) **stała stopa** `amount × (1+benchmark_rate)^lata`; (2) **inflacja + X%** `amount × indeks_HICP(d)/indeks_HICP(wpłata) × (1+cpi_spread)^lata`. Indeks HICP z cache `cpi_index` (`cpi.load_points`), interpolacja liniowa między miesiącami + forward-fill końca (`cpi.index_at`). Bazowy indeks per wkład liczony raz przed pętlą. Gdy cache CPI pusty (`has_cpi=False`) → pola `benchmark_cpi_*` = `None` (front nie rysuje linii). Pola wyjściowe: `benchmark_pln`/`benchmark_pct` (stała), `benchmark_cpi_pln`/`benchmark_cpi_pct` (inflacja). Front: `HistoryChart` ma osobne przełączniki widoczności obu benchmarków, działa w trybie PLN i %.
-- **Drawdown** (`history.portfolio_drawdown` + `returns.twr_index`) — obsunięcie liczone na **indeksie wzrostu TWR** (growth-of-1, ta sama neutralizacja przepływów co `twr_detail`), NIE na surowej wartości PLN: wpłaty IKE nie maskują spadków, wypłaty nie udają obsunięć. `drawdown[d] = indeks/dotychczasowy_szczyt − 1` (≤ 0). Zwraca dzienną krzywą „pod wodą" (`series`), `max_drawdown` z datami szczytu/dołka (`..._from`/`..._to`), `recovery_date` (pierwszy dzień powrotu do poziomu szczytu sprzed obsunięcia) oraz `current_drawdown`/`in_drawdown`. Front: `DrawdownChart` (czerwona krzywa pod osią 0 + pasek podsumowania) na Pulpicie pod wykresem wartości.
+- **Drawdown** (`history.portfolio_drawdown` + `returns.twr_index`) — obsunięcie liczone na **indeksie wzrostu TWR** (growth-of-1, ta sama neutralizacja przepływów co `twr_detail`), NIE na surowej wartości PLN: wpłaty IKE nie maskują spadków, wypłaty nie udają obsunięć. `drawdown[d] = indeks/dotychczasowy_szczyt − 1` (≤ 0). Zwraca dzienną krzywą „pod wodą" (`series`), `max_drawdown` z datami szczytu/dołka (`..._from`/`..._to`), `recovery_date` (pierwszy dzień powrotu do poziomu szczytu sprzed obsunięcia) oraz `current_drawdown`/`in_drawdown`. Front: `DrawdownChart` (czerwona krzywa pod osią 0 + pasek podsumowania) w Raporty → Ryzyko.
 - **Stopa zwrotu % vs benchmark %** (`portfolio_history`) — `portfolio_pct = (wartość − cum_wkłady) / cum_wkłady × 100`, analogicznie `benchmark_pct`. Skumulowane wkłady liczone inkrementalnie (O(dni + wpłaty), nie O(dni × wpłaty)). Przed pierwszą wpłatą `cum_wkłady = 0` → `null` (przerwa w linii, `connectNulls` tylko w trybie PLN). Bez wpłat zewnętrznych fallback na transakcje (wkład = cost basis). Przełącznik trybu wykresu (PLN/%) jest czysto frontendowy w `HistoryChart`.
 - **Atrybucja FX** (widok waloru) — `wartość_bez_zmian_kursu = ilość × cena_natywna × kurs_wejścia`; `efekt_waluty = wartość − wartość_bez_zmian_kursu`; `efekt_instrumentu = total − efekt_waluty`.
 - **Zmiana dzienna** (`history.portfolio_daily_changes`) — `change_pln = wartość_ETF[d] − wartość_ETF[d−1] − przepływ_handlowy[d]`, gdzie przepływ = koszt kupna (+) / przychód ze sprzedaży (−). Dzięki temu zakup nie liczy się jako zysk. Bez atrybucji FX: ETF na cały świat zależy od setek walut pod spodem, a przypisywanie D/D do fixingu EUR/PLN to szum, nie insight. Cały efekt walutowy zostaje ukryty w `change_pln` (realny zwrot inwestora złotówkowego). `flow_pln` pokazuje przepływ handlowy danego dnia.

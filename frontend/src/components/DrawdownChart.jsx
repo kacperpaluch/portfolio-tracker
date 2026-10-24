@@ -16,7 +16,7 @@ import { TOOLTIP_STYLE, axisProps, gridProps, useChartColors } from "../chartThe
 export default function DrawdownChart({ data }) {
   const colors = useChartColors();
   if (!data || !data.series || data.series.length === 0)
-    return <div className="spinner">Brak danych historycznych — uzupełnij historię w sekcji „Dane i ustawienia".</div>;
+    return <div className="spinner">Brak danych historycznych — uzupełnij ją w Ustawieniach → Synchronizacja i kopie.</div>;
 
   const { series, max_drawdown, max_drawdown_from, max_drawdown_to, recovery_date, current_drawdown } = data;
   const minVal = Math.min(0, ...series.map((p) => p.drawdown_pct));

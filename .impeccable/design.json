@@ -1,0 +1,169 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-24T00:00:00Z",
+  "title": "Design System: Portfolio",
+  "extensions": {
+    "colorMeta": {
+      "accent": { "role": "primary", "displayName": "Niebieski akcji", "canonical": "#2563eb", "dark": "#7ea3ff", "darkFill": "#3b6fe0", "tonalRamp": ["#172554", "#1e3a8a", "#1d4ed8", "#2563eb", "#5584ea", "#7ea3ff", "#c7d7fe", "#eef3ff"] },
+      "accent-hover": { "role": "primary", "displayName": "Niebieski wciśnięty", "canonical": "#1d4ed8", "dark": "#5584ea" },
+      "accent-ink": { "role": "primary", "displayName": "Tekst na akcencie", "canonical": "#ffffff", "dark": "#ffffff" },
+      "accent-soft": { "role": "primary", "displayName": "Mgiełka akcentu", "canonical": "#eef3ff", "dark": "rgba(59, 111, 224, 0.16)" },
+      "pos": { "role": "secondary", "displayName": "Zieleń zysku", "canonical": "#067647", "dark": "#47cd89", "tonalRamp": ["#053321", "#074d31", "#067647", "#079455", "#17b26a", "#47cd89", "#abefc6", "#ecfdf3"] },
+      "neg": { "role": "secondary", "displayName": "Czerwień straty", "canonical": "#d92d20", "dark": "#f97066", "tonalRamp": ["#55160c", "#912018", "#b42318", "#d92d20", "#f04438", "#f97066", "#fecdca", "#fef3f2"] },
+      "warn": { "role": "secondary", "displayName": "Bursztyn ostrzeżenia", "canonical": "#b54708", "dark": "#fdb022", "tonalRamp": ["#4e1d09", "#7a2e0e", "#b54708", "#dc6803", "#f79009", "#fdb022", "#fedf89", "#fffaeb"] },
+      "bg": { "role": "neutral", "displayName": "Tło strony", "canonical": "#f5f6f8", "dark": "#0c0e12" },
+      "surface": { "role": "neutral", "displayName": "Karta", "canonical": "#ffffff", "dark": "#15191f" },
+      "surface-2": { "role": "neutral", "displayName": "Kafel", "canonical": "#f6f7f9", "dark": "#1c2128" },
+      "border": { "role": "neutral", "displayName": "Ramka", "canonical": "#e4e7ec", "dark": "#262c35" },
+      "border-strong": { "role": "neutral", "displayName": "Ramka mocna", "canonical": "#d0d5dd", "dark": "#363e4a" },
+      "text": { "role": "neutral", "displayName": "Tekst", "canonical": "#101828", "dark": "#f2f4f7", "tonalRamp": ["#101828", "#344054", "#667085", "#98a2b3", "#d0d5dd", "#e4e7ec", "#f6f7f9", "#ffffff"] },
+      "text-2": { "role": "neutral", "displayName": "Tekst 2", "canonical": "#344054", "dark": "#cfd4dc" },
+      "muted": { "role": "neutral", "displayName": "Wyciszony", "canonical": "#667085", "dark": "#98a2b3" },
+      "series-portfolio": { "role": "tertiary", "displayName": "Seria portfela", "canonical": "#2563eb", "dark": "#6b9bff" },
+      "series-benchmark": { "role": "tertiary", "displayName": "Seria benchmarku", "canonical": "#c27803", "dark": "#fdb022" },
+      "series-cpi": { "role": "tertiary", "displayName": "Seria inflacji", "canonical": "#7c3aed", "dark": "#b79cff" },
+      "series-cost": { "role": "tertiary", "displayName": "Seria kosztu", "canonical": "#98a2b3", "dark": "#667085" },
+      "series-loss": { "role": "tertiary", "displayName": "Seria straty", "canonical": "#d92d20", "dark": "#f97066" }
+    },
+    "categoryPalette": {
+      "source": "frontend/src/chartTheme.js CATEGORY_COLORS",
+      "purpose": "Tylko donut alokacji; stonowane tony średnie czytelne na obu tłach.",
+      "values": ["#3f8f60", "#4d78ad", "#b27a1c", "#8a6fb8", "#c45b55", "#4f9e93", "#99a83f", "#b87958", "#7b8580", "#6f7fb5"]
+    },
+    "typographyMeta": {
+      "headline": { "displayName": "Tytuł strony", "purpose": "Jeden na stronę; 1.25rem na telefonie." },
+      "kpi": { "displayName": "KPI", "purpose": "Wartość w kartach KPI; 1.25rem na telefonie." },
+      "title": { "displayName": "Tytuł karty", "purpose": "Nagłówek karty (Block)." },
+      "stat": { "displayName": "Kafel", "purpose": "Wartości w szarych kaflach wewnątrz kart." },
+      "body": { "displayName": "Treść", "purpose": "Treść, komórki tabel, listy." },
+      "label": { "displayName": "Etykieta", "purpose": "Podpisy KPI i kafli, etykiety pól, małe przyciski." },
+      "table-head": { "displayName": "Nagłówek kolumny", "purpose": "Nagłówki tabel, wyciszone, bez wersalików." }
+    },
+    "shadows": [
+      { "name": "shadow-xs", "value": "0 1px 2px rgba(16, 24, 40, 0.05)", "dark": "none", "purpose": "Spoczynek: karty, KPI, przyciski, pola." },
+      { "name": "shadow-lg", "value": "0 20px 48px rgba(16, 24, 40, 0.18)", "dark": "0 20px 48px rgba(0, 0, 0, 0.55)", "purpose": "Tylko elementy nad stroną: okno modalne, toast." }
+    ],
+    "motion": [
+      { "name": "state", "value": "120ms ease-out", "purpose": "Zmiana tła/koloru przycisków, menu, wierszy tabel." },
+      { "name": "disclosure", "value": "150ms ease-out", "purpose": "Obrót strzałki rozwijanej grupy problemów." },
+      { "name": "enter", "value": "240ms cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Wjazd toastu z 8px; ta sama krzywa dla paska ładowania (1.1s)." },
+      { "name": "reduced-motion", "value": "transition: none", "purpose": "Przy prefers-reduced-motion wszystko bez przejść, pasek ładowania stoi." }
+    ],
+    "breakpoints": [
+      { "name": "tablet", "value": "1100px" },
+      { "name": "phone", "value": "760px" },
+      { "name": "narrow", "value": "420px" },
+      { "name": "coarse-pointer", "value": "pointer: coarse (cele 44px)" }
+    ],
+    "layout": { "page": "1280px", "gutter": "clamp(16px, 3vw, 32px)", "topbar": "60px" }
+  },
+  "components": [
+    {
+      "name": "Przycisk główny",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Jedna akcja główna na widok („Dodaj”, „Zapisz”).",
+      "html": "<button class=\"ds-btn-primary\">Dodaj</button>",
+      "css": ".ds-btn-primary { display: inline-flex; min-height: 36px; align-items: center; padding: 0 14px; border: 1px solid transparent; border-radius: 8px; background: var(--accent-fill, var(--accent, #2563eb)); color: var(--accent-ink, #fff); font: 600 0.875rem/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-shadow: 0 1px 2px rgba(16,24,40,0.05); cursor: pointer; transition: background-color 120ms ease-out; } .ds-btn-primary:hover { background: var(--accent-hover, #1d4ed8); } .ds-btn-primary:focus-visible { outline: 2px solid var(--accent, #2563eb); outline-offset: 2px; }"
+    },
+    {
+      "name": "Przycisk drugorzędny",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Akcje pomocnicze w nagłówku strony („Odśwież wyceny”).",
+      "html": "<button class=\"ds-btn-secondary\">Odśwież wyceny</button>",
+      "css": ".ds-btn-secondary { display: inline-flex; min-height: 36px; align-items: center; padding: 0 14px; border: 1px solid var(--border-strong, #d0d5dd); border-radius: 8px; background: var(--surface, #fff); color: var(--text-2, #344054); font: 600 0.875rem/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-shadow: 0 1px 2px rgba(16,24,40,0.05); cursor: pointer; transition: background-color 120ms ease-out; } .ds-btn-secondary:hover { background: var(--surface-2, #f6f7f9); color: var(--text, #101828); } .ds-btn-secondary:focus-visible { outline: 2px solid var(--accent, #2563eb); outline-offset: 2px; }"
+    },
+    {
+      "name": "Pole tekstowe",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Pole formularza z etykietą nad nim.",
+      "html": "<label class=\"ds-field\">Kwota<input class=\"ds-input\" placeholder=\"0,00\"></label>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 6px; color: var(--text-2, #344054); font: 550 0.8125rem -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; } .ds-input { width: 160px; min-height: 36px; padding: 0 10px; border: 1px solid var(--border-strong, #d0d5dd); border-radius: 8px; background: var(--surface, #fff); color: var(--text, #101828); font: 400 0.875rem -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-shadow: 0 1px 2px rgba(16,24,40,0.05); } .ds-input::placeholder { color: var(--muted, #667085); } .ds-input:focus { border-color: var(--accent, #2563eb); outline: 3px solid color-mix(in srgb, var(--accent, #2563eb) 20%, transparent); outline-offset: 0; }"
+    },
+    {
+      "name": "Menu główne",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "Pięć sekcji w pasku górnym; aktywna jako pigułka mgiełki akcentu.",
+      "html": "<nav class=\"ds-nav\"><button class=\"active\">Przegląd</button><button>Portfel</button><button>Historia</button><button>Raporty</button><button>Ustawienia</button></nav>",
+      "css": ".ds-nav { display: flex; gap: 4px; } .ds-nav button { min-height: 36px; padding: 0 12px; border: 0; border-radius: 8px; background: none; color: var(--muted, #667085); font: 550 0.875rem -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; cursor: pointer; transition: background-color 120ms ease-out, color 120ms ease-out; } .ds-nav button:hover { background: var(--surface-2, #f6f7f9); color: var(--text, #101828); } .ds-nav button.active { background: var(--accent-soft, #eef3ff); color: var(--accent, #2563eb); } .ds-nav button:focus-visible { outline: 2px solid var(--accent, #2563eb); outline-offset: 2px; }"
+    },
+    {
+      "name": "Zakładki",
+      "kind": "nav",
+      "refersTo": "tab",
+      "description": "Podsekcje strony; aktywna z 2px podkreśleniem w akcencie.",
+      "html": "<div class=\"ds-tabs\" role=\"tablist\"><button role=\"tab\" aria-selected=\"true\">Pozycje</button><button role=\"tab\" aria-selected=\"false\">Transakcje</button><button role=\"tab\" aria-selected=\"false\">Gotówka</button></div>",
+      "css": ".ds-tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--border, #e4e7ec); } .ds-tabs button { min-height: 40px; margin-bottom: -1px; padding: 0; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted, #667085); font: 550 0.875rem -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; cursor: pointer; } .ds-tabs button:hover { color: var(--text, #101828); } .ds-tabs button[aria-selected=\"true\"] { border-color: var(--accent, #2563eb); color: var(--accent, #2563eb); }"
+    },
+    {
+      "name": "Karta KPI",
+      "kind": "card",
+      "refersTo": "kpi",
+      "description": "Etykieta, wartość kolorowana znakiem, szczegół; cztery w rzędzie.",
+      "html": "<div class=\"ds-kpi\"><span class=\"l\">Zysk od początku</span><strong class=\"v pos\">537,27 zł</strong><span class=\"d\">TWR +21,76%</span></div>",
+      "css": ".ds-kpi { padding: 18px 20px; border: 1px solid var(--border, #e4e7ec); border-radius: 12px; background: var(--surface, #fff); box-shadow: 0 1px 2px rgba(16,24,40,0.05); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; } .ds-kpi .l, .ds-kpi .d { display: block; color: var(--muted, #667085); font-size: 0.8125rem; font-weight: 500; } .ds-kpi .v { display: block; margin: 6px 0; color: var(--text, #101828); font-size: 1.625rem; font-weight: 650; letter-spacing: -0.02em; line-height: 1.2; font-variant-numeric: tabular-nums; } .ds-kpi .v.pos { color: var(--pos, #067647); } .ds-kpi .v.neg { color: var(--neg, #d92d20); }"
+    },
+    {
+      "name": "Karta z kaflami",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Karta sekcji z tytułem i akcją tekstową; liczby w szarych kaflach, nie w zagnieżdżonych kartach.",
+      "html": "<section class=\"ds-card\"><header><h2>Stopy zwrotu</h2><a href=\"#\">Pełna analiza</a></header><div class=\"ds-tiles\"><div><span>1 miesiąc</span><strong>+1,24%</strong></div><div><span>YTD</span><strong>+9,80%</strong></div><div><span>Od początku</span><strong>+21,76%</strong></div></div></section>",
+      "css": ".ds-card { padding: 20px 24px; border: 1px solid var(--border, #e4e7ec); border-radius: 12px; background: var(--surface, #fff); box-shadow: 0 1px 2px rgba(16,24,40,0.05); font: 400 0.875rem/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: var(--text, #101828); } .ds-card header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; } .ds-card h2 { margin: 0; font-size: 1rem; font-weight: 650; } .ds-card a { color: var(--accent, #2563eb); font-weight: 600; text-decoration: none; } .ds-card a:hover { color: var(--accent-hover, #1d4ed8); } .ds-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; } .ds-tiles > div { padding: 12px 14px; border-radius: 8px; background: var(--surface-2, #f6f7f9); } .ds-tiles span { display: block; color: var(--muted, #667085); font-size: 0.8125rem; font-weight: 500; } .ds-tiles strong { display: block; margin-top: 4px; font-size: 1.125rem; font-weight: 650; font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Presety okresu",
+      "kind": "chip",
+      "refersTo": "chip-preset",
+      "description": "Wybór zakresu raportu; aktywny na mgiełce akcentu.",
+      "html": "<div class=\"ds-presets\"><button class=\"active\">Ten miesiąc</button><button>Kwartał</button><button>YTD</button></div>",
+      "css": ".ds-presets { display: flex; gap: 6px; } .ds-presets button { min-height: 32px; padding: 0 12px; border: 1px solid var(--border-strong, #d0d5dd); border-radius: 99px; background: none; color: var(--text-2, #344054); font: 600 0.8125rem -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; cursor: pointer; } .ds-presets button:hover { background: var(--surface-2, #f6f7f9); } .ds-presets button.active { border-color: var(--accent, #2563eb); background: var(--accent-soft, #eef3ff); color: var(--accent, #2563eb); } .ds-presets button:focus-visible { outline: 2px solid var(--accent, #2563eb); outline-offset: 2px; }"
+    },
+    {
+      "name": "Tabela liczb",
+      "kind": "custom",
+      "refersTo": "table",
+      "description": "Liczby do prawej, tekst do lewej, cyfry tabelaryczne, hover wiersza na kaflu.",
+      "html": "<table class=\"ds-table\"><thead><tr><th>Instrument</th><th>Udział</th><th>Wartość</th></tr></thead><tbody><tr><td>ETFPZUWORLD</td><td>29,3%</td><td>1779,56 zł</td></tr><tr><td>Invesco MSCI World</td><td>8,4%</td><td>508,81 zł</td></tr></tbody></table>",
+      "css": ".ds-table { width: 100%; border-collapse: collapse; font: 400 0.875rem/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-variant-numeric: tabular-nums; color: var(--text, #101828); } .ds-table th, .ds-table td { padding: 11px 12px; border-bottom: 1px solid var(--border, #e4e7ec); text-align: right; } .ds-table th:first-child, .ds-table td:first-child { padding-left: 0; text-align: left; } .ds-table th { color: var(--muted, #667085); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em; } .ds-table tbody tr { transition: background-color 120ms ease-out; } .ds-table tbody tr:hover { background: var(--surface-2, #f6f7f9); } .ds-table tbody tr:last-child td { border-bottom: 0; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Standard kategorii, wykonany starannie",
+    "overview": "Portfolio wygląda jak tracker, którego użytkownik się spodziewa: górny pasek z pięcioma sekcjami, nagłówek strony, rząd kart z liczbami, wykres i tabele. Nowość nie leży w formie, tylko w wykonaniu — równe odstępy, cyfry tabelaryczne, jedna niebieska barwa akcji, zieleń i czerwień tylko przy wyniku. Interfejs mówi liczbami i etykietami, nie zdaniami.\n\nGęstość jest umiarkowana: strona startowa odpowiada na „ile mam i jak idzie” czterema kartami KPI i siatką 2:1 (wykres + największe pozycje); gęstsze tabele i kafle pojawiają się dopiero w sekcjach analitycznych. Powierzchnie są płaskie: jasnoszare tło, białe karty z jednopikselową ramką i prawie niewidocznym cieniem. Tryb ciemny idzie za ustawieniem systemu; wydruk raportu jest zawsze jasny.\n\nOdrzucone przez użytkownika (2026-10-24): styl redakcyjny ze zdaniami-wnioskami i wielką typografią, kolorowe bloki sekcji, boczne menu.",
+    "keyCharacteristics": [
+      "Jasnoszare tło, białe karty 12px z ramką 1px, cień tylko 1px.",
+      "Jeden akcent (niebieski) dla akcji, aktywnej nawigacji i serii portfela.",
+      "Zysk/strata kolorem, zero i przepływy neutralnie.",
+      "Systemowy krój, treść 14px, liczby zawsze tabelaryczne.",
+      "Liczby wyrównane do prawej, tekst do lewej."
+    ],
+    "rules": [
+      { "name": "The Zero Is Neutral Rule", "body": "Zero, przepływy (wpłaty, zakupy, rebalans) i brak danych są szare (`muted`/`text`). Zielony i czerwony pojawiają się na liczbie tylko wtedy, gdy znak oznacza wynik.", "section": "colors" },
+      { "name": "The One Blue Rule", "body": "Niebieski znaczy „możesz w to kliknąć” albo „to twój portfel”. Nie służy do dekoracji, nagłówków sekcji ani teł kart.", "section": "colors" },
+      { "name": "The Word Beside the Color Rule", "body": "Kolor statusu (pos/warn/neg w plakietkach jakości, kopii, nieaktualnych wycen) zawsze stoi przy słowie lub liczbie, nigdy sam.", "section": "colors" },
+      { "name": "The Tabular Figures Rule", "body": "Każda liczba w tabeli, liście rankingowej, KPI i kaflu ma `font-variant-numeric: tabular-nums`. Kolumny cyfr muszą się zgadzać w pionie.", "section": "typography" },
+      { "name": "The Labels Not Sentences Rule", "body": "Etykieta nad liczbą to rzeczownik („Wartość portfela”, „Ostatnia sesja”), szczegół pod nią to druga liczba („TWR +21,76%”). Bez zdań-wniosków i bez nadtytułów nad nagłówkami.", "section": "typography" },
+      { "name": "The No Nested Cards Rule", "body": "Liczby z podpisem wewnątrz karty to szare kafle (surface-2, promień 8px, bez ramki i cienia), nigdy karta w karcie.", "section": "elevation" }
+    ],
+    "dos": [
+      "**Do** budować widok z tych samych klocków: nagłówek strony → rząd KPI → karty z tytułem i jedną akcją → tabele.",
+      "**Do** kolorować liczbę przez `cls()` — zero i brak danych zostają wyciszone.",
+      "**Do** dawać każdej liczbie `tabular-nums` i wyrównanie do prawej w kolumnach.",
+      "**Do** brać kolory wykresów z `useChartColors()` / zmiennych `--series-*`, nie wpisywać hexów w komponentach.",
+      "**Do** trzymać promienie 12px (kontenery) / 8px (kontrolki) / pigułka (presety, plakietki).",
+      "**Do** zapewnić 44px celu dotykowego przy `pointer: coarse` dla każdego nowego przycisku."
+    ],
+    "donts": [
+      "**Don't** dodawać zdań-wniosków, nadtytułów ani wielkiej typografii redakcyjnej — odrzucone przez użytkownika.",
+      "**Don't** barwić sekcji ani kart kolorowymi tłami; jedyne tła tonalne to surface-2 i mgiełka akcentu dla stanu aktywnego.",
+      "**Don't** wkładać karty w kartę — wewnątrz karty liczby idą do szarych kafli.",
+      "**Don't** używać zieleni dla wpłat, zakupów ani zera.",
+      "**Don't** dodawać cieni ponad `--shadow-xs` na elementach osadzonych w stronie; `--shadow-lg` tylko dla okien i powiadomień.",
+      "**Don't** wprowadzać bocznego menu — nawigacja to pasek górny i zakładki."
+    ]
+  }
+}

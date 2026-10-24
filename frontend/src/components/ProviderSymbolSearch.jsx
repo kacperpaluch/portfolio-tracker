@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api } from "../api.js";
+import Modal from "./Modal.jsx";
 
 export default function ProviderSymbolSearch({ source, defaultQuery, onSelect }) {
   const [open, setOpen] = useState(false);
@@ -43,14 +44,12 @@ export default function ProviderSymbolSearch({ source, defaultQuery, onSelect })
 
   return (
     <>
-      <button type="button" className="symbol-search-trigger" onClick={show}>Wyszukaj</button>
+      <button type="button" className="text-button symbol-search-trigger" onClick={show}>Wyszukaj symbol</button>
       {open && (
-        <div className="modal-backdrop" role="presentation">
-          <div className="modal symbol-search-modal" role="dialog" aria-modal="true" aria-label="Wyszukaj symbol">
+        <Modal label="Wyszukaj symbol" className="symbol-search-modal" onClose={busy ? undefined : () => setOpen(false)}>
             <div className="modal-head">
               <div>
-                <div className="eyebrow">{source === 'eodhd' ? 'EODHD' : 'Alpha Vantage'}</div>
-                <h2>Wyszukaj symbol</h2>
+                <h2>Wyszukaj symbol w {source === 'eodhd' ? 'EODHD' : 'Alpha Vantage'}</h2>
                 <p className="mapping-intro">
                   {source === 'eodhd'
                     ? 'Najpewniejszy wynik daje ISIN. Możesz też użyć nazwy lub symbolu.'
@@ -82,8 +81,7 @@ export default function ProviderSymbolSearch({ source, defaultQuery, onSelect })
                 ))}
               </div>
             )}
-          </div>
-        </div>
+        </Modal>
       )}
     </>
   );

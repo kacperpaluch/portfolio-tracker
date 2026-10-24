@@ -8,7 +8,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { fmtPct } from "../format.js";
+import { fmtPct, fmtNum } from "../format.js";
 import { LEGEND_STYLE, TOOLTIP_STYLE, axisProps, gridProps, paddedDomain, useChartColors } from "../chartTheme.js";
 
 export default function ReportPerformanceChart({ rows, benchmarkRate, cpiSpread }) {
@@ -26,7 +26,7 @@ export default function ReportPerformanceChart({ rows, benchmarkRate, cpiSpread 
       <LineChart data={rows} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
         <CartesianGrid {...gridProps(colors)} />
         <XAxis dataKey="date" {...axisProps(colors, 10)} minTickGap={35} />
-        <YAxis {...axisProps(colors, 10)} tickFormatter={(value) => `${value.toFixed(1)}%`} width={55} domain={domain} />
+        <YAxis {...axisProps(colors, 10)} tickFormatter={(value) => `${fmtNum(value, 1)}%`} width={55} domain={domain} />
         <Tooltip
           contentStyle={TOOLTIP_STYLE}
           formatter={(value, name) => [fmtPct(value), labels[name] || name]}

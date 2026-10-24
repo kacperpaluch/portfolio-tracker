@@ -42,7 +42,7 @@ export default function TransactionForm({ instruments, accounts, defaultAccount,
         <select className="cell" value={f.isin} onChange={(e) => set("isin", e.target.value)}>
           <option value="">— wybierz walor —</option>
           {instruments.map((i) => <option key={i.isin} value={i.isin}>{i.name}</option>)}
-          <option value="__new__">➕ nowy walor…</option>
+          <option value="__new__">Nowy walor…</option>
         </select>
       </label>
       {adding && (

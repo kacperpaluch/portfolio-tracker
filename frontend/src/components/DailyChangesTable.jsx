@@ -2,7 +2,7 @@ import { fmtPln, fmtPct, cls } from "../format.js";
 
 export default function DailyChangesTable({ rows }) {
   if (!rows || rows.length === 0)
-    return <div className="spinner">Brak danych — uzupełnij historię wycen w sekcji „Dane i ustawienia".</div>;
+    return <div className="spinner">Brak danych — uzupełnij historię wycen w Ustawieniach → Synchronizacja i kopie.</div>;
   const ordered = [...rows].reverse();
   return (
     <table>

@@ -49,3 +49,8 @@ data/
 .mcp.json
 opencode.json
 opencode.jsonc
+
+# Impeccable — szkice decyzyjne i zrzuty z przeglądów (lokalne artefakty procesu projektowego)
+.impeccable/mocks/
+.impeccable/review/
+.impeccable/build/

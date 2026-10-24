@@ -1,5 +1,5 @@
 import { Cell, Label, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
-import { fmtPln } from "../format.js";
+import { fmtPln, fmtNum } from "../format.js";
 import { CATEGORY_COLORS, LEGEND_STYLE, TOOLTIP_STYLE } from "../chartTheme.js";
 
 const plural = (n) => (n === 1 ? "kategoria" : n < 5 ? "kategorie" : "kategorii");
@@ -42,7 +42,7 @@ export default function AllocationDonut({ groups, total, compact = false }) {
           </Pie>
           <Tooltip
             contentStyle={TOOLTIP_STYLE}
-            formatter={(v, name) => [`${fmtPln(v)} (${((v / total) * 100).toFixed(1)}%)`, name]}
+            formatter={(v, name) => [`${fmtPln(v)} (${fmtNum((v / total) * 100, 1)}%)`, name]}
           />
           {!compact && <Legend wrapperStyle={LEGEND_STYLE} />}
         </PieChart>

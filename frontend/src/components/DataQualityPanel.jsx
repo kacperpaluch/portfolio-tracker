@@ -10,7 +10,7 @@ function groupIssues(issues) {
   return [...byCode.values()];
 }
 
-// Dokąd prowadzi naprawa problemu danego typu: [strona, pod-zakładka ustawień, etykieta].
+// Dokąd prowadzi naprawa problemu danego typu: [strona, pod-zakładka, etykieta].
 const FIX = {
   instrument_config: ["settings", "instruments", "Otwórz instrumenty"],
   missing_category: ["settings", "instruments", "Otwórz instrumenty"],
@@ -18,16 +18,16 @@ const FIX = {
   stale_price: ["settings", "data", "Otwórz synchronizację"],
   missing_fx: ["settings", "data", "Otwórz synchronizację"],
   stale_fx: ["settings", "data", "Otwórz synchronizację"],
-  invalid_transaction: ["activity", null, "Otwórz transakcje"],
-  oversell: ["activity", null, "Otwórz transakcje"],
-  cash_reconciliation: ["portfolio", null, "Otwórz portfel"],
-  allocation_target: ["allocation", null, "Otwórz alokację"],
+  invalid_transaction: ["history", "transactions", "Otwórz transakcje"],
+  oversell: ["history", "transactions", "Otwórz transakcje"],
+  cash_reconciliation: ["history", "cash", "Otwórz wpłaty i wypłaty"],
+  allocation_target: ["portfolio", "allocation", "Otwórz alokację"],
 };
 
 function FixLink({ code, onGo }) {
   const fix = FIX[code];
   if (!fix || !onGo) return null;
-  return <button className="text-button quality-fix" onClick={() => onGo(fix[0], fix[1])}>{fix[2]} →</button>;
+  return <button className="text-button quality-fix" onClick={() => onGo(fix[0], fix[1])}>{fix[2]}</button>;
 }
 
 function IssueBody({ issue }) {
