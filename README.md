@@ -42,7 +42,8 @@ Internetu bez dodatkowej warstwy dostępu (np. VPN, Tailscale lub reverse proxy 
   z przyklejoną pierwszą kolumną, pola formularzy nie wywołują zoomu w Safari na iOS,
   a cele dotykowe mają co najmniej 44 px. Okna dialogowe zamykają się klawiszem Esc
   i trzymają fokus klawiatury w środku.
-- **Kolor niesie jedno znaczenie** — zieleń i czerwień zarezerwowane są dla zysku i straty.
+- **Kolor niesie jedno znaczenie** — przy kwotach i procentach zieleń i czerwień oznaczają wyłącznie zysk i stratę
+  (statusy danych i błędy używają ich jako OK/błąd, zawsze z napisem obok).
   Typ operacji (kupno/sprzedaż, wpłata/wypłata) jest neutralnym znacznikiem, kwoty przepływów
   i rebalansu pokazują kierunek znakiem, a zero jest szare, nie zielone.
 - **Import CSV i PDF** z biura maklerskiego — GPW „historia PW”, eMAKLER

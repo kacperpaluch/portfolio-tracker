@@ -53,8 +53,8 @@ Motyw jasny i ciemny za ustawieniem systemu; raport drukowany do PDF zawsze jasn
   widok waloru z atrybucją instrument/waluta, transakcje (dodawanie, import CSV/PDF, edycja, usuwanie),
   gotówka, obligacje, podatek szacunkowy, alokacja i planer, raport okresowy z wydrukiem,
   ryzyko (drawdown), zmiany dzienne, jakość danych, instrumenty/providerzy, konta, backup i przywracanie.
-- Zielony/czerwony zarezerwowane dla zysku/straty; przepływy (wpłaty, zakupy, rebalans) neutralne,
-  zero neutralne.
+- Przy kwotach i procentach zielony/czerwony oznaczają wyłącznie zysk/stratę; przepływy (wpłaty, zakupy,
+  rebalans) i zero są neutralne. W statusach systemu (jakość danych, kopie zapasowe, błędy formularzy) te same kolory oznaczają OK i błąd — zawsze z napisem obok, nigdy jako sam kolor.
 
 ## Brand Commitments
 

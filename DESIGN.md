@@ -154,7 +154,7 @@ components:
 
 **Creative North Star: "Standard kategorii, wykonany starannie"**
 
-Portfolio wygląda jak tracker, którego użytkownik się spodziewa: górny pasek z pięcioma sekcjami, nagłówek strony, rząd kart z liczbami, wykres i tabele. Nowość nie leży w formie, tylko w wykonaniu — równe odstępy, cyfry tabelaryczne, jedna niebieska barwa akcji, zieleń i czerwień tylko przy wyniku. Interfejs mówi liczbami i etykietami, nie zdaniami.
+Portfolio wygląda jak tracker, którego użytkownik się spodziewa: górny pasek z pięcioma sekcjami, nagłówek strony, rząd kart z liczbami, wykres i tabele. Nowość nie leży w formie, tylko w wykonaniu — równe odstępy, cyfry tabelaryczne, jedna niebieska barwa akcji, zieleń i czerwień przy liczbach tylko dla wyniku, a w statusach tylko z napisem. Interfejs mówi liczbami i etykietami, nie zdaniami.
 
 Gęstość jest umiarkowana: strona startowa odpowiada na „ile mam i jak idzie” czterema kartami KPI i siatką 2:1 (wykres + największe pozycje); gęstsze tabele i kafle pojawiają się dopiero w sekcjach analitycznych. Powierzchnie są płaskie: jasnoszare tło, białe karty z jednopikselową ramką i prawie niewidocznym cieniem. Tryb ciemny idzie za ustawieniem systemu; wydruk raportu jest zawsze jasny.
 
@@ -194,7 +194,7 @@ Chłodna szarość z jednym niebieskim akcentem i semantyczną triadą zysk / st
 Te same role, inne wartości (blok `prefers-color-scheme: dark` w `styles.css`): grafitowe tło `#0c0e12`, karty `#15191f`, kafel `#1c2128`, ramki `#262c35` / `#363e4a`, tekst `#f2f4f7`, zysk `#47cd89`, strata `#f97066`, ostrzeżenie `#fdb022`; `--shadow-xs` wyłączony. Wydruk nadpisuje zmienne z powrotem na jasne.
 
 ### Named Rules
-**The Zero Is Neutral Rule.** Zero, przepływy (wpłaty, zakupy, rebalans) i brak danych są szare (`muted`/`text`). Zielony i czerwony pojawiają się na liczbie tylko wtedy, gdy znak oznacza wynik.
+**The Zero Is Neutral Rule.** Zero, przepływy (wpłaty, zakupy, rebalans) i brak danych są szare (`muted`/`text`). Zielony i czerwony pojawiają się na liczbie tylko wtedy, gdy znak oznacza wynik. Poza liczbami te same kolory niosą tylko status systemu (OK/błąd), zawsze ze słowem obok.
 
 **The One Blue Rule.** Niebieski znaczy „możesz w to kliknąć” albo „to twój portfel”. Nie służy do dekoracji, nagłówków sekcji ani teł kart.
 

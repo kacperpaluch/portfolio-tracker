@@ -149,7 +149,8 @@ w `:root` i nadpisywane w bloku `prefers-color-scheme: dark`; Recharts nie przyj
 w atrybutach SVG, więc `useChartColors()` odczytuje te same zmienne z DOM i przelicza je po
 zmianie motywu.
 
-**Semantyka koloru**: zieleń i czerwień oznaczają wyłącznie zysk i stratę. Typ operacji
+**Semantyka koloru**: przy liczbach zieleń i czerwień oznaczają wyłącznie zysk i stratę; w statusach
+systemu (jakość danych, kopie, błędy formularzy) oznaczają OK/błąd i zawsze stoją przy napisie. Typ operacji
 (kupno/sprzedaż, wpłata/wypłata) to neutralny `.op-chip`, kwoty przepływów i rebalansu
 mają klasę `.flow` (kierunek niesie znak), odchylenie alokacji czerwienieje dopiero od 1 pp,
 a `cls(0)` zwraca `muted` — zero nie jest wynikiem dodatnim.
